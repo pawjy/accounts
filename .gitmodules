@@ -1,0 +1,33 @@
+[submodule "modules/wanage"]
+	path = modules/wanage
+	url = git://github.com/wakaba/wanage
+[submodule "modules/ooutils"]
+	path = modules/ooutils
+	url = git://github.com/wakaba/perl-ooutils
+[submodule "modules/temma"]
+	path = modules/temma
+	url = git://github.com/wakaba/temma
+[submodule "modules/web-ua"]
+	path = modules/web-ua
+	url = git://github.com/wakaba/perl-web-useragent-functions
+[submodule "modules/charclass"]
+	path = modules/charclass
+	url = git://github.com/wakaba/perl-charclass
+[submodule "modules/web-dom"]
+	path = modules/web-dom
+	url = git://github.com/manakai/perl-web-dom
+[submodule "modules/web-markup"]
+	path = modules/web-markup
+	url = git://github.com/manakai/perl-web-markup
+[submodule "modules/web-url"]
+	path = modules/web-url
+	url = git://github.com/manakai/perl-web-url
+[submodule "modules/web-encodings"]
+	path = modules/web-encodings
+	url = git://github.com/manakai/perl-web-encodings
+[submodule "modules/promise"]
+	path = modules/promise
+	url = git://github.com/wakaba/perl-promise
+[submodule "t_deps/modules/test-x1"]
+	path = t_deps/modules/test-x1
+	url = git://github.com/wakaba/perl-test-x1
