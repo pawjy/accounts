@@ -11,3 +11,6 @@
 - "../../modules/vcutils" tests viewvc rcs
 - "../../modules/temma" tests
 - "../../modules/web-ua" tests oauth wsse testws cli curl anyeventsocks
+- "../../modules/dongry" tests datetime mp dbi
+- "../../modules/anyevent-mysql-client" tests
+- "../../modules/rdb-utils" tests anyeventdbi
