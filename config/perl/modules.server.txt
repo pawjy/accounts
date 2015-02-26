@@ -1,2 +1,1 @@
-Path::Tiny
 Twiggy::Prefork
