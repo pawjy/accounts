@@ -54,3 +54,15 @@
 	path = modules/rdb-utils
 	url = git://github.com/wakaba/perl-rdb-utils
 	track = master
+[submodule "modules/promised-command"]
+	path = modules/promised-command
+	url = git://github.com/wakaba/perl-promised-command
+[submodule "t_deps/modules/promised-mysql"]
+	path = t_deps/modules/promised-mysql
+	url = git://github.com/wakaba/perl-promised-mysqld
+[submodule "t_deps/modules/promised-docker-webdriver"]
+	path = t_deps/modules/promised-docker-webdriver
+	url = git://github.com/wakaba/perl-promised-docker-webdriver
+[submodule "t_deps/modules/promised-plackup"]
+	path = t_deps/modules/promised-plackup
+	url = git://github.com/wakaba/perl-promised-plackup

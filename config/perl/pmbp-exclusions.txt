@@ -14,3 +14,9 @@
 - "../../modules/dongry" tests datetime mp dbi
 - "../../modules/anyevent-mysql-client" tests
 - "../../modules/rdb-utils" tests anyeventdbi
+- "../../modules/promise" tests
+- "../../modules/promised-command" tests
+- "../../t_deps/modules/test-x1" tests
+- "../../t_deps/modules/promised-mysqld" tests
+- "../../t_deps/modules/promised-plackup" tests
+- "../../t_deps/modules/promised-docker-webdriver" tests
