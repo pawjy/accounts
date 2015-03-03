@@ -66,3 +66,6 @@
 [submodule "t_deps/modules/promised-plackup"]
 	path = t_deps/modules/promised-plackup
 	url = git://github.com/wakaba/perl-promised-plackup
+[submodule "modules/json-ps"]
+	path = modules/json-ps
+	url = git://github.com/wakaba/perl-json-ps
