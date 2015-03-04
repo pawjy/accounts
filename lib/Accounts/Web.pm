@@ -5,6 +5,7 @@ use Path::Tiny;
 use Promise;
 use Wanage::HTTP;
 use Accounts::AppServer;
+use Accounts::MySQL;
 
 sub psgi_app ($$) {
   my ($class, $config) = @_;
@@ -39,6 +40,16 @@ sub psgi_app ($$) {
 sub main ($$) {
   my ($class, $app) = @_;
   my $path = $app->path_segments;
+
+  if (@$path == 1 and $path->[0] eq '') {
+    # /
+
+    # XXX
+    return $app->db->execute ('show tables')->then (sub {
+      use Data::Dumper;
+      return $app->send_plain_text (Dumper $_[0]->all);
+    });
+  }
 
   if (@$path == 2 and
       {js => 1, css => 1, data => 1, images => 1, fonts => 1}->{$path->[0]} and

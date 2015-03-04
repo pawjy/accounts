@@ -1,3 +1,63 @@
-basename=`dirname $0`/..
-exec $basename/plackup $basename/bin/server.psgi \
-    -p 5710 -s Twiggy::Prefork
+#!perl
+use strict;
+use warnings;
+use Path::Tiny;
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/promised-*/lib');
+use AnyEvent;
+use Promise;
+use Promised::File;
+use Promised::Plackup;
+use Promised::Mysqld;
+use Promised::Command::Signals;
+use JSON::PS;
+
+$ENV{SQL_DEBUG} //= 1;
+$ENV{WEBUA_DEBUG} //= 1;
+
+my $root_path = path (__FILE__)->parent->parent;
+my $config_path = $root_path->child ('local/local-server/config.json');
+my $config_file = Promised::File->new_from_path ($config_path);
+
+my $main_cv = AE::cv;
+
+my $mysqld = Promised::Mysqld->new;
+my $plackup = Promised::Plackup->new;
+
+my $done = sub {
+  return Promise->all ([$plackup->stop, $mysqld->stop]);
+};
+Promised::Command::Signals->add_handler (INT => $done);
+Promised::Command::Signals->add_handler (TERM => $done);
+
+my $db_dir = $root_path->child ('local/local-server/mysql');
+$db_dir->mkpath;
+$mysqld->set_db_dir ($db_dir);
+$mysqld->start->then (sub {
+  my $dsn = $mysqld->get_dsn_string (dbname => 'account_devel');
+  return Promise->all ([
+    $mysqld->create_db_and_execute_sqls (account_devel => [
+      'CREATE TABLE if not exists hoge (id int)',
+      'insert into hoge (id) values (3)',
+    ]),
+    $config_file->write_byte_string (perl2json_bytes {
+      alt_dsns => {master => {account => $dsn}},
+      dsns => {account => $dsn},
+    }),
+  ]);
+})->then (sub {
+  $plackup->envs->{APP_CONFIG} = $config_path;
+  $plackup->plackup ($root_path->child ('plackup'));
+  $plackup->set_option ('--app' => $root_path->child ('bin/server.psgi'));
+  $plackup->set_option ('--host' => 0);
+  $plackup->set_option ('--port' => 5710);
+  $plackup->set_server ('Twiggy::Prefork');
+  return $plackup->start;
+})->catch (sub {
+  my $error = $_[0];
+  AE::log alert => "$error";
+  return Promise->resolve->then ($done)->then (sub {
+    $main_cv->croak;
+  });
+});
+
+$main_cv->recv;

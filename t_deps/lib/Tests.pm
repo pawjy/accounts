@@ -3,9 +3,14 @@ use strict;
 use warnings;
 use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/modules/*/lib');
+use File::Temp;
 use AnyEvent;
+use Promise;
+use Promised::File;
 use Promised::Plackup;
+use Promised::Mysqld;
 use Promised::Docker::WebDriver;
+use JSON::PS;
 
 our @EXPORT;
 
@@ -20,18 +25,38 @@ sub import ($;@) {
   }
 } # import
 
+my $MySQLServer;
 my $HTTPServer;
 my $Browsers = {};
 
 push @EXPORT, qw(web_server);
 sub web_server (;$) {
+  my $web_host = $_[0];
   my $cv = AE::cv;
   my $root_path = path (__FILE__)->parent->parent->parent;
-  $HTTPServer = Promised::Plackup->new;
-  $HTTPServer->plackup ($root_path->child ('plackup'));
-  $HTTPServer->set_option ('--host' => $_[0]) if defined $_[0];
-  $HTTPServer->set_option ('--app' => $root_path->child ('bin/server.psgi'));
-  $HTTPServer->start->then (sub {
+  $MySQLServer = Promised::Mysqld->new;
+  $MySQLServer->start->then (sub {
+    my $dsn = $MySQLServer->get_dsn_string (dbname => 'account_test');
+    $MySQLServer->{_temp} = my $temp = File::Temp->new;
+    my $temp_path = path ($temp)->absolute;
+    my $temp_file = Promised::File->new_from_path ($temp_path);
+    $HTTPServer = Promised::Plackup->new;
+    $HTTPServer->envs->{APP_CONFIG} = $temp_path;
+    return Promise->all ([
+      $MySQLServer->create_db_and_execute_sqls (account_test => [
+        'CREATE TABLE hoge (id int)',
+      ]),
+      $temp_file->write_byte_string (perl2json_bytes {
+        alt_dsns => {master => {account => $dsn}},
+        dsns => {account => $dsn},
+      }),
+    ]);
+  })->then (sub {
+    $HTTPServer->plackup ($root_path->child ('plackup'));
+    $HTTPServer->set_option ('--host' => $web_host) if defined $web_host;
+    $HTTPServer->set_option ('--app' => $root_path->child ('bin/server.psgi'));
+    return $HTTPServer->start;
+  })->then (sub {
     $cv->send ({host => $HTTPServer->get_host});
   });
   return $cv;
@@ -59,6 +84,10 @@ sub stop_web_server () {
   $cv->begin;
   $cv->begin;
   $HTTPServer->stop->then (sub {
+    $cv->end;
+  });
+  $cv->begin;
+  $MySQLServer->stop->then (sub {
     $cv->end;
   });
   for (values %$Browsers) {

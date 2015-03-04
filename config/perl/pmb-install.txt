@@ -1,6 +1,7 @@
 Net::SSLeay~1.68
-Encode~2.70
 IO::HTML~1.001
+Encode~2.70
+File::Path~2.09
 HTTP::Daemon~6.01
 Test::Deep~0.115
 List::MoreUtils~0.405
@@ -28,8 +29,8 @@ Test::Tester~0.114
 Exporter~5.70
 Class::Accessor::Lite~0.06
 Proc::Wait3~0.04
-Filesys::Notify::Simple~0.12
 LWP::UserAgent~6.13
+Filesys::Notify::Simple~0.12
 MIME::Base64~3.15
 HTML::Tagset~3.20
 Devel::StackTrace::AsHTML~0.14
@@ -45,10 +46,10 @@ Digest::SHA~5.95
 Crypt::SSLeay~0.72
 Time::Local~1.2300
 Test::SharedFork~0.29
-Try::Tiny~0.22
 Getopt::Long~2.45
-AnyEvent~7.08
+Try::Tiny~0.22
 Term::ANSIColor~4.03
+AnyEvent~7.08
 Test::Class~0.48
 Server::Starter~0.19
 Exporter::Lite~0.06

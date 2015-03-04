@@ -18,7 +18,7 @@ test {
       cb => sub {
         my $res = $_[1];
         test {
-          is $res->code, 404; # XXX
+          is $res->code, 200;
           done $c;
           undef $c;
         } $c;

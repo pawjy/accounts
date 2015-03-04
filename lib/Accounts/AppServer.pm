@@ -15,6 +15,10 @@ sub config ($) {
   return $_[0]->{config};
 } # config
 
+sub db ($) {
+  return $_[0]->{db} ||= $_[0]->config->get_db;
+} # db
+
 sub error_log ($$) {
   #$_[0]->ikachan (1, $_[1]);
   warn "ERROR: $_[1]\n"; # XXX blocking I/O
