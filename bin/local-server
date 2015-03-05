@@ -29,16 +29,23 @@ my $done = sub {
 Promised::Command::Signals->add_handler (INT => $done);
 Promised::Command::Signals->add_handler (TERM => $done);
 
+sub db_sqls () {
+  my $file = Promised::File->new_from_path
+      ($root_path->child ('db/account.sql'));
+  return $file->read_byte_string->then (sub {
+    return [split /;/, $_[0]];
+  });
+} # db_sqls
+
 my $db_dir = $root_path->child ('local/local-server/mysql');
 $db_dir->mkpath;
 $mysqld->set_db_dir ($db_dir);
 $mysqld->start->then (sub {
   my $dsn = $mysqld->get_dsn_string (dbname => 'account_devel');
   return Promise->all ([
-    $mysqld->create_db_and_execute_sqls (account_devel => [
-      'CREATE TABLE if not exists hoge (id int)',
-      'insert into hoge (id) values (3)',
-    ]),
+    db_sqls->then (sub {
+      return $mysqld->create_db_and_execute_sqls (account_devel => $_[0]);
+    }),
     $config_file->write_byte_string (perl2json_bytes {
       alt_dsns => {master => {account => $dsn}},
       dsns => {account => $dsn},

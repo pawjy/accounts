@@ -29,11 +29,20 @@ my $MySQLServer;
 my $HTTPServer;
 my $Browsers = {};
 
+my $root_path = path (__FILE__)->parent->parent->parent;
+
+sub db_sqls () {
+  my $file = Promised::File->new_from_path
+      ($root_path->child ('db/account.sql'));
+  return $file->read_byte_string->then (sub {
+    return [split /;/, $_[0]];
+  });
+} # db_sqls
+
 push @EXPORT, qw(web_server);
 sub web_server (;$) {
   my $web_host = $_[0];
   my $cv = AE::cv;
-  my $root_path = path (__FILE__)->parent->parent->parent;
   $MySQLServer = Promised::Mysqld->new;
   $MySQLServer->start->then (sub {
     my $dsn = $MySQLServer->get_dsn_string (dbname => 'account_test');
@@ -43,9 +52,9 @@ sub web_server (;$) {
     $HTTPServer = Promised::Plackup->new;
     $HTTPServer->envs->{APP_CONFIG} = $temp_path;
     return Promise->all ([
-      $MySQLServer->create_db_and_execute_sqls (account_test => [
-        'CREATE TABLE hoge (id int)',
-      ]),
+      db_sqls->then (sub {
+        $MySQLServer->create_db_and_execute_sqls (account_test => $_[0]);
+      }),
       $temp_file->write_byte_string (perl2json_bytes {
         alt_dsns => {master => {account => $dsn}},
         dsns => {account => $dsn},
