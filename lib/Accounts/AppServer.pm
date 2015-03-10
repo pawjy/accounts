@@ -4,6 +4,7 @@ use warnings;
 use Warabe::App;
 push our @ISA, qw(Warabe::App);
 use Path::Tiny;
+use Promise;
 
 sub new_from_http_and_config ($$$) {
   my $self = $_[0]->SUPER::new_from_http ($_[1]);
@@ -91,6 +92,11 @@ sub temma ($$$) {
 
   return $p;
 } # temma
+
+sub shutdown ($) {
+  return $_[0]->{db}->disconnect if defined $_[0]->{db};
+  return Promise->resolve;
+} # shutdown
 
 package Accounts::AppServer::TemmaPrinter;
 

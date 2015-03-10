@@ -10,6 +10,7 @@ use Promised::File;
 use Promised::Plackup;
 use Promised::Mysqld;
 use Promised::Docker::WebDriver;
+use MIME::Base64;
 use JSON::PS;
 
 our @EXPORT;
@@ -30,6 +31,8 @@ my $HTTPServer;
 my $Browsers = {};
 
 my $root_path = path (__FILE__)->parent->parent->parent;
+my $config_keys_path = $root_path->child ('local/keys/devel/config-keys.json');
+my $config_keys_file = Promised::File->new_from_path ($config_keys_path);
 
 sub db_sqls () {
   my $file = Promised::File->new_from_path
@@ -43,6 +46,7 @@ push @EXPORT, qw(web_server);
 sub web_server (;$) {
   my $web_host = $_[0];
   my $cv = AE::cv;
+  my $keys;
   $MySQLServer = Promised::Mysqld->new;
   $MySQLServer->start->then (sub {
     my $dsn = $MySQLServer->get_dsn_string (dbname => 'account_test');
@@ -55,9 +59,13 @@ sub web_server (;$) {
       db_sqls->then (sub {
         $MySQLServer->create_db_and_execute_sqls (account_test => $_[0]);
       }),
-      $temp_file->write_byte_string (perl2json_bytes {
-        alt_dsns => {master => {account => $dsn}},
-        dsns => {account => $dsn},
+      $config_keys_file->read_byte_string->then (sub {
+        $keys = json_bytes2perl $_[0];
+        return $temp_file->write_byte_string (perl2json_bytes {
+          %$keys,
+          alt_dsns => {master => {account => $dsn}},
+          dsns => {account => $dsn},
+        });
       }),
     ]);
   })->then (sub {
@@ -66,7 +74,14 @@ sub web_server (;$) {
     $HTTPServer->set_option ('--app' => $root_path->child ('bin/server.psgi'));
     return $HTTPServer->start;
   })->then (sub {
-    $cv->send ({host => $HTTPServer->get_host});
+    for my $key (keys %$keys) {
+      my $value = $keys->{$key};
+      if (defined $value and ref $value eq 'ARRAY' and
+          defined $value->[0] and $value->[0] eq 'Base64') {
+        $keys->{$key} = decode_base64 $value->[1];
+      }
+    }
+    $cv->send ({host => $HTTPServer->get_host, keys => $keys});
   });
   return $cv;
 } # web_server

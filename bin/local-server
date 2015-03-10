@@ -17,6 +17,8 @@ $ENV{WEBUA_DEBUG} //= 1;
 my $root_path = path (__FILE__)->parent->parent;
 my $config_path = $root_path->child ('local/local-server/config.json');
 my $config_file = Promised::File->new_from_path ($config_path);
+my $config_keys_path = $root_path->child ('local/keys/devel/config-keys.json');
+my $config_keys_file = Promised::File->new_from_path ($config_keys_path);
 
 my $main_cv = AE::cv;
 
@@ -46,9 +48,13 @@ $mysqld->start->then (sub {
     db_sqls->then (sub {
       return $mysqld->create_db_and_execute_sqls (account_devel => $_[0]);
     }),
-    $config_file->write_byte_string (perl2json_bytes {
-      alt_dsns => {master => {account => $dsn}},
-      dsns => {account => $dsn},
+    $config_keys_file->read_byte_string->then (sub {
+      my $keys = json_bytes2perl $_[0];
+      return $config_file->write_byte_string (perl2json_bytes {
+        %$keys,
+        alt_dsns => {master => {account => $dsn}},
+        dsns => {account => $dsn},
+      });
     }),
   ]);
 })->then (sub {
