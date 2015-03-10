@@ -3,9 +3,11 @@ use strict;
 use warnings;
 use Path::Tiny;
 use Promise;
+use JSON::PS;
 use Wanage::URL;
 use Wanage::HTTP;
 use Accounts::AppServer;
+use Web::UserAgent::Functions qw(http_post);
 use Web::UserAgent::Functions::OAuth;
 
 sub psgi_app ($$) {
@@ -69,10 +71,14 @@ sub main ($$) {
       $app->http->set_response_header ('Content-Type' => 'text/html; charset=utf-8');
       $app->http->send_response_body_as_text (sprintf q{
         <form action=/oauth/start method=post>
-          <input type=hidden name=server value="%s">
-          <button type=submit>OAuth</button>
+          <button type=submit name=server value=twitter>Twitter</button>
+          <button type=submit name=server value=hatena>Hatena</button>
+          <button type=submit name=server value=google>Google</button>
+          <button type=submit name=server value=facebook>Facebook</button>
+          <button type=submit name=server value=github>GitHub</button>
+          <button type=submit name=server value=bitbucket>Bitbucket</button>
         </form>
-      }, $app->bare_param ('server') // ''); # XXXescape
+      });
       return $app->http->close_response_body;
     });
   }
@@ -90,22 +96,23 @@ sub main ($$) {
 
       my $cb = $app->http->url->resolve_string ('/oauth/cb')->stringify;
       my $state = id 50;
-      $cb .= '?state=' . $state;
+      my $scope = $server->{login_scope};
 
       my $session_data = $session_row->get ('data');
       $session_data->{action} = {endpoint => 'oauth',
                                  server => $server->{name},
                                  state => $state};
 
-      return Promise->new (sub {
+      return (defined $server->{temp_endpoint} ? Promise->new (sub {
         my ($ok, $ng) = @_;
+        $cb .= '?state=' . $state;
         http_oauth1_request_temp_credentials
             host => $server->{host},
             pathquery => $server->{temp_endpoint},
             oauth_callback => $cb,
             oauth_consumer_key => $server->{client_id},
             client_shared_secret => $server->{client_secret},
-            params => $server->{temp_params} || {},
+            params => {scope => $scope},
             auth => {pathquery => $server->{auth_endpoint}},
             timeout => 30,
             anyevent => 1,
@@ -117,7 +124,19 @@ sub main ($$) {
                   = [$temp_token, $temp_token_secret];
               $ok->($auth_url);
             };
-      })->then (sub {
+      }) : Promise->new (sub {
+        my ($ok, $ng) = @_;
+        my $auth_url = q<https://> . ($server->{auth_host} // $server->{host}) . ($server->{auth_endpoint}) . '?' . join '&', map {
+          (percent_encode_c $_->[0]) . '=' . (percent_encode_c $_->[1])
+        } (
+          [client_id => $server->{client_id}],
+          [redirect_uri => $cb],
+          [response_type => 'code'],
+          [state => $state],
+          [scope => $scope],
+        );
+        $ok->($auth_url);
+      }))->then (sub {
         my $auth_url = $_[0];
         return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
           return $app->send_redirect ($auth_url);
@@ -146,7 +165,7 @@ sub main ($$) {
           ($session_data->{action}->{server})
           or $app->throw_error (500);
 
-      return Promise->new (sub {
+      return (defined $session_data->{action}->{temp_credentials} ? Promise->new (sub {
         my ($ok, $ng) = @_;
         http_oauth1_request_token # or die
             host => $server->{host},
@@ -168,7 +187,45 @@ sub main ($$) {
               }
               $ok->();
             };
-      })->then (sub {
+      }) : Promise->new (sub {
+        my ($ok, $ng) = @_;
+        my $cb = $app->http->url->resolve_string ('/oauth/cb')->stringify;
+        my $code = $app->text_param ('code')
+            // return $app->throw_error (400, reason_phrase => 'Bad |code|');
+        http_post
+            url => ('https://' . $server->{host} . $server->{token_endpoint}),
+            params => {
+              client_id => $server->{client_id},
+              client_secret => $server->{client_secret},
+              redirect_uri => $cb,
+              code => $code,
+              grant_type => 'authorization_code',
+            },
+            timeout => 30,
+            anyevent => 1,
+            cb => sub {
+              my (undef, $res) = @_;
+              my $access_token;
+              my $refresh_token;
+              if ($res->content_type =~ /json/) { ## Standard
+                my $json = json_bytes2perl $res->content;
+                if (ref $json eq 'HASH' and defined $json->{access_token}) {
+                  $access_token = $json->{access_token};
+                  $refresh_token = $json->{refresh_token};
+                }
+              } else { ## Facebook
+                my $parsed = parse_form_urlencoded_b $res->content;
+                $access_token = $parsed->{access_token}->[0];
+                $refresh_token = $parsed->{refresh_token}->[0];
+              }
+              return $ng->("Access token request failed")
+                  unless defined $access_token;
+              $session_data->{$server->{name}}->{access_token} = $access_token;
+              $session_data->{$server->{name}}->{refresh_token} = $refresh_token
+                  if defined $refresh_token;
+              $ok->();
+            };
+      }))->then (sub {
         delete $session_data->{action};
         return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
           return $app->send_redirect ('/oauth');
@@ -198,7 +255,7 @@ sub main ($$) {
   return $app->send_error (404);
 } # main
 
-my $SessionTimeout = 60*10;
+my $SessionTimeout = 60*30;
 
 sub start_session ($$) {
   my ($class, $app) = @_;
@@ -218,7 +275,7 @@ sub start_session ($$) {
     if (defined $sk) {
       return {sk => $sk};
     } else {
-      $sk = id 200;
+      $sk = id 100;
       return $app->db->execute ('INSERT INTO session (session_id, created, data) VALUES (:session_id, :created, "{}")', {
         session_id => $sk,
         created => time,

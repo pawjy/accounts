@@ -49,6 +49,34 @@ my $OAuthServers = {
     token_endpoint => '/oauth/token',
     token_res_params => [qw(url_name display_name)],
   },
+  bitbucket => {
+    name => 'bitbucket',
+    host => 'bitbucket.org',
+    temp_endpoint => '/api/1.0/oauth/request_token',
+    auth_endpoint => '/api/1.0/oauth/authenticate',
+    token_endpoint => '/api/1.0/oauth/access_token',
+  },
+
+  google => {
+    name => 'google',
+    host => 'accounts.google.com',
+    auth_endpoint => '/o/oauth2/auth',
+    token_endpoint => '/o/oauth2/token',
+    login_scope => 'openid profile',
+  },
+  facebook => {
+    name => 'facebook',
+    host => 'graph.facebook.com',
+    auth_host => 'www.facebook.com',
+    auth_endpoint => '/dialog/oauth',
+    token_endpoint => '/oauth/access_token',
+  },
+  github => {
+    name => 'github',
+    host => 'github.com',
+    auth_endpoint => '/login/oauth/authorize',
+    token_endpoint => '/login/oauth/access_token',
+  },
 }; # $OAuthServers
 
 sub get_oauth_server ($$) {
