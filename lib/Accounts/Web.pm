@@ -163,9 +163,8 @@ sub main ($$) {
               return $ng->("Access token request failed")
                   unless defined $access_token;
               $session_data->{$server->{name}}->{access_token} = [$access_token, $access_token_secret];
-              if ($server->{name} eq 'hatena') {
-                $session_data->{$server->{name}}->{url_name} = $params->{url_name};
-                $session_data->{$server->{name}}->{display_name} = $params->{display_name};
+              for (@{$server->{token_res_params} or []}) {
+                $session_data->{$server->{name}}->{$_} = $params->{$_};
               }
               $ok->();
             };

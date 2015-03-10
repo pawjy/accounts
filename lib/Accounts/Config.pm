@@ -32,13 +32,24 @@ sub get ($$) {
 } # get
 
 my $OAuthServers = {
-  hatena => {name => 'hatena',
-             host => 'www.hatena.ne.jp',
-             temp_endpoint => '/oauth/initiate',
-             temp_params => {scope => ''},
-             auth_endpoint => '/oauth/authorize',
-             token_endpoint => '/oauth/token'},
-};
+  twitter => {
+    name => 'twitter',
+    host => 'api.twitter.com',
+    temp_endpoint => '/oauth/request_token',
+    auth_endpoint => '/oauth/authenticate',
+    token_endpoint => '/oauth/access_token',
+    token_res_params => [qw(user_id screen_name)],
+  },
+  hatena => {
+    name => 'hatena',
+    host => 'www.hatena.ne.jp',
+    temp_endpoint => '/oauth/initiate',
+    temp_params => {scope => ''},
+    auth_endpoint => '/oauth/authorize',
+    token_endpoint => '/oauth/token',
+    token_res_params => [qw(url_name display_name)],
+  },
+}; # $OAuthServers
 
 sub get_oauth_server ($$) {
   my ($self, $server_name) = @_;
