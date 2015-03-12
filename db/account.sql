@@ -65,9 +65,11 @@ CREATE TABLE IF NOT EXISTS app_session_log (
 
 CREATE TABLE IF NOT EXISTS app_temp_session (
   atsk BINARY(100) NOT NULL,
+  atsl BINARY(100) NOT NULL,
   app_name VARBINARY(127) NOT NULL,
   created DOUBLE NOT NULL,
   `data` MEDIUMBLOB NOT NULL,
   PRIMARY KEY (atsk),
+  UNIQUE KEY (atsl),
   KEY (created)
 ) DEFAULT CHARSET=BINARY ENGINE=InnoDB;

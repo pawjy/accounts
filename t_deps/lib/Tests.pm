@@ -28,6 +28,7 @@ sub import ($;@) {
 
 my $MySQLServer;
 my $HTTPServer;
+my $AppServer;
 my $Browsers = {};
 
 my $root_path = path (__FILE__)->parent->parent->parent;
@@ -86,17 +87,90 @@ sub web_server (;$) {
   return $cv;
 } # web_server
 
+sub app_server ($$$) {
+  my ($app_hostname, $api_token, $api_host) = @_;
+  $AppServer = Promised::Plackup->new;
+  $AppServer->plackup ($root_path->child ('plackup'));
+  $AppServer->set_option ('--host' => $app_hostname);
+  $AppServer->envs->{API_TOKEN} = $api_token;
+  $AppServer->envs->{API_HOST} = $api_host;
+  $AppServer->set_app_code (q{
+    use Wanage::HTTP;
+    use Web::UserAgent::Functions qw(http_post);
+    use JSON::PS;
+    my $api_token = $ENV{API_TOKEN};
+    my $host = $ENV{API_HOST};
+    sub {
+      my $env = shift;
+      my $http = Wanage::HTTP->new_from_psgi_env ($env);
+      my $path = $http->url->{path};
+      if ($path eq '/start') {
+        my (undef, $res) = http_post
+            url => qq<http://$host/session>,
+            header_fields => {Authorization => 'Bearer ' . $api_token},
+            params => {
+              sk => $http->request_cookies->{sk},
+            };
+        my $json = json_bytes2perl $res->content;
+        $http->set_response_cookie (sk => $json->{sk}, expires => $json->{sk_expires}, path => q</>, httponly => 0, secure => 0)
+            if $json->{set_sk};
+
+        my $cb_url = $http->url->resolve_string ('/cb?')->stringify;
+        $cb_url .= '&bad_state=1' if $http->query_params->{bad_state};
+        $cb_url .= '&bad_code=1' if $http->query_params->{bad_code};
+        my (undef, $res) = http_post
+            url => qq<http://$host/login>,
+            header_fields => {Authorization => 'Bearer ' . $api_token},
+            params => {
+              sk => $json->{sk},
+              server => 'hatena',
+              callback_url => $cb_url,
+            };
+        my $json = json_bytes2perl $res->content;
+        $http->set_status (302);
+        my $url = $json->{authorization_url};
+        $http->set_response_header (Location => $url);
+      } elsif ($path eq '/cb') {
+        my (undef, $res) = http_post
+            url => qq<http://$host/cb>,
+            header_fields => {Authorization => 'Bearer ' . $api_token},
+            params => {
+              sk => $http->request_cookies->{sk},
+              oauth_token => $http->query_params->{oauth_token},
+              oauth_verifier => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{oauth_verifier},
+              code => $http->query_params->{code},
+              state => $http->query_params->{bad_state} ? 'aaa' : $http->query_params->{state},
+            };
+        if ($res->code == 200) {
+          $http->set_status (200);
+          $http->send_response_body_as_text ($res->code);
+        } else {
+          $http->set_status (400);
+          $http->send_response_body_as_text ($res->code);
+        }
+      }
+      $http->close_response_body;
+      return $http->send_response;
+    };
+  });
+  return $AppServer->start;
+} # app_server
+
 push @EXPORT, qw(web_server_and_driver);
 sub web_server_and_driver () {
   my $cv = AE::cv;
-  my $cv1 = web_server ('0.0.0.0'); # XXX
+  my $cv1 = web_server ('127.0.0.1');
   $cv1->cb (sub {
     my $data = $_[0]->recv;
     my $wd = $Browsers->{chrome} = Promised::Docker::WebDriver->chrome;
     $wd->start->then (sub {
-      $data->{host_for_browser} = $wd->get_docker_host_hostname_for_container . ':' . $HTTPServer->get_port;
       $data->{wd_url} = $wd->get_url_prefix;
-      $cv->send ($data);
+      my $api_token = $data->{keys}->{'auth.bearer'};
+      my $api_host = '127.0.0.1:' . $HTTPServer->get_port;
+      return app_server ('0.0.0.0', $api_token, $api_host)->then (sub {
+        $data->{host_for_browser} = $wd->get_docker_host_hostname_for_container . ':' . $AppServer->get_port;
+        $cv->send ($data);
+      });
     });
   });
   return $cv;
@@ -119,6 +193,10 @@ sub stop_web_server () {
     $_->stop->then (sub { $cv->end });
   }
   $cv->end;
+  if (defined $AppServer) {
+    $cv->begin;
+    $AppServer->stop->then (sub { $cv->end });
+  }
   $cv->recv;
 } # stop_web_server
 
@@ -126,3 +204,12 @@ push @EXPORT, qw(stop_web_server_and_driver);
 *stop_web_server_and_driver = \&stop_web_server;
 
 1;
+
+=head1 LICENSE
+
+Copyright 2015 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

@@ -42,12 +42,14 @@ test {
     my $json = $_[0];
     test {
       like $json->{atsk}, qr{\A\w+\z};
+      like $json->{atsl}, qr{\A\w+\z};
       like $json->{state}, qr{\A\w+\z};
+      ok $json->{age};
       done $c;
       undef $c;
     } $c;
   });
-} wait => $wait, n => 2, name => '/ats/create';
+} wait => $wait, n => 4, name => '/ats/create';
 
 test {
   my $c = shift;

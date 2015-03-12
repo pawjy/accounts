@@ -11,9 +11,6 @@ use Accounts::AppServer;
 use Web::UserAgent::Functions qw(http_post);
 use Web::UserAgent::Functions::OAuth;
 
-my $SessionTimeout = 60*30;
-my $ATSTimeout = 60*30;
-
 sub psgi_app ($$) {
   my ($class, $config) = @_;
   return sub {
@@ -55,63 +52,69 @@ sub id ($) {
   return $key;
 } # id
 
+my $SessionTimeout = 60*60*24*10;
+
 sub main ($$) {
   my ($class, $app) = @_;
   my $path = $app->path_segments;
 
-  if (@$path == 1 and $path->[0] eq '') {
-    # /
-
-    # XXX
-    return $app->db->execute ('show tables')->then (sub {
-      use Data::Dumper;
-      return $app->send_plain_text (Dumper $_[0]->all);
-    });
-  }
-
-  if (@$path == 1 and $path->[0] eq 'oauth') {
-    # /oauth
-    return $class->start_session ($app)->then (sub {
-      $app->http->set_response_header ('Content-Type' => 'text/html; charset=utf-8');
-      $app->http->send_response_body_as_text (sprintf q{
-        <form action=/oauth/start method=post>
-          <button type=submit name=server value=twitter>Twitter</button>
-          <button type=submit name=server value=hatena>Hatena</button>
-          <button type=submit name=server value=google>Google</button>
-          <button type=submit name=server value=facebook>Facebook</button>
-          <button type=submit name=server value=github>GitHub</button>
-          <button type=submit name=server value=bitbucket>Bitbucket</button>
-          <input type=hidden name=next_action value=login>
-        </form>
-      });
-      return $app->http->close_response_body;
-    });
-  }
-
-  if (@$path == 2 and $path->[0] eq 'oauth' and $path->[1] eq 'start') {
-    # /oauth/start
+  if (@$path == 1 and $path->[0] eq 'session') {
+    ## /session - Ensure that there is a session
     $app->requires_request_method ({POST => 1});
-    # XXX CSRF
+    $app->requires_api_key;
 
-    my $server = $app->config->get_oauth_server ($app->bare_param ('server'))
-        or return $app->send_error (404, reason_phrase => 'Bad |server|');
-
-    my $next_action = $app->bare_param ('next_action') // '';
-    return $app->send_error (400, reason_phrase => 'Bad |next_action|')
-        unless {login => 1}->{$next_action};
-
-    return $class->resume_session ($app, no_session_url => '/oauth?server=' . percent_encode_c $app->bare_param ('server'))->then (sub { # XXXtransaction
+    my $sk = $app->bare_param ('sk') // '';
+    return ((length $sk ? $app->db->select ('session', {
+      sk => $sk,
+      created => {'>', time - $SessionTimeout},
+    }, fields => ['sk', 'created'], source_name => 'master')->then (sub {
+      return $_[0]->first_as_row; # or undef
+    }) : Promise->resolve (undef))->then (sub {
       my $session_row = $_[0];
+      if (defined $session_row) {
+        return [$session_row, 0];
+      } else {
+        $sk = id 100;
+        return $app->db->insert ('session', [{
+          sk => $sk,
+          created => time,
+          data => '{}',
+        }], source_name => 'master')->then (sub {
+          $session_row = $_[0]->first_as_row;
+          return [$session_row, 1];
+        });
+      }
+    })->then (sub {
+      my ($session_row, $new) = @{$_[0]};
+      my $json = {sk => $session_row->get ('sk'),
+                  sk_expires => $session_row->get ('created') + $SessionTimeout,
+                  set_sk => $new?1:0};
+      return $app->send_json ($json);
+    })->then (sub {
+      return $class->delete_old_sessions ($app);
+    }));
+  } # /session
 
-      my $cb = $app->http->url->resolve_string ('/oauth/cb')->stringify;
+  if (@$path == 1 and $path->[0] eq 'login') {
+    ## /login - Start OAuth flow to associate session with account
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    return $class->resume_session ($app)->then (sub {
+      my $session_row = $_[0]
+          // return $app->send_error_json ({reason => 'bad session'});
+      my $session_data = $session_row->get ('data');
+
+      my $server = $app->config->get_oauth_server ($app->bare_param ('server'))
+          or return $app->throw_error (400, reason_phrase => 'Bad |server|');
+      my $cb = $app->text_param ('callback_url')
+          // return $app->throw_error (400, reason_phrase => 'Bad |callback_url|');
+
       my $state = id 50;
       my $scope = $server->{login_scope};
-
-      my $session_data = $session_row->get ('data');
       $session_data->{action} = {endpoint => 'oauth',
                                  server => $server->{name},
-                                 state => $state,
-                                 next => $next_action};
+                                 callback_url => $cb,
+                                 state => $state};
 
       return (defined $server->{temp_endpoint} ? Promise->new (sub {
         my ($ok, $ng) = @_;
@@ -149,7 +152,7 @@ sub main ($$) {
       }))->then (sub {
         my $auth_url = $_[0];
         return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
-          return $app->send_redirect ($auth_url);
+          return $app->send_json ({authorization_url => $auth_url});
         });
       })->then (sub {
         return $class->delete_old_sessions ($app);
@@ -157,25 +160,29 @@ sub main ($$) {
     });
   }
 
-  if (@$path == 2 and $path->[0] eq 'oauth' and $path->[1] eq 'cb') {
-    # /oauth/cb
-    return $class->resume_session ($app, no_session_url => '/oauth?server=' . percent_encode_c $app->bare_param ('server'))->then (sub { # XXXtransaction
-      my $session_row = $_[0];
+  if (@$path == 1 and $path->[0] eq 'cb') {
+    ## /cb - Process OAuth callback
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    return $class->resume_session ($app)->then (sub {
+      my $session_row = $_[0]
+          // return $app->send_error_json ({reason => 'Bad session'});
 
       my $session_data = $session_row->get ('data');
-      return $app->send_error (400, reason_phrase => 'Bad callback call')
+      return $app->send_error_json ({reason => 'Bad callback call'})
           unless 'oauth' eq ($session_data->{action}->{endpoint} // '');
 
       my $actual_state = $app->bare_param ('state') // '';
-      return $app->throw_error (400, reason_phrase => 'Bad |state|')
+      return $app->send_error_json ({reason => 'Bad |state|'})
           unless length $actual_state and
                  $actual_state eq $session_data->{action}->{state};
 
       my $server = $app->config->get_oauth_server
           ($session_data->{action}->{server})
-          or $app->throw_error (500);
+          or $app->send_error (500);
 
-      return (defined $session_data->{action}->{temp_credentials} ? Promise->new (sub {
+      return ((defined $session_data->{action}->{temp_credentials} ? Promise->new (sub {
         my ($ok, $ng) = @_;
         http_oauth1_request_token # or die
             host => $server->{host},
@@ -184,7 +191,8 @@ sub main ($$) {
             client_shared_secret => $server->{client_secret},
             temp_token => $session_data->{action}->{temp_credentials}->[0],
             temp_token_secret => $session_data->{action}->{temp_credentials}->[1],
-            current_request_url => $app->http->url->stringify,
+            oauth_token => $app->bare_param ('oauth_token'),
+            oauth_verifier => $app->bare_param ('oauth_verifier'),
             timeout => 30,
             anyevent => 1,
             cb => sub {
@@ -199,16 +207,13 @@ sub main ($$) {
             };
       }) : Promise->new (sub {
         my ($ok, $ng) = @_;
-        my $cb = $app->http->url->resolve_string ('/oauth/cb')->stringify;
-        my $code = $app->text_param ('code')
-            // return $app->throw_error (400, reason_phrase => 'Bad |code|');
         http_post
             url => ('https://' . $server->{host} . $server->{token_endpoint}),
             params => {
               client_id => $server->{client_id},
               client_secret => $server->{client_secret},
-              redirect_uri => $cb,
-              code => $code,
+              redirect_uri => $session_data->{action}->{callback_url},
+              code => $app->text_param ('code'),
               grant_type => 'authorization_code',
             },
             timeout => 30,
@@ -236,188 +241,36 @@ sub main ($$) {
               $ok->();
             };
       }))->then (sub {
-        my $next = (delete $session_data->{action})->{next} // '';
-        return $app->send_error (400, reason_phrase => 'Bad |next_action|')
-            unless $next eq 'login';
         return Promise->resolve ($class->create_account (
           $app,
           server => $server,
           session_data => $session_data,
         ))->then (sub {
           return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
-            return $app->send_redirect ('/oauth');
+            return $app->send_json ({});
           });
         });
+      }, sub {
+        return $app->send_error_json ({reason => 'OAuth token endpoint failed',
+                                       error_for_dev => "$_[0]"});
       })->then (sub {
         return $class->delete_old_sessions ($app);
-      });
+      }));
     });
-  }
-
-  if (@$path == 2 and $path->[0] eq 'ats' and $path->[1] eq 'create') {
-    # /ats/create
-    $app->requires_request_method ({POST => 1});
-
-    my $auth = $app->http->request_auth;
-    unless (defined $auth->{auth_scheme} and
-            $auth->{auth_scheme} eq 'bearer' and
-            length $auth->{token} and
-            $auth->{token} eq $app->config->get ('ats.bearer')) {
-      $app->http->set_status (401);
-      $app->http->set_response_auth ('Bearer');
-      $app->http->set_response_header
-          ('Content-Type' => 'text/plain; charset=us-ascii');
-      $app->http->send_response_body_as_ref (\'401 Authorization required');
-      $app->http->close_response_body;
-      return;
-    }
-
-    my $app_name = $app->text_param ('app_name')
-        // return $app->send_error (400, reason_phrase => 'Bad |app_name|');
-    my $url = $app->text_param ('callback_url')
-        // return $app->send_error (400, reason_phrase => 'Bad |callback_url|');
-
-    my $atsk = id 100;
-    my $state = id 50;
-    return $app->db->insert ('app_temp_session', [{
-      atsk => $atsk,
-      app_name => Dongry::Type->serialize ('text', $app_name),
-      created => time,
-      data => Dongry::Type->serialize ('json', {
-        callback_url => $url,
-        state => $state,
-      }),
-    }], source_name => 'master')->then (sub {
-      return $app->send_json ({
-        atsk => $atsk,
-        state => $state,
-      });
-    });
-  }
-
-  if (@$path == 2 and $path->[0] eq 'ats' and $path->[1] eq 'get') {
-    # /ats/get
-    $app->requires_request_method ({POST => 1});
-
-    my $auth = $app->http->request_auth;
-    unless (defined $auth->{auth_scheme} and
-            $auth->{auth_scheme} eq 'bearer' and
-            length $auth->{token} and
-            $auth->{token} eq $app->config->get ('ats.bearer')) {
-      $app->http->set_status (401);
-      $app->http->set_response_auth ('Bearer');
-      $app->http->set_response_header
-          ('Content-Type' => 'text/plain; charset=us-ascii');
-      $app->http->send_response_body_as_ref (\'401 Authorization required');
-      $app->http->close_response_body;
-      return;
-    }
-
-    my $app_name = $app->text_param ('app_name')
-        // return $app->send_error (400, reason_phrase => 'Bad |app_name|');
-    my $atsk = $app->text_param ('atsk')
-        // return $app->send_error (403, reason_phrase => 'Bad |atsk|');
-    my $state = $app->text_param ('state')
-        // return $app->send_error (403, reason_phrase => 'Bad |state|');
-
-    return $app->db->select ('app_temp_session', {
-      atsk => Dongry::Type->serialize ('text', $atsk),
-      app_name => Dongry::Type->serialize ('text', $app_name),
-    }, source_name => 'master')->then (sub {
-      my $row = $_[0]->first_as_row
-          or return $app->send_error (404, reason_phrase => 'Bad |atsk|');
-      my $data = $row->get ('data');
-      unless (defined $data->{state} and
-              length $data->{state} and
-              $data->{state} eq $state) {
-        return $app->send_error (403, reason_phrase => 'Bad |state|');
-      }
-
-      return $row->delete (source_name => 'master')->then (sub {
-        return $app->send_json ({
-          callback_url => $data->{callback_url},
-        });
-      });
-    })->then (sub {
-      return $app->db->execute ('DELETE FROM app_temp_session WHERE created < ?', {
-        created => time - $ATSTimeout,
-      }, source_name => 'master');
-    });
-  }
-
-
-  if (@$path == 2 and
-      {js => 1, css => 1, data => 1, images => 1, fonts => 1}->{$path->[0]} and
-      $path->[1] =~ /\A[0-9A-Za-z_-]+\.(js|css|jpe?g|gif|png|json|ttf|otf|woff)\z/) {
-    # /js/* /css/* /images/* /data/*
-    return $app->send_file ("$path->[0]/$path->[1]", {
-      js => 'text/javascript; charset=utf-8',
-      css => 'text/css; charset=utf-8',
-      jpeg => 'image/jpeg',
-      jpg => 'image/jpeg',
-      gif => 'image/gif',
-      png => 'image/png',
-      json => 'application/json',
-    }->{$1});
   }
 
   return $app->send_error (404);
 } # main
 
-sub start_session ($$) {
+sub resume_session ($$) {
   my ($class, $app) = @_;
-  my $sk = $app->http->request_cookies->{sk} // '';
-  return (length $sk ? $app->db->execute ('SELECT sk FROM `session` WHERE sk = ? AND created > ?', {
+  my $sk = $app->bare_param ('sk') // '';
+  return (length $sk ? $app->db->select ('session', {
     sk => $sk,
-    created => time - $SessionTimeout,
+    created => {'>', time - $SessionTimeout},
   }, source_name => 'master')->then (sub {
-    my $v = $_[0]->first;
-    if (defined $v) {
-      return $v->{sk};
-    } else {
-      return undef;
-    }
-  }) : Promise->resolve (undef))->then (sub {
-    my $sk = $_[0];
-    if (defined $sk) {
-      return {sk => $sk};
-    } else {
-      $sk = id 100;
-      return $app->db->execute ('INSERT INTO session (sk, created, data) VALUES (:sk, :created, "{}")', {
-        sk => $sk,
-        created => time,
-      }, source_name => 'master')->then (sub {
-        $app->http->set_response_cookie
-            (sk => $sk,
-             expires => time + $SessionTimeout,
-             #secure => $cookiesecure, # XXX
-             #domain => $cookiedomain, # XXX
-             path => q</>,
-             httponly => 1);
-        return {sk => $sk, new => 1};
-      }); # or duplicate rejection
-    }
-  });
-} # start_session
-
-sub resume_session ($$;%) {
-  my ($class, $app, %args) = @_;
-  my $sk = $app->http->request_cookies->{sk};
-  return (defined $sk ? $app->db->execute ('SELECT sk, data FROM `session` WHERE sk = ? AND created > ?', {
-    sk => $sk,
-    created => time - $SessionTimeout,
-  }, source_name => 'master', table_name => 'session')->then (sub {
     return $_[0]->first_as_row; # or undef
-  }) : Promise->resolve (undef))->then (sub {
-    if (not defined $_[0]) {
-      if (defined $args{no_session_url}) {
-        return $app->throw_redirect ($args{no_session_url});
-      } else {
-        return $app->throw_error (400, reason_phrase => 'Invalid session');
-      }
-    }
-    return $_[0];
-  });
+  }) : Promise->resolve (undef));
 } # resume_session
 
 sub delete_old_sessions ($$) {

@@ -26,12 +26,38 @@ sub error_log ($$) {
   warn "ERROR: $_[1]\n"; # XXX blocking I/O
 } # error_log
 
+sub requires_api_key ($) {
+  my $self = $_[0];
+  my $http = $self->http;
+  my $auth = $http->request_auth;
+  unless (defined $auth->{auth_scheme} and
+          $auth->{auth_scheme} eq 'bearer' and
+          length $auth->{token} and
+          $auth->{token} eq $self->config->get ('auth.bearer')) {
+    $http->set_status (401);
+    $http->set_response_auth ('Bearer');
+    $http->set_response_header
+        ('Content-Type' => 'text/plain; charset=us-ascii');
+    $http->send_response_body_as_ref (\'401 Authorization required');
+    $http->close_response_body;
+    return $self->throw;
+  }
+} # requires_api_key
+
 sub send_json ($$) {
   my ($self, $data) = @_;
   $self->http->set_response_header ('Content-Type' => 'application/json; charset=utf-8');
   $self->http->send_response_body_as_ref (\perl2json_bytes $data);
   $self->http->close_response_body;
 } # send_json
+
+sub send_error_json ($$) {
+  my ($self, $data) = @_;
+  $self->http->set_status (400);
+  $self->http->set_response_header ('Content-Type' => 'application/json; charset=utf-8');
+  $self->http->send_response_body_as_ref (\perl2json_bytes $data);
+  $self->http->close_response_body;
+} # send_error_json
 
 my $RootPath = path (__FILE__)->parent->parent->parent;
 

@@ -83,7 +83,7 @@ my $OAuthServers = {
 
 sub get_oauth_server ($$) {
   my ($self, $server_name) = @_;
-  my $def = $OAuthServers->{$server_name} or return undef;
+  my $def = $OAuthServers->{$server_name // ''} or return undef;
 
   $def->{client_id} = $self->{json}->{$server_name . ".client_id"};
   $def->{client_secret} = $self->{json}->{$server_name . ".client_secret"};

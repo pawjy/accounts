@@ -9,6 +9,8 @@ use Web::UserAgent::Functions qw(http_post_data http_get);
 use JSON::PS;
 use Promise;
 
+## This test will make requests to www.hatena.ne.jp.
+
 my $wait = web_server_and_driver;
 
 sub post ($$) {
@@ -64,7 +66,6 @@ sub get ($) {
   });
 } # get
 
-
 test {
   my $c = shift;
   my $host = $c->received_data->{host_for_browser};
@@ -77,49 +78,7 @@ test {
     my $json = $_[0];
     my $sid = $json->{sessionId};
     return post ("$wd/session/$sid/url", {
-      url => qq<http://$host/oauth>,
-    })->then (sub {
-      return post ("$wd/session/$sid/execute", {
-        script => q{ return document.cookie },
-        args => [],
-      });
-    })->then (sub {
-      my $value = $_[0]->{value};
-      test {
-        unlike $value, qr{\bsk=}, 'httponly';
-      } $c;
-    });
-  })->then (sub {
-    done $c;
-    undef $c;
-  });
-} wait => $wait, n => 1, name => '/oauth sk';
-
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host_for_browser};
-  my $wd = $c->received_data->{wd_url};
-  return post ("$wd/session", {
-    desiredCapabilities => {
-      browserName => 'firefox', # XXX
-    },
-  })->then (sub {
-    my $json = $_[0];
-    my $sid = $json->{sessionId};
-    return post ("$wd/session/$sid/url", {
-      url => qq<http://$host/oauth?server=hatena>,
-    })->then (sub {
-      return post ("$wd/session/$sid/execute", {
-        script => q{ return document.forms[0].submit () },
-        args => [],
-      });
-    })->then (sub {
-      return get ("$wd/session/$sid/url")->then (sub {
-        my $value = $_[0]->{value};
-        test {
-          like $value, qr{^https://www.hatena.ne.jp/oauth/};
-        } $c;
-      });
+      url => qq<http://$host/start>,
     })->then (sub {
       return post ("$wd/session/$sid/execute", {
         script => q{
@@ -135,16 +94,25 @@ test {
         script => q{
           document.querySelector ('form [type=submit]').click ();
         },
-        args => [$c->received_data->{keys}->{'test.hatena_id'},
-                 $c->received_data->{keys}->{'test.hatena_password'}],
+        args => [],
       });
     })->then (sub {
       return get ("$wd/session/$sid/url")->then (sub {
         my $value = $_[0]->{value};
         test {
-          like $value, qr{^http://$host/};
+          like $value, qr{^http://$host/cb\?};
         } $c;
       });
+    })->then (sub {
+      return post ("$wd/session/$sid/execute", {
+        script => q{ return document.body.textContent },
+        args => [],
+      });
+    })->then (sub {
+      my $value = $_[0]->{value};
+      test {
+        is $value, 200;
+      } $c;
     });
   })->then (sub {
     done $c;
@@ -152,5 +120,122 @@ test {
   });
 } wait => $wait, n => 2, name => '/oauth hatena';
 
+test {
+  my $c = shift;
+  my $host = $c->received_data->{host_for_browser};
+  my $wd = $c->received_data->{wd_url};
+  return post ("$wd/session", {
+    desiredCapabilities => {
+      browserName => 'firefox', # XXX
+    },
+  })->then (sub {
+    my $json = $_[0];
+    my $sid = $json->{sessionId};
+    return post ("$wd/session/$sid/url", {
+      url => qq<http://$host/start?bad_state=1>,
+    })->then (sub {
+      return post ("$wd/session/$sid/execute", {
+        script => q{
+          document.querySelector ('form input[name=name]').value = arguments[0];
+          document.querySelector ('form input[name=password]').value = arguments[1];
+          document.querySelector ('form [type=submit]').click ();
+        },
+        args => [$c->received_data->{keys}->{'test.hatena_id'},
+                 $c->received_data->{keys}->{'test.hatena_password'}],
+      });
+    })->then (sub {
+      return post ("$wd/session/$sid/execute", {
+        script => q{
+          document.querySelector ('form [type=submit]').click ();
+        },
+        args => [],
+      });
+    })->then (sub {
+      return get ("$wd/session/$sid/url")->then (sub {
+        my $value = $_[0]->{value};
+        test {
+          like $value, qr{^http://$host/cb\?};
+        } $c;
+      });
+    })->then (sub {
+      return post ("$wd/session/$sid/execute", {
+        script => q{ return document.body.textContent },
+        args => [],
+      });
+    })->then (sub {
+      my $value = $_[0]->{value};
+      test {
+        is $value, 400;
+      } $c;
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} wait => $wait, n => 2, name => '/oauth hatena bad state';
+
+test {
+  my $c = shift;
+  my $host = $c->received_data->{host_for_browser};
+  my $wd = $c->received_data->{wd_url};
+  return post ("$wd/session", {
+    desiredCapabilities => {
+      browserName => 'firefox', # XXX
+    },
+  })->then (sub {
+    my $json = $_[0];
+    my $sid = $json->{sessionId};
+    return post ("$wd/session/$sid/url", {
+      url => qq<http://$host/start?bad_code=1>,
+    })->then (sub {
+      return post ("$wd/session/$sid/execute", {
+        script => q{
+          document.querySelector ('form input[name=name]').value = arguments[0];
+          document.querySelector ('form input[name=password]').value = arguments[1];
+          document.querySelector ('form [type=submit]').click ();
+        },
+        args => [$c->received_data->{keys}->{'test.hatena_id'},
+                 $c->received_data->{keys}->{'test.hatena_password'}],
+      });
+    })->then (sub {
+      return post ("$wd/session/$sid/execute", {
+        script => q{
+          document.querySelector ('form [type=submit]').click ();
+        },
+        args => [],
+      });
+    })->then (sub {
+      return get ("$wd/session/$sid/url")->then (sub {
+        my $value = $_[0]->{value};
+        test {
+          like $value, qr{^http://$host/cb\?};
+        } $c;
+      });
+    })->then (sub {
+      return post ("$wd/session/$sid/execute", {
+        script => q{ return document.body.textContent },
+        args => [],
+      });
+    })->then (sub {
+      my $value = $_[0]->{value};
+      test {
+        is $value, 400;
+      } $c;
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} wait => $wait, n => 2, name => '/oauth hatena bad code';
+
 run_tests;
 stop_web_server_and_driver;
+
+=head1 LICENSE
+
+Copyright 2015 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut
