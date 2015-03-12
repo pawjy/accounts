@@ -28,7 +28,7 @@ sub from_file_name ($$) {
 } # from_file_name
 
 sub get ($$) {
-  return $_[0]->{json}->[1];
+  return $_[0]->{json}->{$_[1]};
 } # get
 
 my $OAuthServers = {
@@ -48,6 +48,8 @@ my $OAuthServers = {
     auth_endpoint => '/oauth/authorize',
     token_endpoint => '/oauth/token',
     token_res_params => [qw(url_name display_name)],
+    linked_name_field => 'display_name',
+    linked_id_field => 'url_name',
   },
   bitbucket => {
     name => 'bitbucket',
@@ -109,7 +111,11 @@ $Dongry::Types->{json} = {
 my $Schema = {
   session => {
     type => {data => 'json'},
-    primary_keys => ['session_id'],
+    primary_keys => ['sk'],
+  },
+  app_temp_session => {
+    type => {app_name => 'text', data => 'json'},
+    primary_keys => ['atsk'],
   },
 }; # $Schema
 

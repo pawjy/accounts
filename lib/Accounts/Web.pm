@@ -6,9 +6,13 @@ use Promise;
 use JSON::PS;
 use Wanage::URL;
 use Wanage::HTTP;
+use Dongry::Type;
 use Accounts::AppServer;
 use Web::UserAgent::Functions qw(http_post);
 use Web::UserAgent::Functions::OAuth;
+
+my $SessionTimeout = 60*30;
+my $ATSTimeout = 60*30;
 
 sub psgi_app ($$) {
   my ($class, $config) = @_;
@@ -77,6 +81,7 @@ sub main ($$) {
           <button type=submit name=server value=facebook>Facebook</button>
           <button type=submit name=server value=github>GitHub</button>
           <button type=submit name=server value=bitbucket>Bitbucket</button>
+          <input type=hidden name=next_action value=login>
         </form>
       });
       return $app->http->close_response_body;
@@ -91,6 +96,10 @@ sub main ($$) {
     my $server = $app->config->get_oauth_server ($app->bare_param ('server'))
         or return $app->send_error (404, reason_phrase => 'Bad |server|');
 
+    my $next_action = $app->bare_param ('next_action') // '';
+    return $app->send_error (400, reason_phrase => 'Bad |next_action|')
+        unless {login => 1}->{$next_action};
+
     return $class->resume_session ($app, no_session_url => '/oauth?server=' . percent_encode_c $app->bare_param ('server'))->then (sub { # XXXtransaction
       my $session_row = $_[0];
 
@@ -101,7 +110,8 @@ sub main ($$) {
       my $session_data = $session_row->get ('data');
       $session_data->{action} = {endpoint => 'oauth',
                                  server => $server->{name},
-                                 state => $state};
+                                 state => $state,
+                                 next => $next_action};
 
       return (defined $server->{temp_endpoint} ? Promise->new (sub {
         my ($ok, $ng) = @_;
@@ -226,13 +236,112 @@ sub main ($$) {
               $ok->();
             };
       }))->then (sub {
-        delete $session_data->{action};
-        return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
-          return $app->send_redirect ('/oauth');
+        my $next = (delete $session_data->{action})->{next} // '';
+        return $app->send_error (400, reason_phrase => 'Bad |next_action|')
+            unless $next eq 'login';
+        return Promise->resolve ($class->create_account (
+          $app,
+          server => $server,
+          session_data => $session_data,
+        ))->then (sub {
+          return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
+            return $app->send_redirect ('/oauth');
+          });
         });
       })->then (sub {
         return $class->delete_old_sessions ($app);
       });
+    });
+  }
+
+  if (@$path == 2 and $path->[0] eq 'ats' and $path->[1] eq 'create') {
+    # /ats/create
+    $app->requires_request_method ({POST => 1});
+
+    my $auth = $app->http->request_auth;
+    unless (defined $auth->{auth_scheme} and
+            $auth->{auth_scheme} eq 'bearer' and
+            length $auth->{token} and
+            $auth->{token} eq $app->config->get ('ats.bearer')) {
+      $app->http->set_status (401);
+      $app->http->set_response_auth ('Bearer');
+      $app->http->set_response_header
+          ('Content-Type' => 'text/plain; charset=us-ascii');
+      $app->http->send_response_body_as_ref (\'401 Authorization required');
+      $app->http->close_response_body;
+      return;
+    }
+
+    my $app_name = $app->text_param ('app_name')
+        // return $app->send_error (400, reason_phrase => 'Bad |app_name|');
+    my $url = $app->text_param ('callback_url')
+        // return $app->send_error (400, reason_phrase => 'Bad |callback_url|');
+
+    my $atsk = id 100;
+    my $state = id 50;
+    return $app->db->insert ('app_temp_session', [{
+      atsk => $atsk,
+      app_name => Dongry::Type->serialize ('text', $app_name),
+      created => time,
+      data => Dongry::Type->serialize ('json', {
+        callback_url => $url,
+        state => $state,
+      }),
+    }], source_name => 'master')->then (sub {
+      return $app->send_json ({
+        atsk => $atsk,
+        state => $state,
+      });
+    });
+  }
+
+  if (@$path == 2 and $path->[0] eq 'ats' and $path->[1] eq 'get') {
+    # /ats/get
+    $app->requires_request_method ({POST => 1});
+
+    my $auth = $app->http->request_auth;
+    unless (defined $auth->{auth_scheme} and
+            $auth->{auth_scheme} eq 'bearer' and
+            length $auth->{token} and
+            $auth->{token} eq $app->config->get ('ats.bearer')) {
+      $app->http->set_status (401);
+      $app->http->set_response_auth ('Bearer');
+      $app->http->set_response_header
+          ('Content-Type' => 'text/plain; charset=us-ascii');
+      $app->http->send_response_body_as_ref (\'401 Authorization required');
+      $app->http->close_response_body;
+      return;
+    }
+
+    my $app_name = $app->text_param ('app_name')
+        // return $app->send_error (400, reason_phrase => 'Bad |app_name|');
+    my $atsk = $app->text_param ('atsk')
+        // return $app->send_error (403, reason_phrase => 'Bad |atsk|');
+    my $state = $app->text_param ('state')
+        // return $app->send_error (403, reason_phrase => 'Bad |state|');
+
+    return $app->db->select ('app_temp_session', {
+      atsk => Dongry::Type->serialize ('text', $atsk),
+      app_name => Dongry::Type->serialize ('text', $app_name),
+    }, source_name => 'master')->then (sub {
+      my $row = $_[0]->first_as_row
+          or return $app->send_error (404, reason_phrase => 'Bad |atsk|');
+      my $data = $row->get ('data');
+      unless (defined $data->{state} and
+              length $data->{state} and
+              $data->{state} eq $state) {
+        return $app->send_error (403, reason_phrase => 'Bad |state|');
+      }
+
+      return $row->delete (source_name => 'master')->then (sub {
+        return $app->send_json ({
+          callback_url => $data->{callback_url},
+        });
+      });
+    })->then (sub {
+      return $app->db->execute ('DELETE FROM app_temp_session WHERE created < ?', {
+        created => time - $ATSTimeout,
+      }, source_name => 'master');
     });
   }
 
@@ -255,18 +364,16 @@ sub main ($$) {
   return $app->send_error (404);
 } # main
 
-my $SessionTimeout = 60*30;
-
 sub start_session ($$) {
   my ($class, $app) = @_;
   my $sk = $app->http->request_cookies->{sk} // '';
-  return (length $sk ? $app->db->execute ('SELECT session_id FROM `session` WHERE session_id = ? AND created > ?', {
-    session_id => $sk,
+  return (length $sk ? $app->db->execute ('SELECT sk FROM `session` WHERE sk = ? AND created > ?', {
+    sk => $sk,
     created => time - $SessionTimeout,
   }, source_name => 'master')->then (sub {
     my $v = $_[0]->first;
     if (defined $v) {
-      return $v->{session_id};
+      return $v->{sk};
     } else {
       return undef;
     }
@@ -276,8 +383,8 @@ sub start_session ($$) {
       return {sk => $sk};
     } else {
       $sk = id 100;
-      return $app->db->execute ('INSERT INTO session (session_id, created, data) VALUES (:session_id, :created, "{}")', {
-        session_id => $sk,
+      return $app->db->execute ('INSERT INTO session (sk, created, data) VALUES (:sk, :created, "{}")', {
+        sk => $sk,
         created => time,
       }, source_name => 'master')->then (sub {
         $app->http->set_response_cookie
@@ -296,8 +403,8 @@ sub start_session ($$) {
 sub resume_session ($$;%) {
   my ($class, $app, %args) = @_;
   my $sk = $app->http->request_cookies->{sk};
-  return (defined $sk ? $app->db->execute ('SELECT session_id, data FROM `session` WHERE session_id = ? AND created > ?', {
-    session_id => $sk,
+  return (defined $sk ? $app->db->execute ('SELECT sk, data FROM `session` WHERE sk = ? AND created > ?', {
+    sk => $sk,
     created => time - $SessionTimeout,
   }, source_name => 'master', table_name => 'session')->then (sub {
     return $_[0]->first_as_row; # or undef
@@ -318,6 +425,108 @@ sub delete_old_sessions ($$) {
     created => time - $SessionTimeout,
   });
 } # delete_old_sessions
+
+sub create_account ($$%) {
+  my ($class, $app, %args) = @_;
+  my $server = $args{server} or die;
+  my $service = $server->{name};
+
+  return $app->send_error (400, reason_phrase => 'Non-loginable |service|')
+      unless defined $server->{linked_id_field};
+
+  my $session_data = $args{session_data} or die;
+
+  my $id = $session_data->{$service}->{$server->{linked_id_field}};
+  return $app->send_error (400, reason_phrase => 'Non-loginable server account')
+      unless defined $id and length $id;
+  $id = Dongry::Type->serialize ('text', $id);
+  my $link_id = '';
+  #my $link_id = $app->bare_param ('account_link_id') // '';
+  return ((length $link_id ? $app->db->execute ('SELECT account_link_id, account_id FROM account_link WHERE account_link_id = ? AND service_name = ? AND linked_id = ?', {
+    account_link_id => $link_id,
+    service_name => $service,
+    linked_id => $id,
+  }, source_name => 'master') : $app->db->execute ('SELECT account_link_id, account_id FROM account_link WHERE service_name = ? AND linked_id = ?', {
+    service_name => $service,
+    linked_id => $id,
+  }, source_name => 'master'))->then (sub {
+    my $links = $_[0]->all;
+    # XXX filter by account status?
+    $links = [$links->[0]] if @$links; # XXX
+    if (@$links == 0) { # new account
+      return $app->db->execute ('SELECT UUID_SHORT() AS account_id, UUID_SHORT() AS link_id', undef, source_name => 'master')->then (sub {
+        my $uuids = $_[0]->first;
+        $uuids->{account_id} .= '';
+        $uuids->{account_link_id} .= '';
+        my $time = time;
+        my $name = $uuids->{account_id};
+        my $account = {account_id => $uuids->{account_id},
+                       user_status => 1, admin_status => 1,
+                       terms_version => 0};
+        return $app->db->execute ('INSERT INTO account (account_id, created, user_status, admin_status, terms_version, name) VALUES (:account_id, :created, :user_status, :admin_status, :terms_version, :name)', {
+          created => $time,
+          %$account,
+          name => Dongry::Type->serialize ('text', $name),
+        }, source_name => 'master', table_name => 'account')->then (sub {
+          return $app->db->execute ('INSERT INTO account_link (account_link_id, account_id, service_name, created, updated, linked_name, linked_id, linked_token1, linked_token2) VALUES (:account_link_id, :account_id, :service_name, :created, :updated, :linked_name, :linked_id, :linked_token1, :linked_token2)', {
+            account_link_id => $uuids->{link_id},
+            account_id => $uuids->{account_id},
+            service_name => Dongry::Type->serialize ('text', $server->{name}),
+            created => $time,
+            updated => $time,
+            linked_name => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_name_field} // ''} // ''),
+            linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
+            linked_token1 => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_token1_field} // ''} // ''),
+            linked_token2 => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_token2_field} // ''} // ''),
+          }, source_name => 'master', table_name => 'account_link')->then (sub {
+            my $account_link = {account_link_id => $uuids->{link_id}};
+            return [$account, $account_link];
+          });
+        });
+      });
+    } elsif (@$links == 1) { # existing account
+      my $time = time;
+      my $account_id = $links->[0]->{account_id};
+      my $name = $account_id;
+      return Promise->all ([
+        $app->db->execute ('UPDATE account SET name = ? WHERE account_id = ?', {
+          name => Dongry::Type->serialize ('text', $name),
+          account_id => $account_id,
+        }, source_name => 'master')->then (sub {
+          return $app->db->execute ('SELECT account_id,user_status,admin_status,terms_version FROM account WHERE account_id = ?', {
+            account_id => $account_id,
+          }, source_name => 'master', table_name => 'account');
+        }),
+        $app->db->execute ('UPDATE account_link SET linked_name = ?, linked_id = ?, linked_token1 = ?, linked_token2 = ?, updated = ? WHERE account_link_id = ? AND account_id = ?', {
+          account_link_id => $links->[0]->{account_link_id},
+          account_id => $account_id,
+          linked_name => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_name_field} // ''} // ''),
+          linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
+          linked_token1 => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_token1_field} // ''} // ''),
+          linked_token2 => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_token2_field} // ''} // ''),
+          updated => time,
+        }, source_name => 'master'),
+      ])->then (sub {
+        return [$_[0]->[0]->first, {account_link_id => $links->[0]->{account_link_id}}];
+      });
+    } else { # multiple account links
+      die "XXX Not implemented yet";
+    }
+  }))->then (sub {
+    my ($account, $account_link) = @{$_[0]};
+    unless ($account->{user_status} == 1) {
+      die "XXX Disabled account";
+    }
+    unless ($account->{admin_status} == 1) {
+      die "XXX Account suspended";
+    }
+    my $expected_version = 0;
+    if ($account->{terms_version} < $expected_version) {
+      die "XXX Not implemented yet";
+    }
+    $session_data->{account_id} = ''.$account->{account_id};
+  });
+} # create_account
 
 1;
 

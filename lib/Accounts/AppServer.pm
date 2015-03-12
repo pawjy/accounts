@@ -4,6 +4,7 @@ use warnings;
 use Warabe::App;
 push our @ISA, qw(Warabe::App);
 use Path::Tiny;
+use JSON::PS;
 use Promise;
 
 sub new_from_http_and_config ($$$) {
