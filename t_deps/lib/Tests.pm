@@ -12,6 +12,7 @@ use Promised::Mysqld;
 use Promised::Docker::WebDriver;
 use MIME::Base64;
 use JSON::PS;
+use Web::UserAgent::Functions qw(http_get http_post);
 
 our @EXPORT;
 
@@ -148,6 +149,14 @@ sub app_server ($$$) {
           $http->set_status (400);
           $http->send_response_body_as_text ($res->code);
         }
+      } elsif ($path eq '/info') {
+        my (undef, $res) = http_post
+            url => qq<http://$host/info>,
+            header_fields => {Authorization => 'Bearer ' . $api_token},
+            params => {
+              sk => $http->request_cookies->{sk},
+            };
+        $http->send_response_body_as_ref (\($res->content));
       }
       $http->close_response_body;
       return $http->send_response;
@@ -202,6 +211,30 @@ sub stop_web_server () {
 
 push @EXPORT, qw(stop_web_server_and_driver);
 *stop_web_server_and_driver = \&stop_web_server;
+
+push @EXPORT, qw(session);
+sub session ($) {
+  my ($c) = @_;
+  return Promise->new (sub {
+    my ($ok, $ng) = @_;
+    my $host = $c->received_data->{host};
+    http_post
+        url => qq<http://$host/session>,
+        header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
+        anyevent => 1,
+        max_redirect => 0,
+        cb => sub {
+          my $res = $_[1];
+          if ($res->code == 200) {
+            $ok->(json_bytes2perl $res->content);
+          } elsif ($res->code == 400) {
+            $ng->(json_bytes2perl $res->content);
+          } else {
+            $ng->($res->code);
+          }
+        };
+  });
+} # session
 
 1;
 

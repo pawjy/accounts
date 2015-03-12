@@ -100,6 +100,8 @@ sub main ($$) {
 
       my $server = $app->config->get_oauth_server ($app->bare_param ('server'))
           or return $app->throw_error (400, reason_phrase => 'Bad |server|');
+      ## Application must specify a legal |callback_url| in the
+      ## context of the application.
       my $cb = $app->text_param ('callback_url')
           // return $app->throw_error (400, reason_phrase => 'Bad |callback_url|');
 
@@ -112,7 +114,8 @@ sub main ($$) {
 
       return (defined $server->{temp_endpoint} ? Promise->new (sub {
         my ($ok, $ng) = @_;
-        $cb .= '?state=' . $state;
+        $cb .= $cb =~ /\?/ ? '&' : '?';
+        $cb .= 'state=' . $state;
         http_oauth1_request_temp_credentials
             host => $server->{host},
             pathquery => $server->{temp_endpoint},
@@ -240,6 +243,7 @@ sub main ($$) {
           server => $server,
           session_data => $session_data,
         ))->then (sub {
+          delete $session_data->{action};
           return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
             return $app->send_json ({});
           });
@@ -251,7 +255,34 @@ sub main ($$) {
         return $class->delete_old_sessions ($app);
       }));
     });
-  }
+  } # /cb
+
+  if (@$path == 1 and $path->[0] eq 'info') {
+    ## /info - Current account data
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    return $class->resume_session ($app)->then (sub {
+      my $session_row = $_[0];
+      my $json = {};
+      return Promise->resolve->then (sub {
+        if (defined $session_row) {
+          my $id = $session_row->get ('data')->{account_id};
+          if (defined $id) {
+            return $app->db->select ('account', {
+              account_id => Dongry::Type->serialize ('text', $id),
+            }, source_name => 'master', fields => ['name'])->then (sub {
+              my $r = $_[0]->first or die "Account |$id| has no data";
+              $json->{account_id} = $id;
+              $json->{name} = $r->{name};
+            });
+          }
+        }
+      })->then (sub {
+        return $app->send_json ($json);
+      });
+    });
+  } # /info
 
   return $app->send_error (404);
 } # main
@@ -307,6 +338,8 @@ sub create_account ($$%) {
         $uuids->{account_link_id} .= '';
         my $time = time;
         my $name = $uuids->{account_id};
+        my $linked_name = $session_data->{$service}->{$server->{linked_name_field} // ''} // '';
+        $name = $linked_name if length $linked_name;
         my $account = {account_id => $uuids->{account_id},
                        user_status => 1, admin_status => 1,
                        terms_version => 0};
@@ -321,7 +354,7 @@ sub create_account ($$%) {
             service_name => Dongry::Type->serialize ('text', $server->{name}),
             created => $time,
             updated => $time,
-            linked_name => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_name_field} // ''} // ''),
+            linked_name => Dongry::Type->serialize ('text', $linked_name),
             linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
             linked_token1 => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_token1_field} // ''} // ''),
             linked_token2 => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_token2_field} // ''} // ''),
@@ -335,6 +368,8 @@ sub create_account ($$%) {
       my $time = time;
       my $account_id = $links->[0]->{account_id};
       my $name = $account_id;
+      my $linked_name = $session_data->{$service}->{$server->{linked_name_field} // ''} // '';
+      $name = $linked_name if length $linked_name;
       return Promise->all ([
         $app->db->execute ('UPDATE account SET name = ? WHERE account_id = ?', {
           name => Dongry::Type->serialize ('text', $name),
@@ -347,7 +382,7 @@ sub create_account ($$%) {
         $app->db->execute ('UPDATE account_link SET linked_name = ?, linked_id = ?, linked_token1 = ?, linked_token2 = ?, updated = ? WHERE account_link_id = ? AND account_id = ?', {
           account_link_id => $links->[0]->{account_link_id},
           account_id => $account_id,
-          linked_name => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_name_field} // ''} // ''),
+          linked_name => Dongry::Type->serialize ('text', $linked_name),
           linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
           linked_token1 => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_token1_field} // ''} // ''),
           linked_token2 => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_token2_field} // ''} // ''),

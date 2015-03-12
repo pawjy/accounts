@@ -17,7 +17,8 @@ test {
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     http_get
-        url => qq<http://$host/login>,
+        url => qq<http://$host/info>,
+        header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
         anyevent => 1,
         max_redirect => 0,
         cb => sub {
@@ -32,11 +33,11 @@ test {
     my $status = $_[0];
     test {
       is $status, 405;
-      done $c;
-      undef $c;
     } $c;
+    done $c;
+    undef $c;
   });
-} wait => $wait, n => 1, name => '/login GET';
+} wait => $wait, n => 1, name => '/info GET';
 
 test {
   my $c = shift;
@@ -44,7 +45,7 @@ test {
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     http_post
-        url => qq<http://$host/login>,
+        url => qq<http://$host/info>,
         anyevent => 1,
         max_redirect => 0,
         cb => sub {
@@ -59,11 +60,11 @@ test {
     my $status = $_[0];
     test {
       is $status, 401;
-      done $c;
-      undef $c;
     } $c;
+    done $c;
+    undef $c;
   });
-} wait => $wait, n => 1, name => '/login no auth';
+} wait => $wait, n => 1, name => '/info no auth';
 
 test {
   my $c = shift;
@@ -71,7 +72,7 @@ test {
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     http_post
-        url => qq<http://$host/login>,
+        url => qq<http://$host/info>,
         header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
         anyevent => 1,
         max_redirect => 0,
@@ -79,60 +80,20 @@ test {
           my $res = $_[1];
           if ($res->code == 200) {
             $ok->(json_bytes2perl $res->content);
-          } elsif ($res->code == 400) {
-            $ng->(json_bytes2perl $res->content);
           } else {
             $ng->($res->code);
           }
         };
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $error = $_[0];
-    test {
-      is $error->{reason}, 'Bad session';
-      done $c;
-      undef $c;
-    } $c;
-  });
-} wait => $wait, n => 1, name => '/login bad session';
-
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  session ($c)->then (sub {
-    my $session = $_[0];
-    return Promise->new (sub {
-      my ($ok, $ng) = @_;
-      http_post
-          url => qq<http://$host/login>,
-          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {
-            sk => $session->{sk},
-            server => 'xaa',
-            callback_url => 'http://haoa/',
-          },
-          anyevent => 1,
-          max_redirect => 0,
-          cb => sub {
-            my $res = $_[1];
-            if ($res->code == 200) {
-              $ok->(json_bytes2perl $res->content);
-            } elsif ($res->code == 400) {
-              $ng->(json_bytes2perl $res->content);
-            } else {
-              $ng->($res->code);
-            }
-          };
-    });
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $error = $_[0];
-    test {
-      is $error, undef;
-    } $c;
   })->then (sub {
+    my $json = $_[0];
+    test {
+      is $json->{account_id}, undef;
+      is $json->{name}, undef;
+    } $c;
     done $c;
     undef $c;
   });
-} wait => $wait, n => 1, name => '/login bad server';
+} wait => $wait, n => 2, name => '/info no session';
 
 test {
   my $c = shift;
@@ -142,21 +103,15 @@ test {
     return Promise->new (sub {
       my ($ok, $ng) = @_;
       http_post
-          url => qq<http://$host/login>,
+          url => qq<http://$host/info>,
           header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {
-            sk => $session->{sk},
-            server => 'hatena',
-            callback_url => 'http://haoa/',
-          },
+          cookies => {sk => $session->{sk}},
           anyevent => 1,
           max_redirect => 0,
           cb => sub {
             my $res = $_[1];
             if ($res->code == 200) {
               $ok->(json_bytes2perl $res->content);
-            } elsif ($res->code == 400) {
-              $ng->(json_bytes2perl $res->content);
             } else {
               $ng->($res->code);
             }
@@ -165,13 +120,46 @@ test {
   })->then (sub {
     my $json = $_[0];
     test {
-      like $json->{authorization_url}, qr{^https://www.hatena.ne.jp/oauth/authorize\?oauth_token=.+$};
+      is $json->{account_id}, undef;
+      is $json->{name}, undef;
     } $c;
-  }, sub { test { ok 0 } $c })->then (sub {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 1, name => '/login';
+} wait => $wait, n => 2, name => '/info has anon session';
+
+test {
+  my $c = shift;
+  my $host = $c->received_data->{host};
+  Promise->resolve->then (sub {
+    my $session = $_[0];
+    return Promise->new (sub {
+      my ($ok, $ng) = @_;
+      http_post
+          url => qq<http://$host/info>,
+          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
+          cookies => {sk => 'gfaeaaaaa'},
+          anyevent => 1,
+          max_redirect => 0,
+          cb => sub {
+            my $res = $_[1];
+            if ($res->code == 200) {
+              $ok->(json_bytes2perl $res->content);
+            } else {
+              $ng->($res->code);
+            }
+          };
+    });
+  })->then (sub {
+    my $json = $_[0];
+    test {
+      is $json->{account_id}, undef;
+      is $json->{name}, undef;
+    } $c;
+    done $c;
+    undef $c;
+  });
+} wait => $wait, n => 2, name => '/info bad session';
 
 run_tests;
 stop_web_server;

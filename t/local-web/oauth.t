@@ -111,14 +111,75 @@ test {
     })->then (sub {
       my $value = $_[0]->{value};
       test {
-        is $value, 200;
+        is $value, 200, 'oauth login result';
       } $c;
+    })->then (sub {
+      return post ("$wd/session/$sid/url", {
+        url => qq<http://$host/info>,
+      });
+    })->then (sub {
+      return post ("$wd/session/$sid/execute", {
+        script => q{ return document.body.textContent },
+        args => [],
+      });
+    })->then (sub {
+      my $json = json_bytes2perl $_[0]->{value};
+      test {
+        is $json->{name}, $c->received_data->{keys}->{'test.hatena_id'};
+        ok $json->{account_id};
+      } $c;
+      return $json->{account_id};
+    });
+  })->then (sub {
+    my $account_id = $_[0];
+    return post ("$wd/session", {
+      desiredCapabilities => {
+        browserName => 'firefox', # XXX
+      },
+    })->then (sub {
+      my $json = $_[0];
+      my $sid = $json->{sessionId};
+      return post ("$wd/session/$sid/url", {
+        url => qq<http://$host/start>,
+      })->then (sub {
+        return post ("$wd/session/$sid/execute", {
+          script => q{
+            document.querySelector ('form input[name=name]').value = arguments[0];
+            document.querySelector ('form input[name=password]').value = arguments[1];
+            document.querySelector ('form [type=submit]').click ();
+          },
+          args => [$c->received_data->{keys}->{'test.hatena_id'},
+                   $c->received_data->{keys}->{'test.hatena_password'}],
+        });
+      })->then (sub {
+        return post ("$wd/session/$sid/execute", {
+          script => q{
+            document.querySelector ('form [type=submit]').click ();
+          },
+          args => [],
+        });
+      })->then (sub {
+        return post ("$wd/session/$sid/url", {
+          url => qq<http://$host/info>,
+        });
+      })->then (sub {
+        return post ("$wd/session/$sid/execute", {
+          script => q{ return document.body.textContent },
+          args => [],
+        });
+      });
+    })->then (sub {
+      my $json = json_bytes2perl $_[0]->{value};
+      test {
+        is $json->{name}, $c->received_data->{keys}->{'test.hatena_id'};
+        is $json->{account_id}, $account_id;
+      } $c, name => 'second login';
     });
   })->then (sub {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 2, name => '/oauth hatena';
+} wait => $wait, n => 6, name => '/oauth hatena';
 
 test {
   my $c = shift;
