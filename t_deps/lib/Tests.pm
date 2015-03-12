@@ -111,6 +111,7 @@ sub app_server ($$$) {
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $http->request_cookies->{sk},
+              sk_context => 'app.cookie',
             };
         my $json = json_bytes2perl $res->content;
         $http->set_response_cookie (sk => $json->{sk}, expires => $json->{sk_expires}, path => q</>, httponly => 0, secure => 0)
@@ -124,6 +125,7 @@ sub app_server ($$$) {
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $json->{sk},
+              sk_context => 'app.cookie',
               server => 'hatena',
               callback_url => $cb_url,
             };
@@ -137,6 +139,7 @@ sub app_server ($$$) {
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $http->request_cookies->{sk},
+              sk_context => 'app.cookie',
               oauth_token => $http->query_params->{oauth_token},
               oauth_verifier => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{oauth_verifier},
               code => $http->query_params->{code},
@@ -155,6 +158,7 @@ sub app_server ($$$) {
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $http->request_cookies->{sk},
+              sk_context => 'app.cookie',
             };
         $http->send_response_body_as_ref (\($res->content));
       }
@@ -221,6 +225,7 @@ sub session ($) {
     http_post
         url => qq<http://$host/session>,
         header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
+        params => {sk_context => 'tests'},
         anyevent => 1,
         max_redirect => 0,
         cb => sub {

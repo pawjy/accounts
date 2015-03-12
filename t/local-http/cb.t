@@ -73,6 +73,7 @@ test {
     http_post
         url => qq<http://$host/cb>,
         header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
+        params => {sk_context => 'tests'},
         anyevent => 1,
         max_redirect => 0,
         cb => sub {
@@ -95,29 +96,6 @@ test {
   });
 } wait => $wait, n => 1, name => '/cb bad session';
 
-sub session ($) {
-  my ($c) = @_;
-  return Promise->new (sub {
-    my ($ok, $ng) = @_;
-    my $host = $c->received_data->{host};
-    http_post
-        url => qq<http://$host/session>,
-        header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-        anyevent => 1,
-        max_redirect => 0,
-        cb => sub {
-          my $res = $_[1];
-          if ($res->code == 200) {
-            $ok->(json_bytes2perl $res->content);
-          } elsif ($res->code == 400) {
-            $ng->(json_bytes2perl $res->content);
-          } else {
-            $ng->($res->code);
-          }
-        };
-  });
-} # session
-
 test {
   my $c = shift;
   my $host = $c->received_data->{host};
@@ -130,6 +108,7 @@ test {
           header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
           params => {
             sk => $session->{sk},
+            sk_context => 'tests',
           },
           anyevent => 1,
           max_redirect => 0,

@@ -1,9 +1,12 @@
 CREATE TABLE IF NOT EXISTS `session` (
   sk BINARY(100) NOT NULL,
+  sk_context VARBINARY(15),
   created DOUBLE NOT NULL,
+  expires DOUBLE NOT NULL,
   `data` MEDIUMBLOB NOT NULL,
   PRIMARY KEY (sk),
-  KEY (created)
+  KEY (created),
+  KEY (expires)
 ) DEFAULT CHARSET=BINARY ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS `account` (
@@ -34,31 +37,19 @@ CREATE TABLE IF NOT EXISTS `account_link` (
   KEY (service_name, linked_id)
 ) DEFAULT CHARSET=BINARY ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS `app_session` (
-  account_id BIGINT UNSIGNED NOT NULL,
-  app_name VARBINARY(127) NOT NULL,
-  ask BINARY(100) NOT NULL,
-  `ask_type` TINYINT UNSIGNED NOT NULL,
-  created DOUBLE NOT NULL,
-  PRIMARY KEY (ask),
-  KEY (account_id, created),
-  KEY (app_name, created),
-  KEY (created)
-) DEFAULT CHARSET=BINARY ENGINE=InnoDB;
-
-CREATE TABLE IF NOT EXISTS app_session_log (
+CREATE TABLE IF NOT EXISTS account_log (
   log_id BIGINT UNSIGNED NOT NULL,
   account_id BIGINT UNSIGNED NOT NULL,
-  app_name VARBINARY(127) NOT NULL,
-  ask BINARY(100) NOT NULL,
-  ask_type TINYINT UNSIGNED NOT NULL,
-  created DOUBLE NOT NULL,
+  operator_account_id BIGINT UNSIGNED NOT NULL,
+  `timestamp` DOUBLE NOT NULL,
   `action` VARBINARY(63) NOT NULL,
   ua VARBINARY(1023) NOT NULL,
   ipaddr VARBINARY(127) NOT NULL,
   `data` MEDIUMBLOB NOT NULL,
   PRIMARY KEY (log_id),
-  KEY (account_id, action),
-  KEY (ipaddr, created),
-  KEY (created)
+  KEY (action, timestamp),
+  KEY (account_id, action, timestamp),
+  KEY (operator_account_id, timestamp),
+  KEY (ipaddr, timestamp),
+  KEY (timestamp)
 ) DEFAULT CHARSET=BINARY ENGINE=InnoDB;

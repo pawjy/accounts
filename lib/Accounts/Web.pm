@@ -58,10 +58,13 @@ sub main ($$) {
     $app->requires_api_key;
 
     my $sk = $app->bare_param ('sk') // '';
+    my $sk_context = $app->bare_param ('sk_context')
+        // return $app->send_error (400, reason_phrase => 'No |sk_context|');
     return ((length $sk ? $app->db->select ('session', {
       sk => $sk,
-      created => {'>', time - $SessionTimeout},
-    }, fields => ['sk', 'created'], source_name => 'master')->then (sub {
+      sk_context => $sk_context,
+      expires => {'>', time},
+    }, fields => ['sk', 'expires'], source_name => 'master')->then (sub {
       return $_[0]->first_as_row; # or undef
     }) : Promise->resolve (undef))->then (sub {
       my $session_row = $_[0];
@@ -71,7 +74,9 @@ sub main ($$) {
         $sk = id 100;
         return $app->db->insert ('session', [{
           sk => $sk,
+          sk_context => $sk_context,
           created => time,
+          expires => time + $SessionTimeout,
           data => '{}',
         }], source_name => 'master')->then (sub {
           $session_row = $_[0]->first_as_row;
@@ -81,7 +86,7 @@ sub main ($$) {
     })->then (sub {
       my ($session_row, $new) = @{$_[0]};
       my $json = {sk => $session_row->get ('sk'),
-                  sk_expires => $session_row->get ('created') + $SessionTimeout,
+                  sk_expires => $session_row->get ('expires'),
                   set_sk => $new?1:0};
       return $app->send_json ($json);
     })->then (sub {
@@ -95,7 +100,7 @@ sub main ($$) {
     $app->requires_api_key;
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0]
-          // return $app->send_error_json ({reason => 'bad session'});
+          // return $app->send_error_json ({reason => 'Bad session'});
       my $session_data = $session_row->get ('data');
 
       my $server = $app->config->get_oauth_server ($app->bare_param ('server'))
@@ -292,6 +297,7 @@ sub resume_session ($$) {
   my $sk = $app->bare_param ('sk') // '';
   return (length $sk ? $app->db->select ('session', {
     sk => $sk,
+    sk_context => $app->bare_param ('sk_context') // '',
     created => {'>', time - $SessionTimeout},
   }, source_name => 'master')->then (sub {
     return $_[0]->first_as_row; # or undef

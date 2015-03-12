@@ -73,6 +73,7 @@ test {
     http_post
         url => qq<http://$host/login>,
         header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
+        params => {sk_context => 'tests'},
         anyevent => 1,
         max_redirect => 0,
         cb => sub {
@@ -107,6 +108,47 @@ test {
           header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
           params => {
             sk => $session->{sk},
+            sk_context => 'not-tests',
+            server => 'hatena',
+            callback_url => 'http://haoa/',
+          },
+          anyevent => 1,
+          max_redirect => 0,
+          cb => sub {
+            my $res = $_[1];
+            if ($res->code == 200) {
+              $ok->(json_bytes2perl $res->content);
+            } elsif ($res->code == 400) {
+              $ng->(json_bytes2perl $res->content);
+            } else {
+              $ng->($res->code);
+            }
+          };
+    });
+  })->then (sub { test { ok 0 } $c }, sub {
+    my $error = $_[0];
+    test {
+      is $error->{reason}, 'Bad session';
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} wait => $wait, n => 1, name => '/login bad sk_context';
+
+test {
+  my $c = shift;
+  my $host = $c->received_data->{host};
+  session ($c)->then (sub {
+    my $session = $_[0];
+    return Promise->new (sub {
+      my ($ok, $ng) = @_;
+      http_post
+          url => qq<http://$host/login>,
+          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
+          params => {
+            sk => $session->{sk},
+            sk_context => 'tests',
             server => 'xaa',
             callback_url => 'http://haoa/',
           },
@@ -146,6 +188,7 @@ test {
           header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
           params => {
             sk => $session->{sk},
+            sk_context => 'tests',
             server => 'hatena',
             callback_url => 'http://haoa/',
           },
