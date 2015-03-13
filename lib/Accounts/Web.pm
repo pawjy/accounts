@@ -8,7 +8,7 @@ use Wanage::URL;
 use Wanage::HTTP;
 use Dongry::Type;
 use Accounts::AppServer;
-use Web::UserAgent::Functions qw(http_post);
+use Web::UserAgent::Functions qw(http_post http_get);
 use Web::UserAgent::Functions::OAuth;
 
 sub psgi_app ($$) {
@@ -243,11 +243,17 @@ sub main ($$) {
               $ok->();
             };
       }))->then (sub {
-        return Promise->resolve ($class->create_account (
+        return Promise->resolve ($class->get_resource_owner_profile (
           $app,
           server => $server,
           session_data => $session_data,
         ))->then (sub {
+          return $class->create_account (
+            $app,
+            server => $server,
+            session_data => $session_data,
+          );
+        })->then (sub {
           delete $session_data->{action};
           return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
             return $app->send_json ({});
@@ -310,15 +316,49 @@ sub delete_old_sessions ($$) {
   });
 } # delete_old_sessions
 
+sub get_resource_owner_profile ($$%) {
+  my ($class, $app, %args) = @_;
+  my $server = $args{server} or die;
+  my $service = $server->{name};
+  my $session_data = $args{session_data} or die;
+  return unless defined $server->{profile_endpoint};
+
+  return Promise->new (sub {
+    my ($ok, $ng) = @_;
+    my %param;
+    if ($server->{auth_scheme} eq 'token') {
+      $param{header_fields}->{Authorization} = 'token ' . $session_data->{$service}->{access_token};
+    }
+    http_get
+        url => ('https://' . ($server->{profile_host} // $server->{host}) . $server->{profile_endpoint}),
+        %param,
+        timeout => 30,
+        anyevent => 1,
+        cb => sub {
+          my (undef, $res) = @_;
+          if ($res->code == 200) {
+            $ok->(json_bytes2perl $res->content);
+          } else {
+            $ng->($res->code);
+          }
+        };
+  })->then (sub {
+    my $json = $_[0];
+    $session_data->{$service}->{profile_id} = $json->{$server->{profile_id_field}}
+        if defined $server->{profile_id_field};
+    $session_data->{$service}->{profile_name} = $json->{$server->{profile_name_field}}
+        if defined $server->{profile_name_field};
+  });
+} # get_resource_owner_profile
+
 sub create_account ($$%) {
   my ($class, $app, %args) = @_;
   my $server = $args{server} or die;
   my $service = $server->{name};
+  my $session_data = $args{session_data} or die;
 
   return $app->send_error (400, reason_phrase => 'Non-loginable |service|')
       unless defined $server->{linked_id_field};
-
-  my $session_data = $args{session_data} or die;
 
   my $id = $session_data->{$service}->{$server->{linked_id_field}};
   return $app->send_error (400, reason_phrase => 'Non-loginable server account')

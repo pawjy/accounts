@@ -78,6 +78,13 @@ my $OAuthServers = {
     host => 'github.com',
     auth_endpoint => '/login/oauth/authorize',
     token_endpoint => '/login/oauth/access_token',
+    profile_host => 'api.github.com',
+    profile_endpoint => '/user',
+    profile_id_field => 'id',
+    profile_name_field => 'name',
+    auth_scheme => 'token',
+    linked_id_field => 'profile_id',
+    linked_name_field => 'profile_name',
   },
 }; # $OAuthServers
 

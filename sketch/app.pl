@@ -31,6 +31,7 @@ $plackup->set_app_code (q{
           header_fields => {Authorization => 'Bearer ' . $api_token},
           params => {
             sk => $http->request_cookies->{sk},
+            sk_context => 'sketch',
           };
       my $json = json_bytes2perl $res->content;
       $http->set_response_cookie (sk => $json->{sk}, expires => $json->{sk_expires}, path => q</>, httponly => 1, secure => 0)
@@ -41,7 +42,8 @@ $plackup->set_app_code (q{
           header_fields => {Authorization => 'Bearer ' . $api_token},
           params => {
             sk => $json->{sk},
-            server => 'hatena',
+            sk_context => 'sketch',
+            server => $http->query_params->{server},
             callback_url => $http->url->resolve_string ('/cb')->stringify,
           };
       my $json = json_bytes2perl $res->content;
@@ -53,14 +55,23 @@ $plackup->set_app_code (q{
           header_fields => {Authorization => 'Bearer ' . $api_token},
           params => {
             sk => $http->request_cookies->{sk},
+            sk_context => 'sketch',
             oauth_token => $http->query_params->{oauth_token},
             oauth_verifier => $http->query_params->{oauth_verifier},
             code => $http->query_params->{code},
             state => $http->query_params->{state},
           };
-      my $json = json_bytes2perl $res->content;
-      $http->send_response_body_as_text ($res->content);
-
+      $http->set_status (302);
+      $http->set_response_header (Location => '/info');
+    } elsif ($path eq '/info') {
+      my (undef, $res) = http_post
+          url => qq<http://$host/info>,
+          header_fields => {Authorization => 'Bearer ' . $api_token},
+          params => {
+            sk => $http->request_cookies->{sk},
+            sk_context => 'sketch',
+          };
+      $http->send_response_body_as_ref (\($res->content));
     }
     $http->close_response_body;
     return $http->send_response;
