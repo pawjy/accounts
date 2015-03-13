@@ -161,6 +161,16 @@ sub app_server ($$$) {
               sk_context => 'app.cookie',
             };
         $http->send_response_body_as_ref (\($res->content));
+      } elsif ($path eq '/token') {
+        my (undef, $res) = http_post
+            url => qq<http://$host/token>,
+            header_fields => {Authorization => 'Bearer ' . $api_token},
+            params => {
+              sk => $http->request_cookies->{sk},
+              sk_context => 'app.cookie',
+              server => $http->query_params->{server},
+            };
+        $http->send_response_body_as_ref (\($res->content));
       }
       $http->close_response_body;
       return $http->send_response;

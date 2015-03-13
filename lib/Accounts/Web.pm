@@ -295,6 +295,45 @@ sub main ($$) {
     });
   } # /info
 
+  if (@$path == 1 and $path->[0] eq 'token') {
+    ## /token - Get access token of an OAuth server
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    my $server_name = $app->bare_param ('server') // '';
+    my $server = $app->config->get_oauth_server ($server_name)
+        or return $app->send_error (400, reason_phrase => 'Bad |server|');
+
+    return $class->resume_session ($app)->then (sub {
+      my $session_row = $_[0];
+      my $json = {};
+      return Promise->resolve->then (sub {
+        if (defined $session_row) {
+          my $id = $session_row->get ('data')->{account_id};
+          if (defined $id) {
+            return $app->db->select ('account_link', {
+              account_id => Dongry::Type->serialize ('text', $id),
+              service_name => $server->{name},
+            }, source_name => 'master', fields => ['linked_token1', 'linked_token2'])->then (sub {
+              my $r = $_[0]->first;
+              if (defined $r) {
+                if (defined $server->{temp_endpoint}) { # OAuth 1.0
+                  $json->{access_token} = [$r->{linked_token1}, $r->{linked_token2}]
+                      if length $r->{linked_token1} and length $r->{linked_token2};
+                } else {
+                  $json->{access_token} = $r->{linked_token1}
+                      if length $r->{linked_token1};
+                }
+              }
+            });
+          }
+        }
+      })->then (sub {
+        return $app->send_json ($json);
+      });
+    });
+  } # /token
+
   return $app->send_error (404);
 } # main
 
@@ -377,6 +416,14 @@ sub create_account ($$%) {
     my $links = $_[0]->all;
     # XXX filter by account status?
     $links = [$links->[0]] if @$links; # XXX
+    my $token1 = '';
+    my $token2 = '';
+    if (defined $server->{temp_endpoint}) { # OAuth 1.0
+      my $at = $session_data->{$service}->{access_token};
+      ($token1, $token2) = @$at if defined $at and ref $at eq 'ARRAY' and @$at == 2;
+    } else {
+      $token1 = $session_data->{$service}->{access_token} // '';
+    }
     if (@$links == 0) { # new account
       return $app->db->execute ('SELECT UUID_SHORT() AS account_id, UUID_SHORT() AS link_id', undef, source_name => 'master')->then (sub {
         my $uuids = $_[0]->first;
@@ -402,8 +449,8 @@ sub create_account ($$%) {
             updated => $time,
             linked_name => Dongry::Type->serialize ('text', $linked_name),
             linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
-            linked_token1 => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_token1_field} // ''} // ''),
-            linked_token2 => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_token2_field} // ''} // ''),
+            linked_token1 => Dongry::Type->serialize ('text', $token1),
+            linked_token2 => Dongry::Type->serialize ('text', $token2),
           }, source_name => 'master', table_name => 'account_link')->then (sub {
             my $account_link = {account_link_id => $uuids->{link_id}};
             return [$account, $account_link];
@@ -430,8 +477,8 @@ sub create_account ($$%) {
           account_id => $account_id,
           linked_name => Dongry::Type->serialize ('text', $linked_name),
           linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
-          linked_token1 => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_token1_field} // ''} // ''),
-          linked_token2 => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_token2_field} // ''} // ''),
+          linked_token1 => Dongry::Type->serialize ('text', $token1),
+          linked_token2 => Dongry::Type->serialize ('text', $token2),
           updated => time,
         }, source_name => 'master'),
       ])->then (sub {

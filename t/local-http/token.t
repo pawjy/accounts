@@ -17,7 +17,7 @@ test {
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     http_get
-        url => qq<http://$host/info>,
+        url => qq<http://$host/token>,
         header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
         anyevent => 1,
         max_redirect => 0,
@@ -37,7 +37,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 1, name => '/info GET';
+} wait => $wait, n => 1, name => '/token GET';
 
 test {
   my $c = shift;
@@ -45,7 +45,7 @@ test {
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     http_post
-        url => qq<http://$host/info>,
+        url => qq<http://$host/token>,
         anyevent => 1,
         max_redirect => 0,
         cb => sub {
@@ -64,7 +64,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 1, name => '/info no auth';
+} wait => $wait, n => 1, name => '/token no auth';
 
 test {
   my $c = shift;
@@ -72,8 +72,9 @@ test {
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     http_post
-        url => qq<http://$host/info>,
+        url => qq<http://$host/token>,
         header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
+        params => {server => 'hatena'},
         anyevent => 1,
         max_redirect => 0,
         cb => sub {
@@ -87,13 +88,12 @@ test {
   })->then (sub {
     my $json = $_[0];
     test {
-      is $json->{account_id}, undef;
-      is $json->{name}, undef;
+      is $json->{access_token}, undef;
     } $c;
     done $c;
     undef $c;
   });
-} wait => $wait, n => 2, name => '/info no session';
+} wait => $wait, n => 1, name => '/token no session';
 
 test {
   my $c = shift;
@@ -103,7 +103,39 @@ test {
     return Promise->new (sub {
       my ($ok, $ng) = @_;
       http_post
-          url => qq<http://$host/info>,
+          url => qq<http://$host/token>,
+          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
+          params => {sk => $session->{sk}, server => 'hoge'},
+          anyevent => 1,
+          max_redirect => 0,
+          cb => sub {
+            my $res = $_[1];
+            if ($res->code == 200) {
+              $ok->(json_bytes2perl $res->content);
+            } else {
+              $ng->($res->code);
+            }
+          };
+    });
+  })->then (sub { test { ok 0 } $c }, sub {
+    my $status = $_[0];
+    test {
+      is $status, 400;
+    } $c;
+    done $c;
+    undef $c;
+  });
+} wait => $wait, n => 1, name => '/token bad server';
+
+test {
+  my $c = shift;
+  my $host = $c->received_data->{host};
+  session ($c)->then (sub {
+    my $session = $_[0];
+    return Promise->new (sub {
+      my ($ok, $ng) = @_;
+      http_post
+          url => qq<http://$host/token>,
           header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
           params => {sk => $session->{sk}},
           anyevent => 1,
@@ -117,28 +149,27 @@ test {
             }
           };
     });
-  })->then (sub {
-    my $json = $_[0];
+  })->then (sub { test { ok 0 } $c }, sub {
+    my $status = $_[0];
     test {
-      is $json->{account_id}, undef;
-      is $json->{name}, undef;
+      is $status, 400;
     } $c;
     done $c;
     undef $c;
   });
-} wait => $wait, n => 2, name => '/info has anon session';
+} wait => $wait, n => 1, name => '/token no server';
 
 test {
   my $c = shift;
   my $host = $c->received_data->{host};
-  Promise->resolve->then (sub {
+  session ($c)->then (sub {
     my $session = $_[0];
     return Promise->new (sub {
       my ($ok, $ng) = @_;
       http_post
-          url => qq<http://$host/info>,
+          url => qq<http://$host/token>,
           header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {sk => 'gfaeaaaaa'},
+          params => {server => 'hatena', sk => $session->{sk}},
           anyevent => 1,
           max_redirect => 0,
           cb => sub {
@@ -153,13 +184,44 @@ test {
   })->then (sub {
     my $json = $_[0];
     test {
-      is $json->{account_id}, undef;
-      is $json->{name}, undef;
+      is $json->{access_token}, undef;
     } $c;
     done $c;
     undef $c;
   });
-} wait => $wait, n => 2, name => '/info bad session';
+} wait => $wait, n => 1, name => '/token has anon session';
+
+test {
+  my $c = shift;
+  my $host = $c->received_data->{host};
+  Promise->resolve->then (sub {
+    my $session = $_[0];
+    return Promise->new (sub {
+      my ($ok, $ng) = @_;
+      http_post
+          url => qq<http://$host/token>,
+          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
+          params => {server => 'hatena', sk => 'gfaeaaaaa'},
+          anyevent => 1,
+          max_redirect => 0,
+          cb => sub {
+            my $res = $_[1];
+            if ($res->code == 200) {
+              $ok->(json_bytes2perl $res->content);
+            } else {
+              $ng->($res->code);
+            }
+          };
+    });
+  })->then (sub {
+    my $json = $_[0];
+    test {
+      is $json->{access_token}, undef;
+    } $c;
+    done $c;
+    undef $c;
+  });
+} wait => $wait, n => 1, name => '/token bad session';
 
 run_tests;
 stop_web_server;

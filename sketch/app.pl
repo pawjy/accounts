@@ -16,7 +16,7 @@ $plackup->envs->{API_TOKEN} = $token;
 $plackup->set_option ('--port' => 1705);
 $plackup->set_app_code (q{
   use Wanage::HTTP;
-  use Web::UserAgent::Functions qw(http_post);
+  use Web::UserAgent::Functions qw(http_post http_get);
   use JSON::PS;
   my $api_token = $ENV{API_TOKEN};
   my $host = 'localhost:5710';
@@ -71,6 +71,23 @@ $plackup->set_app_code (q{
             sk => $http->request_cookies->{sk},
             sk_context => 'sketch',
           };
+      $http->send_response_body_as_ref (\($res->content));
+    } elsif ($path eq '/repos') {
+      my (undef, $res) = http_post
+          url => qq<http://$host/token>,
+          header_fields => {Authorization => 'Bearer ' . $api_token},
+          params => {
+            sk => $http->request_cookies->{sk},
+            sk_context => 'sketch',
+            server => 'github',
+          };
+      my $json = json_bytes2perl $res->content;
+      my $token = $json->{access_token};
+      (undef, $res) = http_get
+          url => q<https://api.github.com/user/repos>,
+          header_fields => {Authorization => 'token ' . $token},
+          ;
+      $http->set_response_header ('Content-Type' => 'text/plain');
       $http->send_response_body_as_ref (\($res->content));
     }
     $http->close_response_body;

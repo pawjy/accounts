@@ -115,6 +115,23 @@ test {
       } $c;
     })->then (sub {
       return post ("$wd/session/$sid/url", {
+        url => qq<http://$host/token?server=hatena>,
+      });
+    })->then (sub {
+      return post ("$wd/session/$sid/execute", {
+        script => q{ return document.body.textContent },
+        args => [],
+      });
+    })->then (sub {
+      my $json = json_bytes2perl $_[0]->{value};
+      test {
+        is ref $json->{access_token}, 'ARRAY';
+        like $json->{access_token}->[0], qr{.+};
+        like $json->{access_token}->[1], qr{.+};
+      } $c, name => '/token';
+      return $json->{account_id};
+    })->then (sub {
+      return post ("$wd/session/$sid/url", {
         url => qq<http://$host/info>,
       });
     })->then (sub {
@@ -179,7 +196,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 6, name => '/oauth hatena';
+} wait => $wait, n => 9, name => '/oauth hatena';
 
 test {
   my $c = shift;
