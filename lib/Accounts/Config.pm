@@ -81,10 +81,13 @@ my $OAuthServers = {
     profile_host => 'api.github.com',
     profile_endpoint => '/user',
     profile_id_field => 'id',
+    profile_key_field => 'login',
     profile_name_field => 'name',
     auth_scheme => 'token',
     linked_id_field => 'profile_id',
+    linked_key_field => 'profile_key',
     linked_name_field => 'profile_name',
+    scope_separator => ',',
   },
 }; # $OAuthServers
 
@@ -120,9 +123,13 @@ my $Schema = {
     type => {data => 'json'},
     primary_keys => ['sk'],
   },
-  app_temp_session => {
-    type => {app_name => 'text', data => 'json'},
-    primary_keys => ['atsk'],
+  account => {
+    type => {name => 'text'},
+    primary_keys => ['account_id'],
+  },
+  account_link => {
+    type => {linked_id => 'text', linked_key => 'text', linked_name => 'text'},
+    primary_keys => ['account_link_id'],
   },
 }; # $Schema
 
