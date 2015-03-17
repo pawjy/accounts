@@ -7,6 +7,7 @@ use JSON::PS;
 use Wanage::URL;
 use Wanage::HTTP;
 use Dongry::Type;
+use Dongry::SQL;
 use Accounts::AppServer;
 use Web::UserAgent::Functions qw(http_post http_get);
 use Web::UserAgent::Functions::OAuth;
@@ -353,6 +354,36 @@ sub main ($$) {
       } } @{$_[0]}}});
     }));
   } # /profiles
+
+  if (@$path == 1 and $path->[0] eq 'search') {
+    ## /search - User search
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $q = $app->text_param ('q');
+    my $q_like = Dongry::Type->serialize ('text', '%' . (like $q) . '%');
+
+    # XXX better full-text search
+    return (((length $q) ? $app->db->execute ('SELECT account_id,service_name,linked_name,linked_id,linked_key FROM account_link WHERE linked_id like :linked_id or linked_key like :linked_key or linked_name like :linked_name LIMIT :limit', {
+      linked_id => $q_like,
+      linked_key => $q_like,
+      linked_name => $q_like,
+      limit => $app->bare_param ('per_page') || 20,
+    }, source_name => 'master', table_name => 'account_link')->then (sub {
+      return $_[0]->all_as_rows;
+    }) : Promise->resolve ([]))->then (sub {
+      my $accounts = {};
+      for my $row (@{$_[0]}) {
+        my $v = {};
+        for (qw(id key name)) {
+          my $x = $row->get ('linked_' . $_);
+          $v->{$_} = $x if length $x;
+        }
+        $accounts->{$row->get ('account_id')}->{services}->{$row->get ('service_name')} = $v;
+      }
+      # XXX filter by account.user_status && account.admin_status
+      return $app->send_json ({accounts => $accounts});
+    }));
+  } # /search
 
   return $app->send_error (404);
 } # main
