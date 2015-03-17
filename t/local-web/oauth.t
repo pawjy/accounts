@@ -146,6 +146,24 @@ test {
         ok $json->{account_id};
       } $c;
       return $json->{account_id};
+    })->then (sub {
+      my $aid = $_[0];
+      return post ("$wd/session/$sid/url", {
+        url => qq<http://$host/profiles?account_id=$aid>,
+      })->then (sub {
+        return post ("$wd/session/$sid/execute", {
+          script => q{ return document.body.textContent },
+          args => [],
+        });
+      })->then (sub {
+        my $json = json_bytes2perl $_[0]->{value};
+        test {
+          ok $json->{accounts}->{$aid};
+          is $json->{accounts}->{$aid}->{name}, $c->received_data->{keys}->{'test.hatena_id'};
+          is $json->{accounts}->{$aid}->{account_id}, $aid;
+        } $c, name => '/profiles';
+        return $aid;
+      });
     });
   })->then (sub {
     my $account_id = $_[0];
@@ -196,7 +214,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 9, name => '/oauth hatena';
+} wait => $wait, n => 12, name => '/oauth hatena';
 
 test {
   my $c = shift;

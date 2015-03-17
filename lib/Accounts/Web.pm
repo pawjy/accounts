@@ -268,33 +268,6 @@ sub main ($$) {
     });
   } # /cb
 
-  if (@$path == 1 and $path->[0] eq 'info') {
-    ## /info - Current account data
-    $app->requires_request_method ({POST => 1});
-    $app->requires_api_key;
-
-    return $class->resume_session ($app)->then (sub {
-      my $session_row = $_[0];
-      my $json = {};
-      return Promise->resolve->then (sub {
-        if (defined $session_row) {
-          my $id = $session_row->get ('data')->{account_id};
-          if (defined $id) {
-            return $app->db->select ('account', {
-              account_id => Dongry::Type->serialize ('text', $id),
-            }, source_name => 'master', fields => ['name'])->then (sub {
-              my $r = $_[0]->first or die "Account |$id| has no data";
-              $json->{account_id} = $id;
-              $json->{name} = $r->{name};
-            });
-          }
-        }
-      })->then (sub {
-        return $app->send_json ($json);
-      });
-    });
-  } # /info
-
   if (@$path == 1 and $path->[0] eq 'token') {
     ## /token - Get access token of an OAuth server
     $app->requires_request_method ({POST => 1});
@@ -333,6 +306,48 @@ sub main ($$) {
       });
     });
   } # /token
+
+  if (@$path == 1 and $path->[0] eq 'info') {
+    ## /info - Current account data
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    return $class->resume_session ($app)->then (sub {
+      my $session_row = $_[0];
+      my $json = {};
+      return Promise->resolve->then (sub {
+        if (defined $session_row) {
+          my $id = $session_row->get ('data')->{account_id};
+          if (defined $id) {
+            return $app->db->select ('account', {
+              account_id => Dongry::Type->serialize ('text', $id),
+            }, source_name => 'master', fields => ['name'])->then (sub {
+              my $r = $_[0]->first or die "Account |$id| has no data";
+              $json->{account_id} = $id;
+              $json->{name} = $r->{name};
+            });
+          }
+        }
+      })->then (sub {
+        return $app->send_json ($json);
+      });
+    });
+  } # /info
+
+  if (@$path == 1 and $path->[0] eq 'profiles') {
+    ## /profiles - Public account data
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    my $account_ids = $app->bare_param_list ('account_id');
+    return ((@$account_ids ? $app->db->select ('account', {
+      account_id => {-in => $account_ids},
+    }, source_name => 'master', fields => ['account_id', 'name'])->then (sub {
+      return $_[0]->all->to_a;
+    }) : Promise->resolve ([]))->then (sub {
+      return $app->send_json ({accounts => {map { $_->{account_id} => $_ } @{$_[0]}}});
+    }));
+  } # /profiles
 
   return $app->send_error (404);
 } # main

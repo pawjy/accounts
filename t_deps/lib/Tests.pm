@@ -161,6 +161,14 @@ sub app_server ($$$) {
               sk_context => 'app.cookie',
             };
         $http->send_response_body_as_ref (\($res->content));
+      } elsif ($path eq '/profiles') {
+        my (undef, $res) = http_post
+            url => qq<http://$host/profiles>,
+            header_fields => {Authorization => 'Bearer ' . $api_token},
+            params => {
+              account_id => $http->query_params->{account_id},
+            };
+        $http->send_response_body_as_ref (\($res->content));
       } elsif ($path eq '/token') {
         my (undef, $res) = http_post
             url => qq<http://$host/token>,
@@ -181,6 +189,7 @@ sub app_server ($$$) {
 
 push @EXPORT, qw(web_server_and_driver);
 sub web_server_and_driver () {
+  $ENV{TEST_MAX_CONCUR} ||= 1;
   my $cv = AE::cv;
   my $cv1 = web_server ('127.0.0.1');
   $cv1->cb (sub {
