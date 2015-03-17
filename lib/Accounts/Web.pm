@@ -277,11 +277,12 @@ sub main ($$) {
     my $server = $app->config->get_oauth_server ($server_name)
         or return $app->send_error (400, reason_phrase => 'Bad |server|');
 
-    return $class->resume_session ($app)->then (sub {
+    my $id = $app->bare_param ('account_id');
+    return ((defined $id ? Promise->resolve ($id) : $class->resume_session ($app)->then (sub {
       my $session_row = $_[0];
       return $session_row->get ('data')->{account_id} # or undef
           if defined $session_row;
-    })->then (sub {
+    }))->then (sub {
       my $id = $_[0];
       my $json = {};
       return $json unless defined $id;
@@ -303,7 +304,7 @@ sub main ($$) {
       });
     })->then (sub {
       return $app->send_json ($_[0]);
-    });
+    }));
   } # /token
 
   if (@$path == 1 and $path->[0] eq 'info') {

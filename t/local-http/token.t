@@ -223,6 +223,38 @@ test {
   });
 } wait => $wait, n => 1, name => '/token bad session';
 
+test {
+  my $c = shift;
+  my $host = $c->received_data->{host};
+  session ($c)->then (sub {
+    my $session = $_[0];
+    return Promise->new (sub {
+      my ($ok, $ng) = @_;
+      http_post
+          url => qq<http://$host/token>,
+          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
+          params => {server => 'hatena', account_id => 42533},
+          anyevent => 1,
+          max_redirect => 0,
+          cb => sub {
+            my $res = $_[1];
+            if ($res->code == 200) {
+              $ok->(json_bytes2perl $res->content);
+            } else {
+              $ng->($res->code);
+            }
+          };
+    });
+  })->then (sub {
+    my $json = $_[0];
+    test {
+      is $json->{access_token}, undef;
+    } $c;
+    done $c;
+    undef $c;
+  });
+} wait => $wait, n => 1, name => '/token bad account_id';
+
 run_tests;
 stop_web_server;
 
