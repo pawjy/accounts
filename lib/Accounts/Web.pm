@@ -279,31 +279,30 @@ sub main ($$) {
 
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0];
+      return $session_row->get ('data')->{account_id} # or undef
+          if defined $session_row;
+    })->then (sub {
+      my $id = $_[0];
       my $json = {};
-      return Promise->resolve->then (sub {
-        if (defined $session_row) {
-          my $id = $session_row->get ('data')->{account_id};
-          if (defined $id) {
-            return $app->db->select ('account_link', {
-              account_id => Dongry::Type->serialize ('text', $id),
-              service_name => $server->{name},
-            }, source_name => 'master', fields => ['linked_token1', 'linked_token2'])->then (sub {
-              my $r = $_[0]->first;
-              if (defined $r) {
-                if (defined $server->{temp_endpoint}) { # OAuth 1.0
-                  $json->{access_token} = [$r->{linked_token1}, $r->{linked_token2}]
-                      if length $r->{linked_token1} and length $r->{linked_token2};
-                } else {
-                  $json->{access_token} = $r->{linked_token1}
-                      if length $r->{linked_token1};
-                }
-              }
-            });
+      return $json unless defined $id;
+      return $app->db->select ('account_link', {
+        account_id => Dongry::Type->serialize ('text', $id),
+        service_name => $server->{name},
+      }, source_name => 'master', fields => ['linked_token1', 'linked_token2'])->then (sub {
+        my $r = $_[0]->first;
+        if (defined $r) {
+          if (defined $server->{temp_endpoint}) { # OAuth 1.0
+            $json->{access_token} = [$r->{linked_token1}, $r->{linked_token2}]
+                if length $r->{linked_token1} and length $r->{linked_token2};
+          } else {
+            $json->{access_token} = $r->{linked_token1}
+                if length $r->{linked_token1};
           }
         }
-      })->then (sub {
-        return $app->send_json ($json);
+        return $json;
       });
+    })->then (sub {
+      return $app->send_json ($_[0]);
     });
   } # /token
 
