@@ -326,7 +326,7 @@ sub main ($$) {
               account_id => Dongry::Type->serialize ('text', $id),
             }, source_name => 'master', fields => ['name'])->then (sub {
               my $r = $_[0]->first_as_row // die "Account |$id| has no data";
-              $json->{account_id} = $id;
+              $json->{account_id} = ''.$id;
               $json->{name} = $r->get ('name');
             });
           }
@@ -349,7 +349,7 @@ sub main ($$) {
       return $_[0]->all_as_rows->to_a;
     }) : Promise->resolve ([]))->then (sub {
       return $app->send_json ({accounts => {map { $_->get ('account_id') => {
-        account_id => $_->get ('account_id'),
+        account_id => ''.$_->get ('account_id'),
         name => $_->get ('name'),
       } } @{$_[0]}}});
     }));
@@ -378,7 +378,9 @@ sub main ($$) {
           my $x = $row->get ('linked_' . $_);
           $v->{$_} = $x if length $x;
         }
-        $accounts->{$row->get ('account_id')}->{services}->{$row->get ('service_name')} = $v;
+        my $aid = $row->get ('account_id');
+        $accounts->{$aid}->{services}->{$row->get ('service_name')} = $v;
+        $accounts->{$aid}->{account_id} = ''.$aid;
       }
       # XXX filter by account.user_status && account.admin_status
       return $app->send_json ({accounts => $accounts});
