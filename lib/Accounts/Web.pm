@@ -2,7 +2,10 @@ package Accounts::Web;
 use strict;
 use warnings;
 use Path::Tiny;
+use File::Temp;
 use Promise;
+use Promised::File;
+use Promised::Command;
 use JSON::PS;
 use Wanage::URL;
 use Wanage::HTTP;
@@ -94,6 +97,33 @@ sub main ($$) {
       return $class->delete_old_sessions ($app);
     }));
   } # /session
+
+  if (@$path == 1 and $path->[0] eq 'create') {
+    ## /create - Create an account (without link)
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    return $class->resume_session ($app)->then (sub {
+      my $session_row = $_[0]
+          // return $app->send_error_json ({reason => 'Bad session'});
+      return $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master')->then (sub {
+        my $account_id = ''.($_[0]->first->{uuid});
+        my $time = time;
+        return $app->db->insert ('account', [{
+          account_id => $account_id,
+          created => $time,
+          name => $account_id,
+          user_status => 1, admin_status => 1, terms_version => 0,
+        }], source_name => 'master')->then (sub {
+          my $session_data = $session_row->get ('data');
+          $session_data->{account_id} = $account_id;
+          return $session_row->update ({data => $session_data}, source_name => 'master');
+        })->then (sub {
+          return $app->send_json ({account_id => $account_id});
+        });
+      });
+    });
+  } # /create
 
   if (@$path == 1 and $path->[0] eq 'login') {
     ## /login - Start OAuth flow to associate session with account
@@ -295,7 +325,8 @@ sub main ($$) {
       }, source_name => 'master', fields => ['linked_token1', 'linked_token2'])->then (sub {
         my $r = $_[0]->first;
         if (defined $r) {
-          if (defined $server->{temp_endpoint}) { # OAuth 1.0
+          if (defined $server->{temp_endpoint} or # OAuth 1.0
+              $server->{name} eq 'ssh') {
             $json->{access_token} = [$r->{linked_token1}, $r->{linked_token2}]
                 if length $r->{linked_token1} and length $r->{linked_token2};
           } else {
@@ -309,6 +340,79 @@ sub main ($$) {
       return $app->send_json ($_[0]);
     }));
   } # /token
+
+  if (@$path == 1 and $path->[0] eq 'keygen') {
+    ## /keygen - Generate SSH key pair
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    my $server_name = $app->bare_param ('server') // '';
+    my $server = $app->config->get_oauth_server ($server_name)
+        or return $app->send_error (400, reason_phrase => 'Bad |server|');
+
+    return $class->resume_session ($app)->then (sub {
+      my $session_row = $_[0];
+      my $account_id = defined $session_row ? $session_row->get ('data')->{account_id} : undef;
+      return $app->send_error_json ({reason => 'Not a login user'})
+          unless defined $account_id;
+
+      return Promise->all ([
+        do {
+          my $temp = File::Temp->newdir;
+          my $dir = Promised::File->new_from_path ("$temp");
+          my $private_file_name = "$temp/key";
+          my $public_file_name = "$temp/key.pub";
+          $dir->mkpath->then (sub {
+            my $cmd = Promised::Command->new ([
+              'ssh-keygen',
+              '-t' => 'dsa',
+              '-N' => '',
+              '-C' => $app->bare_param ('comment') // '',
+              '-f' => $private_file_name,
+            ]);
+            return $cmd->run->then (sub { return $cmd->wait });
+          })->then (sub {
+            my $result = $_[0];
+            die $result unless $result->exit_code == 0;
+            return Promise->all ([
+              Promised::File->new_from_path ($private_file_name)->read_byte_string,
+              Promised::File->new_from_path ($public_file_name)->read_byte_string,
+            ]);
+          })->then (sub {
+            undef $temp;
+            my $result = {private => $_[0]->[0], public => $_[0]->[1]};
+            return $dir->remove_tree->then (sub { return $result });
+          }, sub {
+            my $error = $_[0];
+            return $dir->remove_tree->then (sub { die $error });
+          });
+        },
+        $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master'),
+      ])->then (sub {
+        my $key = $_[0]->[0];
+        my $link_id = $_[0]->[1]->first->{uuid};
+        my $time = time;
+        return $app->db->insert ('account_link', [{
+          account_link_id => $link_id,
+          account_id => Dongry::Type->serialize ('text', $account_id),
+          service_name => Dongry::Type->serialize ('text', $server->{name}),
+          created => $time,
+          updated => $time,
+          linked_id => '',
+          linked_key => '',
+          linked_name => '',
+          linked_token1 => $key->{public},
+          linked_token2 => $key->{private},
+        }], source_name => 'master', duplicate => {
+          linked_token1 => $app->db->bare_sql_fragment ('VALUES(linked_token1)'),
+          linked_token2 => $app->db->bare_sql_fragment ('VALUES(linked_token2)'),
+          updated => $app->db->bare_sql_fragment ('VALUES(updated)'),
+        });
+      });
+    })->then (sub {
+      return $app->send_json ({});
+    });
+  } # /keygen
 
   if (@$path == 1 and $path->[0] eq 'info') {
     ## /info - Current account data

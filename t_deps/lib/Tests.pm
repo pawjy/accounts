@@ -236,9 +236,9 @@ push @EXPORT, qw(stop_web_server_and_driver);
 *stop_web_server_and_driver = \&stop_web_server;
 
 push @EXPORT, qw(session);
-sub session ($) {
-  my ($c) = @_;
-  return Promise->new (sub {
+sub session ($;%) {
+  my ($c, %args) = @_;
+  my $p = Promise->new (sub {
     my ($ok, $ng) = @_;
     my $host = $c->received_data->{host};
     http_post
@@ -258,6 +258,37 @@ sub session ($) {
           }
         };
   });
+
+  if ($args{account}) {
+    $p = $p->then (sub {
+      my $session = $_[0];
+      return Promise->new (sub {
+        my ($ok, $ng) = @_;
+        my $host = $c->received_data->{host};
+        http_post
+            url => qq<http://$host/create>,
+            header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
+            params => {sk_context => 'tests', sk => $session->{sk}},
+            anyevent => 1,
+            max_redirect => 0,
+            cb => sub {
+              my $res = $_[1];
+              if ($res->code == 200) {
+                $ok->(json_bytes2perl $res->content);
+              } elsif ($res->code == 400) {
+                $ng->(json_bytes2perl $res->content);
+              } else {
+                $ng->($res->code);
+              }
+            };
+      })->then (sub {
+        my $account = $_[0];
+        return {%$session, %$account};
+      });
+    });
+  }
+
+  return $p;
 } # session
 
 1;

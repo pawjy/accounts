@@ -89,6 +89,10 @@ my $OAuthServers = {
     linked_name_field => 'profile_name',
     scope_separator => ',',
   },
+
+  ssh => {
+    name => 'ssh',
+  },
 }; # $OAuthServers
 
 sub get_oauth_server ($$) {
