@@ -1,7 +1,7 @@
 #!/bin/sh
 
-#local/keys/devel/config-keys.json
-export APP_CONFIG=XXX
+cat local/keys/devel/config-keys.json | ./perl -MPath::Tiny -n -e '$root = path (".")->absolute; s/\@\@ROOT\@\@/$root/g; print' > local/config-keys.json
+export APP_CONFIG=local/config-keys.json
 
 while true
 do
