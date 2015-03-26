@@ -12,7 +12,7 @@ updatenightly: local/bin/pmbp.pl
 
 ## ------ Setup ------
 
-deps:
+deps: always
 	true
 ifdef PMBP_HEROKU_BUILDPACK
 else
@@ -74,3 +74,4 @@ test-external-http-or-rollback:
 
 failed:
 	false
+always:
