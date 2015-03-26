@@ -41,8 +41,30 @@ test-local-http-circle:
 test-local-web-circle:
 	$(PROVE) t/local-web/*.t
 
+test-external-http:
+	#XXX
+
 ## ------ Deployment ------
 
-heroku-save-current-release:
 create-commit-for-heroku:
+	git remote rm origin
+	rm -fr local/keys/.git deps/pmtar/.git deps/pmpp/.git modules/*/.git
+	git add -f local/keys/* deps/pmtar/* deps/pmpp/*
+	rm -fr ./t_deps/modules
+	git rm -r t_deps/modules .gitmodules
+	git rm modules/* --cached
+	git add -f modules/*/*
+	git commit -m "for heroku"
+
+heroku-save-current-release:
+	perl -e '`heroku releases -n 1 --app $(HEROKU_APP_NAME)` =~ /^(v[0-9]+)/m ? print $$1 : ""' > local/.heroku-current-release
+	cat local/.heroku-current-release
+
+heroku-rollback:
+	heroku rollback `cat local/.heroku-current-release` --app $(HEROKU_APP_NAME)
+
 test-external-http-or-rollback:
+	$(MAKE) test-external-http || $(MAKE) heroku-rollback failed
+
+failed:
+	false
