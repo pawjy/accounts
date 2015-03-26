@@ -1,0 +1,10 @@
+#!/bin/sh
+
+#local/keys/devel/config-keys.json
+export APP_CONFIG=XXX
+
+while true
+do
+  echo "-----> Starting application server..."
+  ./plackup bin/server.psgi -p $PORT -s Twiggy::Prefork
+done
