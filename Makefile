@@ -44,7 +44,7 @@ test-local-http-circle:
 	$(PROVE) t/local-http/*.t
 
 test-local-web-circle:
-	$(PROVE) t/local-web/*.t
+	#$(PROVE) t/local-web/*.t
 
 test-external-http:
 	#XXX

@@ -33,8 +33,8 @@ my $AppServer;
 my $Browsers = {};
 
 my $root_path = path (__FILE__)->parent->parent->parent;
-my $config_keys_path = $root_path->child ('local/keys/test/config-keys.json');
-my $config_keys_file = Promised::File->new_from_path ($config_keys_path);
+#my $config_keys_path = $root_path->child ('local/keys/test/config-keys.json');
+#my $config_keys_file = Promised::File->new_from_path ($config_keys_path);
 
 sub db_sqls () {
   my $file = Promised::File->new_from_path
@@ -61,14 +61,17 @@ sub web_server (;$) {
       db_sqls->then (sub {
         $MySQLServer->create_db_and_execute_sqls (account_test => $_[0]);
       }),
-      $config_keys_file->read_byte_string->then (sub {
-        $keys = json_bytes2perl $_[0];
-        return $temp_file->write_byte_string (perl2json_bytes {
+      #$config_keys_file->read_byte_string->then (sub {
+      #  $keys = json_bytes2perl $_[0];
+      do {
+        $keys = {"auth.bearer" => rand};
+        $temp_file->write_byte_string (perl2json_bytes {
           %$keys,
           alt_dsns => {master => {account => $dsn}},
-          dsns => {account => $dsn},
+          #dsns => {account => $dsn},
         });
-      }),
+      #}),
+      },
     ]);
   })->then (sub {
     $HTTPServer->plackup ($root_path->child ('plackup'));

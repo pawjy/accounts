@@ -11,7 +11,6 @@ dependencies:
     - docker pull wakaba/docker-chromedriver:stable
     - git config --global user.email "temp@circleci.test"
     - git config --global user.name "CircleCI"
-    - git clone $KEYS_REPO_URL local/keys
 test:
   override:
     - make test-local-http-circle :
@@ -26,6 +25,7 @@ deployment:
   staging:
     branch: staging
     commands:
+      - git clone $KEYS_REPO_URL local/keys
       - make heroku-save-current-release HEROKU_APP_NAME=$HEROKU_APP_NAME
       - make create-commit-for-heroku
       - git push git@heroku.com:$HEROKU_APP_NAME.git +`git rev-parse HEAD`:master :
