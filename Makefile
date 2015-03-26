@@ -33,9 +33,16 @@ pmbp-install: pmbp-upgrade
 
 PROVE = ./prove
 
-test: test-deps test-main
-
 test-deps: deps
 
-test-main:
-	$(PROVE) t/*.t
+test-local-http-circle:
+	$(PROVE) t/local-http/*.t
+
+test-local-web-circle:
+	$(PROVE) t/local-web/*.t
+
+## ------ Deployment ------
+
+heroku-save-current-release:
+create-commit-for-heroku:
+test-external-http-or-rollback:
