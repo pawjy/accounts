@@ -1,0 +1,10 @@
+#!/bin/sh
+
+cat local/keys/devel/config-keys.json | ./perl -MPath::Tiny -n -e '$root = path (".")->absolute; s/\@\@ROOT\@\@/$root/g; print' > local/config-keys.json
+export APP_CONFIG=local/config-keys.json
+
+while true
+do
+  echo "-----> Starting application server..."
+  ./plackup bin/server.psgi -p $PORT -s Twiggy::Prefork
+done
