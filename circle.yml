@@ -9,6 +9,8 @@ dependencies:
         timeout: 600
     - docker info
     - docker pull wakaba/docker-chromedriver:stable
+    - git config --global user.email "temp@circleci.test"
+    - git config --global user.name "CircleCI"
     - git clone $KEYS_REPO_URL local/keys
 test:
   override:
