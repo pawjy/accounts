@@ -57,18 +57,24 @@
 [submodule "modules/promised-command"]
 	path = modules/promised-command
 	url = git://github.com/wakaba/perl-promised-command
+	track = master
 [submodule "t_deps/modules/promised-mysql"]
 	path = t_deps/modules/promised-mysql
 	url = git://github.com/wakaba/perl-promised-mysqld
+	track = master
 [submodule "t_deps/modules/promised-docker-webdriver"]
 	path = t_deps/modules/promised-docker-webdriver
 	url = git://github.com/wakaba/perl-promised-docker-webdriver
+	track = master
 [submodule "t_deps/modules/promised-plackup"]
 	path = t_deps/modules/promised-plackup
 	url = git://github.com/wakaba/perl-promised-plackup
+	track = master
 [submodule "modules/json-ps"]
 	path = modules/json-ps
 	url = git://github.com/wakaba/perl-json-ps
+	track = master
 [submodule "modules/promised-file"]
 	path = modules/promised-file
 	url = git://github.com/wakaba/perl-promised-file
+	track = master
