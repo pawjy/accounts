@@ -33,7 +33,7 @@ my $AppServer;
 my $Browsers = {};
 
 my $root_path = path (__FILE__)->parent->parent->parent;
-my $config_keys_path = $root_path->child ('local/keys/devel/config-keys.json');
+my $config_keys_path = $root_path->child ('local/keys/test/config-keys.json');
 my $config_keys_file = Promised::File->new_from_path ($config_keys_path);
 
 sub db_sqls () {

@@ -9,6 +9,7 @@ dependencies:
         timeout: 600
     - docker info
     - docker pull wakaba/docker-chromedriver:stable
+    - git clone $KEYS_REPO_URL local/keys
 test:
   override:
     - make test-local-http-circle :
