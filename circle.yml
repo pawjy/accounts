@@ -29,7 +29,7 @@ deployment:
       - git clone $KEYS_REPO_URL local/keys
       - make heroku-save-current-release HEROKU_APP_NAME=$HEROKU_APP_NAME
       - make create-commit-for-heroku
-      - git push git@heroku.com:$HEROKU_APP_NAME.git +`git rev-parse HEAD`:master > /dev/null 2> /dev/null :
+      - git push git@heroku.com:$HEROKU_APP_NAME.git +`git rev-parse HEAD`:master  :
          timeout: 600
       - make test-external-http-or-rollback HEROKU_APP_NAME=$HEROKU_APP_NAME
       - curl -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"master\",\"head\":\"`cat head.txt`\",\"commit_message\":\"auto-merge staging into master\"}" "https://api.github.com/repos/wakaba/accounts/merges"
