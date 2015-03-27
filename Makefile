@@ -23,7 +23,7 @@ endif
 git-submodules:
 	$(GIT) submodule update --init
 
-PMBP_OPTIONS=--perl-relocatable
+PMBP_OPTIONS=
 
 local/bin/pmbp.pl:
 	mkdir -p local/bin
@@ -55,7 +55,7 @@ test-external-http:
 create-commit-for-heroku:
 	git remote rm origin
 	rm -fr local/keys/.git deps/pmtar/.git deps/pmpp/.git modules/*/.git
-	git add -f local/keys/* deps/pmtar/* local/perlbrew/perls/perl-5* #deps/pmpp/*
+	git add -f local/keys/* deps/pmtar/* #deps/pmpp/*
 	rm -fr ./t_deps/modules
 	git rm -r t_deps/modules .gitmodules
 	git rm modules/* --cached
