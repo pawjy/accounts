@@ -9,7 +9,6 @@ List::MoreUtils~0.410
 DBI~1.633
 Devel::StackTrace~2.00
 HTTP::Body~1.22
-HTTP::Message~6.06
 POSIX::strftime::Compiler~0.41
 DBD::mysql~4.031
 Path::Class~0.35
@@ -19,7 +18,6 @@ IO::Handle~1.28
 LWP::MediaTypes~6.02
 Module::Runtime~0.014
 Unicode::Normalize~1.18
-HTML::Entities~3.69
 Parallel::Prefork~0.17
 DBIx::RewriteDSN~0.05
 Socket~2.018
@@ -31,8 +29,8 @@ Test::Tester~0.114
 Exporter~5.70
 Class::Accessor::Lite~0.06
 Proc::Wait3~0.04
-LWP::UserAgent~6.13
 Filesys::Notify::Simple~0.12
+LWP::UserAgent~6.13
 MIME::Base64~3.15
 HTML::Tagset~3.20
 Devel::StackTrace::AsHTML~0.14
@@ -57,9 +55,11 @@ Term::ANSIColor~4.03
 Test::Class~0.48
 Server::Starter~0.23
 Exporter::Lite~0.06
+HTML::HeadParser~3.71
 Twiggy~0.1025
 AnyEvent::HTTP~2.21
 HTTP::Cookies~6.01
+HTTP::Request::Common~6.04
 File::Temp~0.2304
 File::Copy::Recursive~0.38
 Signal::Mask~0.008
