@@ -7,6 +7,7 @@ use Test::More;
 use Test::X1;
 use Web::UserAgent::Functions qw(http_post_data http_get);
 use JSON::PS;
+use MIME::Base64;
 use Promise;
 
 ## This test will make requests to www.hatena.ne.jp.
@@ -78,7 +79,7 @@ test {
     my $json = $_[0];
     my $sid = $json->{sessionId};
     return post ("$wd/session/$sid/url", {
-      url => qq<http://$host/start>,
+      url => qq<http://$host/start?app_data=ho%E3%81%82%00e>,
     })->then (sub {
       return post ("$wd/session/$sid/execute", {
         script => q{
@@ -111,7 +112,9 @@ test {
     })->then (sub {
       my $value = $_[0]->{value};
       test {
-        is $value, 200, 'oauth login result';
+        my $json = json_bytes2perl decode_base64 $value;
+        is $json->{status}, 200, 'oauth login result';
+        is $json->{app_data}, "ho\x{3042}\x00e";
       } $c;
     })->then (sub {
       return post ("$wd/session/$sid/url", {
@@ -214,7 +217,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 12, name => '/oauth hatena';
+} wait => $wait, n => 13, name => '/oauth hatena';
 
 test {
   my $c = shift;
