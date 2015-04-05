@@ -148,7 +148,8 @@ sub main ($$) {
       $session_data->{action} = {endpoint => 'oauth',
                                  server => $server->{name},
                                  callback_url => $cb,
-                                 state => $state};
+                                 state => $state,
+                                 app_data => $app->text_param ('app_data')};
 
       return (defined $server->{temp_endpoint} ? Promise->new (sub {
         my ($ok, $ng) = @_;
@@ -287,9 +288,10 @@ sub main ($$) {
             session_data => $session_data,
           );
         })->then (sub {
+          my $app_data = $session_data->{action}->{app_data}; # or undef
           delete $session_data->{action};
           return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
-            return $app->send_json ({});
+            return $app->send_json ({app_data => $app_data});
           });
         });
       }, sub {

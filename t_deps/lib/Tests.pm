@@ -64,7 +64,9 @@ sub web_server (;$) {
       #$config_keys_file->read_byte_string->then (sub {
       #  $keys = json_bytes2perl $_[0];
       do {
-        $keys = {"auth.bearer" => rand};
+        $keys = {
+          "auth.bearer" => rand,
+        };
         $temp_file->write_byte_string (perl2json_bytes {
           %$keys,
           alt_dsns => {master => {account => $dsn}},
@@ -100,8 +102,10 @@ sub app_server ($$$) {
   $AppServer->envs->{API_HOST} = $api_host;
   $AppServer->set_app_code (q{
     use Wanage::HTTP;
+    use Wanage::URL;
     use Web::UserAgent::Functions qw(http_post);
     use JSON::PS;
+    use MIME::Base64;
     my $api_token = $ENV{API_TOKEN};
     my $host = $ENV{API_HOST};
     sub {
@@ -124,7 +128,7 @@ sub app_server ($$$) {
         $cb_url .= '&bad_state=1' if $http->query_params->{bad_state};
         $cb_url .= '&bad_code=1' if $http->query_params->{bad_code};
         my (undef, $res) = http_post
-            url => qq<http://$host/login>,
+            url => qq<http://$host/login?app_data=> . (percent_encode_b $http->query_params->{app_data}->[0] // ''),
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $json->{sk},
@@ -149,8 +153,9 @@ sub app_server ($$$) {
               state => $http->query_params->{bad_state} ? 'aaa' : $http->query_params->{state},
             };
         if ($res->code == 200) {
+          my $json = json_bytes2perl $res->content;
           $http->set_status (200);
-          $http->send_response_body_as_text ($res->code);
+          $http->send_response_body_as_text (encode_base64 perl2json_bytes {status => $res->code, app_data => $json->{app_data}});
         } else {
           $http->set_status (400);
           $http->send_response_body_as_text ($res->code);
