@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS `session` (
   sk BINARY(100) NOT NULL,
-  sk_context VARBINARY(15),
+  sk_context VARBINARY(31),
   created DOUBLE NOT NULL,
   expires DOUBLE NOT NULL,
   `data` MEDIUMBLOB NOT NULL,
