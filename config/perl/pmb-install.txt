@@ -15,11 +15,11 @@ DBD::mysql~4.031
 Path::Class~0.35
 common::sense~3.73
 Test::mysqld~0.17
-HTTP::Request~6.00
 IO::Handle~1.28
 LWP::MediaTypes~6.02
 Module::Runtime~0.014
 Unicode::Normalize~1.18
+HTML::Entities~3.69
 Parallel::Prefork~0.17
 DBIx::RewriteDSN~0.05
 Socket~2.018
@@ -56,10 +56,10 @@ Term::ANSIColor~4.03
 Test::Class~0.48
 Server::Starter~0.25
 Exporter::Lite~0.06
-HTML::HeadParser~3.71
 Twiggy~0.1025
 AnyEvent::HTTP~2.21
 HTTP::Cookies~6.01
+HTTP::Request::Common~6.04
 File::Temp~0.2304
 File::Copy::Recursive~0.38
 Signal::Mask~0.008
