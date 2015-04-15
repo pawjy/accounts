@@ -313,7 +313,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 9, name => '/keygen has account session';
+} wait => $wait, n => 9, name => '/keygen has account session', timeout => 60;
 
 run_tests;
 stop_web_server;
