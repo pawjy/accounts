@@ -203,7 +203,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 13, name => ['/oauth', $server_type];
+} wait => $wait, n => 13, name => ['/oauth', $server_type], timeout => 60;
 
 test {
   my $c = shift;
