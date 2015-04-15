@@ -25,7 +25,7 @@ deployment:
   staging:
     branch: staging
     commands:
-      - git fetch --depth=1000
+      - git fetch --unshallow
       - git rev-parse HEAD > head.txt
       - git clone $KEYS_REPO_URL local/keys
       - make heroku-save-current-release HEROKU_APP_NAME=$HEROKU_APP_NAME
