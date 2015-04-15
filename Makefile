@@ -45,10 +45,11 @@ test-local-http-circle:
 	$(PROVE) t/local-http/*.t
 
 test-local-web-circle:
-	#$(PROVE) t/local-web/*.t
+	$(PROVE) t/local-web/*.t
 
+# Requires $ENV{XTEST_ORIGIN}
 test-external-http:
-	#XXX
+	$(PROVE) t/ext-http/*.t
 
 ## ------ Deployment ------
 
@@ -69,6 +70,7 @@ heroku-save-current-release:
 heroku-rollback:
 	heroku rollback `cat local/.heroku-current-release` --app $(HEROKU_APP_NAME)
 
+# Requires $ENV{XTEST_ORIGIN}
 test-external-http-or-rollback:
 	$(MAKE) test-external-http || $(MAKE) heroku-rollback failed
 

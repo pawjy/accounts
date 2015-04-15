@@ -156,14 +156,15 @@ sub main ($$) {
         $cb .= $cb =~ /\?/ ? '&' : '?';
         $cb .= 'state=' . $state;
         http_oauth1_request_temp_credentials
+            url_scheme => $server->{url_scheme},
             host => $server->{host},
             pathquery => $server->{temp_endpoint},
             oauth_callback => $cb,
             oauth_consumer_key => $server->{client_id},
             client_shared_secret => $server->{client_secret},
             params => {scope => $scope},
-            auth => {pathquery => $server->{auth_endpoint}},
-            timeout => 30,
+            auth => {host => $server->{auth_host}, pathquery => $server->{auth_endpoint}},
+            timeout => 10,
             anyevent => 1,
             cb => sub {
               my ($temp_token, $temp_token_secret, $auth_url) = @_;
@@ -175,7 +176,7 @@ sub main ($$) {
             };
       }) : Promise->new (sub {
         my ($ok, $ng) = @_;
-        my $auth_url = q<https://> . ($server->{auth_host} // $server->{host}) . ($server->{auth_endpoint}) . '?' . join '&', map {
+        my $auth_url = ($server->{url_scheme} || 'https') . q<://> . ($server->{auth_host} // $server->{host}) . ($server->{auth_endpoint}) . '?' . join '&', map {
           (percent_encode_c $_->[0]) . '=' . (percent_encode_c $_->[1])
         } (
           [client_id => $server->{client_id}],
@@ -221,6 +222,7 @@ sub main ($$) {
       return ((defined $session_data->{action}->{temp_credentials} ? Promise->new (sub {
         my ($ok, $ng) = @_;
         http_oauth1_request_token # or die
+            url_scheme => $server->{url_scheme},
             host => $server->{host},
             pathquery => $server->{token_endpoint},
             oauth_consumer_key => $server->{client_id},
@@ -229,7 +231,7 @@ sub main ($$) {
             temp_token_secret => $session_data->{action}->{temp_credentials}->[1],
             oauth_token => $app->bare_param ('oauth_token'),
             oauth_verifier => $app->bare_param ('oauth_verifier'),
-            timeout => 30,
+            timeout => 10,
             anyevent => 1,
             cb => sub {
               my ($access_token, $access_token_secret, $params) = @_;
@@ -244,7 +246,7 @@ sub main ($$) {
       }) : Promise->new (sub {
         my ($ok, $ng) = @_;
         http_post
-            url => ('https://' . $server->{host} . $server->{token_endpoint}),
+            url => (($server->{url_scheme} // 'https') . '://' . $server->{host} . $server->{token_endpoint}),
             params => {
               client_id => $server->{client_id},
               client_secret => $server->{client_secret},
@@ -252,7 +254,7 @@ sub main ($$) {
               code => $app->text_param ('code'),
               grant_type => 'authorization_code',
             },
-            timeout => 30,
+            timeout => 10,
             anyevent => 1,
             cb => sub {
               my (undef, $res) = @_;
@@ -323,7 +325,7 @@ sub main ($$) {
       return $json unless defined $id;
       return $app->db->select ('account_link', {
         account_id => Dongry::Type->serialize ('text', $id),
-        service_name => $server->{name},
+        service_name => Dongry::Type->serialize ('text', $server->{name}),
       }, source_name => 'master', fields => ['linked_token1', 'linked_token2'])->then (sub {
         my $r = $_[0]->first;
         if (defined $r) {
@@ -528,7 +530,7 @@ sub get_resource_owner_profile ($$%) {
       $param{header_fields}->{Authorization} = 'token ' . $session_data->{$service}->{access_token};
     }
     http_get
-        url => ('https://' . ($server->{profile_host} // $server->{host}) . $server->{profile_endpoint}),
+        url => (($server->{url_scheme} // 'https') . '://' . ($server->{profile_host} // $server->{host}) . $server->{profile_endpoint}),
         %param,
         timeout => 30,
         anyevent => 1,
@@ -568,10 +570,10 @@ sub create_account ($$%) {
   #my $link_id = $app->bare_param ('account_link_id') // '';
   return ((length $link_id ? $app->db->execute ('SELECT account_link_id, account_id FROM account_link WHERE account_link_id = ? AND service_name = ? AND linked_id = ?', {
     account_link_id => $link_id,
-    service_name => $service,
+    service_name => Dongry::Type->serialize ('text', $service),
     linked_id => $id,
   }, source_name => 'master') : $app->db->execute ('SELECT account_link_id, account_id FROM account_link WHERE service_name = ? AND linked_id = ?', {
-    service_name => $service,
+    service_name => Dongry::Type->serialize ('text', $service),
     linked_id => $id,
   }, source_name => 'master'))->then (sub {
     my $links = $_[0]->all;

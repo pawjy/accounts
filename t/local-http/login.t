@@ -109,7 +109,7 @@ test {
           params => {
             sk => $session->{sk},
             sk_context => 'not-tests',
-            server => 'hatena',
+            server => 'oauth1server',
             callback_url => 'http://haoa/',
           },
           anyevent => 1,
@@ -189,7 +189,7 @@ test {
           params => {
             sk => $session->{sk},
             sk_context => 'tests',
-            server => 'hatena',
+            server => 'oauth1server',
             callback_url => 'http://haoa/',
           },
           anyevent => 1,
@@ -208,7 +208,8 @@ test {
   })->then (sub {
     my $json = $_[0];
     test {
-      like $json->{authorization_url}, qr{^https://www.hatena.ne.jp/oauth/authorize\?oauth_token=.+$};
+      my $auth = $c->received_data->{oauth1_auth_url};
+      like $json->{authorization_url}, qr{^\Q$auth\E\?oauth_token=.+$};
     } $c;
   }, sub { test { ok 0 } $c })->then (sub {
     done $c;
