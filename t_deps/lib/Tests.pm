@@ -52,14 +52,22 @@ sub web_server (;$) {
   $MySQLServer = Promised::Mysqld->new;
   $MySQLServer->start->then (sub {
     my $dsn = $MySQLServer->get_dsn_string (dbname => 'account_test');
-    $MySQLServer->{_temp} = my $temp = File::Temp->new;
-    my $temp_path = path ($temp)->absolute;
+    $MySQLServer->{_temp} = my $temp = File::Temp->newdir;
+    my $temp_dir_path = path ($temp)->absolute;
+    my $temp_path = $temp_dir_path->child ('file');
     my $temp_file = Promised::File->new_from_path ($temp_path);
     $HTTPServer = Promised::Plackup->new;
     $HTTPServer->envs->{APP_CONFIG} = $temp_path;
+    my $servers_json_path = $temp_dir_path->child ('servers.json');
     return Promise->all ([
       db_sqls->then (sub {
         $MySQLServer->create_db_and_execute_sqls (account_test => $_[0]);
+      }),
+      Promised::File->new_from_path ($root_path->child ('config/servers.json'))->read_byte_string->then (sub {
+        my $json = json_bytes2perl $_[0];
+        return Promised::File->new_from_path ($servers_json_path)->write_byte_string (perl2json_bytes {
+          %$json,
+        });
       }),
       #$config_keys_file->read_byte_string->then (sub {
       #  $keys = json_bytes2perl $_[0];
@@ -71,6 +79,7 @@ sub web_server (;$) {
           %$keys,
           alt_dsns => {master => {account => $dsn}},
           #dsns => {account => $dsn},
+          servers_json_file => $servers_json_path,
         });
       #}),
       },
