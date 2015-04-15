@@ -156,6 +156,7 @@ sub main ($$) {
         $cb .= $cb =~ /\?/ ? '&' : '?';
         $cb .= 'state=' . $state;
         http_oauth1_request_temp_credentials
+            url_scheme => $server->{url_scheme},
             host => $server->{host},
             pathquery => $server->{temp_endpoint},
             oauth_callback => $cb,
@@ -163,7 +164,7 @@ sub main ($$) {
             client_shared_secret => $server->{client_secret},
             params => {scope => $scope},
             auth => {pathquery => $server->{auth_endpoint}},
-            timeout => 30,
+            timeout => 10,
             anyevent => 1,
             cb => sub {
               my ($temp_token, $temp_token_secret, $auth_url) = @_;
@@ -221,6 +222,7 @@ sub main ($$) {
       return ((defined $session_data->{action}->{temp_credentials} ? Promise->new (sub {
         my ($ok, $ng) = @_;
         http_oauth1_request_token # or die
+            url_scheme => $server->{url_scheme},
             host => $server->{host},
             pathquery => $server->{token_endpoint},
             oauth_consumer_key => $server->{client_id},
@@ -229,7 +231,7 @@ sub main ($$) {
             temp_token_secret => $session_data->{action}->{temp_credentials}->[1],
             oauth_token => $app->bare_param ('oauth_token'),
             oauth_verifier => $app->bare_param ('oauth_verifier'),
-            timeout => 30,
+            timeout => 10,
             anyevent => 1,
             cb => sub {
               my ($access_token, $access_token_secret, $params) = @_;
@@ -244,7 +246,7 @@ sub main ($$) {
       }) : Promise->new (sub {
         my ($ok, $ng) = @_;
         http_post
-            url => ('https://' . $server->{host} . $server->{token_endpoint}),
+            url => (($server->{url_scheme} // 'https') . '://' . $server->{host} . $server->{token_endpoint}),
             params => {
               client_id => $server->{client_id},
               client_secret => $server->{client_secret},
@@ -252,7 +254,7 @@ sub main ($$) {
               code => $app->text_param ('code'),
               grant_type => 'authorization_code',
             },
-            timeout => 30,
+            timeout => 10,
             anyevent => 1,
             cb => sub {
               my (undef, $res) = @_;

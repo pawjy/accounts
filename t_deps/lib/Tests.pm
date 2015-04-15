@@ -30,6 +30,7 @@ sub import ($;@) {
 my $MySQLServer;
 my $HTTPServer;
 my $AppServer;
+my $OAuthServer;
 my $Browsers = {};
 
 my $root_path = path (__FILE__)->parent->parent->parent;
@@ -44,13 +45,51 @@ sub db_sqls () {
   });
 } # db_sqls
 
+sub oauth_server () {
+  $OAuthServer = Promised::Plackup->new;
+  $OAuthServer->envs->{CLIENT_ID} = rand;
+  $OAuthServer->envs->{CLIENT_SECRET} = rand;
+  $OAuthServer->plackup ($root_path->child ('plackup'));
+  $OAuthServer->set_option ('--host' => '127.0.0.1');
+  $OAuthServer->set_app_code (q{
+    use Wanage::HTTP;
+    use Wanage::URL;
+    use Web::UserAgent::Functions qw(http_post);
+    use JSON::PS;
+    use MIME::Base64;
+    my $ClientID = $ENV{CLIENT_ID};
+    my $ClientSecret = $ENV{CLIENT_SECRET};
+    my $TempToken;
+    my $TempTokenSecret;
+    sub {
+      my $env = shift;
+      my $http = Wanage::HTTP->new_from_psgi_env ($env);
+      my $path = $http->url->{path};
+      if ($path eq '/oauth1/temp') {
+        $TempToken = rand;
+        $TempTokenSecret = rand;
+        $http->send_response_body_as_text (sprintf 'oauth_token=%s&oauth_token_secret=%s&oauth_callback_confirmed=true', percent_encode_c $TempToken, percent_encode_c $TempTokenSecret);
+      }
+
+      $http->close_response_body;
+      return $http->send_response;
+    };
+  });
+  return $OAuthServer->start;
+} # oauth_server
+
 push @EXPORT, qw(web_server);
 sub web_server (;$) {
   my $web_host = $_[0];
   my $cv = AE::cv;
   my $keys;
   $MySQLServer = Promised::Mysqld->new;
-  $MySQLServer->start->then (sub {
+  my $OAuth1AuthEndpoint;
+  my $OAuth2AuthEndpoint;
+  Promise->all ([
+    $MySQLServer->start,
+    oauth_server,
+  ])->then (sub {
     my $dsn = $MySQLServer->get_dsn_string (dbname => 'account_test');
     $MySQLServer->{_temp} = my $temp = File::Temp->newdir;
     my $temp_dir_path = path ($temp)->absolute;
@@ -65,8 +104,23 @@ sub web_server (;$) {
       }),
       Promised::File->new_from_path ($root_path->child ('config/servers.json'))->read_byte_string->then (sub {
         my $json = json_bytes2perl $_[0];
-        return Promised::File->new_from_path ($servers_json_path)->write_byte_string (perl2json_bytes {
+        my $host = $OAuthServer->get_host;
+        $OAuth1AuthEndpoint = sprintf q<http://%s/oauth1/authorize>, $host;
+        $OAuth2AuthEndpoint = sprintf q<http://%s/oauth2/authorize>, $host;
+        return Promised::File->new_from_path ($servers_json_path)->write_byte_string (perl2json_bytes +{
           %$json,
+          oauth1server => {
+            name => 'oauth1server',
+            url_scheme => 'http',
+            host => $host,
+            "temp_endpoint" => "/oauth1/temp",
+            "temp_params" => {"scope" => ""},
+            "auth_endpoint" => "/oauth1/authorize",
+            "token_endpoint" => "/oauth1/token",
+            "token_res_params" => ["url_name", "display_name"],
+            "linked_name_field" => "display_name",
+            "linked_id_field" => "url_name",
+          },
         });
       }),
       #$config_keys_file->read_byte_string->then (sub {
@@ -74,6 +128,8 @@ sub web_server (;$) {
       do {
         $keys = {
           "auth.bearer" => rand,
+          "oauth1server.client_id" => $OAuthServer->envs->{CLIENT_ID},
+          "oauth1server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET},
         };
         $temp_file->write_byte_string (perl2json_bytes {
           %$keys,
@@ -97,7 +153,9 @@ sub web_server (;$) {
         $keys->{$key} = decode_base64 $value->[1];
       }
     }
-    $cv->send ({host => $HTTPServer->get_host, keys => $keys});
+    $cv->send ({host => $HTTPServer->get_host, keys => $keys,
+                oauth1_auth_url => $OAuth1AuthEndpoint,
+                oauth2_auth_url => $OAuth2AuthEndpoint});
   });
   return $cv;
 } # web_server
@@ -229,23 +287,12 @@ push @EXPORT, qw(stop_web_server);
 sub stop_web_server () {
   my $cv = AE::cv;
   $cv->begin;
-  $cv->begin;
-  $HTTPServer->stop->then (sub {
-    $cv->end;
-  });
-  $cv->begin;
-  $MySQLServer->stop->then (sub {
-    $cv->end;
-  });
-  for (values %$Browsers) {
+  for ($HTTPServer, $MySQLServer, $AppServer, $OAuthServer, values %$Browsers) {
+    next unless defined $_;
     $cv->begin;
     $_->stop->then (sub { $cv->end });
   }
   $cv->end;
-  if (defined $AppServer) {
-    $cv->begin;
-    $AppServer->stop->then (sub { $cv->end });
-  }
   $cv->recv;
 } # stop_web_server
 
