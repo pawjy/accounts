@@ -1,5 +1,6 @@
 #!/bin/sh
 
+mkdir -p local/server/config
 cat local/keys/devel/config-keys.json | ./perl -MPath::Tiny -n -e '$root = path (".")->absolute; s/\@\@ROOT\@\@/$root/g; print' > local/server/config/config-keys.json
 export APP_CONFIG=local/server/config/config-keys.json
 
