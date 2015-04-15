@@ -15,7 +15,7 @@ test:
   override:
     - make test-local-http-circle :
         timeout: 600
-    - TEST_WEBDRIVER_BROWSERS="chrome" make test-local-web-circle:
+    - WEBUA_DEBUG=1 TEST_WEBDRIVER_BROWSERS="chrome" make test-local-web-circle:
         timeout: 600
 deployment:
   nightly:
