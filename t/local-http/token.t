@@ -74,7 +74,7 @@ test {
     http_post
         url => qq<http://$host/token>,
         header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-        params => {server => 'hatena'},
+        params => {server => 'oauth1server'},
         anyevent => 1,
         max_redirect => 0,
         cb => sub {
@@ -169,7 +169,7 @@ test {
       http_post
           url => qq<http://$host/token>,
           header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {server => 'hatena', sk => $session->{sk}},
+          params => {server => 'oauth1server', sk => $session->{sk}},
           anyevent => 1,
           max_redirect => 0,
           cb => sub {
@@ -201,7 +201,7 @@ test {
       http_post
           url => qq<http://$host/token>,
           header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {server => 'hatena', sk => 'gfaeaaaaa'},
+          params => {server => 'oauth1server', sk => 'gfaeaaaaa'},
           anyevent => 1,
           max_redirect => 0,
           cb => sub {
@@ -233,7 +233,7 @@ test {
       http_post
           url => qq<http://$host/token>,
           header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {server => 'hatena', account_id => 42533},
+          params => {server => 'oauth1server', account_id => 42533},
           anyevent => 1,
           max_redirect => 0,
           cb => sub {

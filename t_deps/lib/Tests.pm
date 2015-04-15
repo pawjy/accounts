@@ -239,6 +239,9 @@ sub web_server (;$$$) {
           "linked_name_field" => "profile_name",
           "scope_separator" => ","
         },
+        ssh => {
+          name => 'ssh',
+        },
       }),
       $temp_file->write_byte_string (perl2json_bytes +{
         "auth.bearer" => $bearer,
