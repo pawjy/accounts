@@ -247,7 +247,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 2, name => ['/oauth bad state', $server_type];
+} wait => $wait, n => 2, name => ['/oauth bad state', $server_type], timeout => 60;
 
 test {
   my $c = shift;
@@ -291,7 +291,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 2, name => ['/oauth bad code', $server_type];
+} wait => $wait, n => 2, name => ['/oauth bad code', $server_type], timeout => 60;
 
 }
 
