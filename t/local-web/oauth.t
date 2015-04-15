@@ -10,8 +10,6 @@ use JSON::PS;
 use MIME::Base64;
 use Promise;
 
-## This test will make requests to www.hatena.ne.jp.
-
 my $wait = web_server_and_driver;
 
 sub post ($$) {
@@ -83,16 +81,6 @@ test {
     })->then (sub {
       return post ("$wd/session/$sid/execute", {
         script => q{
-          document.querySelector ('form input[name=name]').value = arguments[0];
-          document.querySelector ('form input[name=password]').value = arguments[1];
-          document.querySelector ('form [type=submit]').click ();
-        },
-        args => [$c->received_data->{keys}->{'test.hatena_id'},
-                 $c->received_data->{keys}->{'test.hatena_password'}],
-      });
-    })->then (sub {
-      return post ("$wd/session/$sid/execute", {
-        script => q{
           document.querySelector ('form [type=submit]').click ();
         },
         args => [],
@@ -118,7 +106,7 @@ test {
       } $c;
     })->then (sub {
       return post ("$wd/session/$sid/url", {
-        url => qq<http://$host/token?server=hatena>,
+        url => qq<http://$host/token?server=oauth1server>,
       });
     })->then (sub {
       return post ("$wd/session/$sid/execute", {
@@ -145,7 +133,7 @@ test {
     })->then (sub {
       my $json = json_bytes2perl $_[0]->{value};
       test {
-        is $json->{name}, $c->received_data->{keys}->{'test.hatena_id'};
+        is $json->{name}, $c->received_data->{oauth_server_account_name};
         ok $json->{account_id};
       } $c;
       return $json->{account_id};
@@ -162,7 +150,7 @@ test {
         my $json = json_bytes2perl $_[0]->{value};
         test {
           ok $json->{accounts}->{$aid};
-          is $json->{accounts}->{$aid}->{name}, $c->received_data->{keys}->{'test.hatena_id'};
+          is $json->{accounts}->{$aid}->{name}, $c->received_data->{oauth_server_account_name};
           is $json->{accounts}->{$aid}->{account_id}, $aid;
         } $c, name => '/profiles';
         return $aid;
@@ -179,16 +167,6 @@ test {
       my $sid = $json->{sessionId};
       return post ("$wd/session/$sid/url", {
         url => qq<http://$host/start>,
-      })->then (sub {
-        return post ("$wd/session/$sid/execute", {
-          script => q{
-            document.querySelector ('form input[name=name]').value = arguments[0];
-            document.querySelector ('form input[name=password]').value = arguments[1];
-            document.querySelector ('form [type=submit]').click ();
-          },
-          args => [$c->received_data->{keys}->{'test.hatena_id'},
-                   $c->received_data->{keys}->{'test.hatena_password'}],
-        });
       })->then (sub {
         return post ("$wd/session/$sid/execute", {
           script => q{
@@ -209,7 +187,7 @@ test {
     })->then (sub {
       my $json = json_bytes2perl $_[0]->{value};
       test {
-        is $json->{name}, $c->received_data->{keys}->{'test.hatena_id'};
+        is $json->{name}, $c->received_data->{oauth_server_account_name};
         is $json->{account_id}, $account_id;
       } $c, name => 'second login';
     });
@@ -217,7 +195,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 13, name => '/oauth hatena';
+} wait => $wait, n => 13, name => '/oauth oauth1';
 
 test {
   my $c = shift;
@@ -235,16 +213,6 @@ test {
     })->then (sub {
       return post ("$wd/session/$sid/execute", {
         script => q{
-          document.querySelector ('form input[name=name]').value = arguments[0];
-          document.querySelector ('form input[name=password]').value = arguments[1];
-          document.querySelector ('form [type=submit]').click ();
-        },
-        args => [$c->received_data->{keys}->{'test.hatena_id'},
-                 $c->received_data->{keys}->{'test.hatena_password'}],
-      });
-    })->then (sub {
-      return post ("$wd/session/$sid/execute", {
-        script => q{
           document.querySelector ('form [type=submit]').click ();
         },
         args => [],
@@ -271,7 +239,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 2, name => '/oauth hatena bad state';
+} wait => $wait, n => 2, name => '/oauth bad state';
 
 test {
   my $c = shift;
@@ -289,16 +257,6 @@ test {
     })->then (sub {
       return post ("$wd/session/$sid/execute", {
         script => q{
-          document.querySelector ('form input[name=name]').value = arguments[0];
-          document.querySelector ('form input[name=password]').value = arguments[1];
-          document.querySelector ('form [type=submit]').click ();
-        },
-        args => [$c->received_data->{keys}->{'test.hatena_id'},
-                 $c->received_data->{keys}->{'test.hatena_password'}],
-      });
-    })->then (sub {
-      return post ("$wd/session/$sid/execute", {
-        script => q{
           document.querySelector ('form [type=submit]').click ();
         },
         args => [],
@@ -325,7 +283,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 2, name => '/oauth hatena bad code';
+} wait => $wait, n => 2, name => '/oauth bad code';
 
 run_tests;
 stop_web_server_and_driver;

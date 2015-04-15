@@ -45,32 +45,74 @@ sub db_sqls () {
   });
 } # db_sqls
 
-sub oauth_server () {
+sub oauth_server ($) {
   $OAuthServer = Promised::Plackup->new;
   $OAuthServer->envs->{CLIENT_ID} = rand;
   $OAuthServer->envs->{CLIENT_SECRET} = rand;
+  my $name = rand;
+  $OAuthServer->envs->{ACCOUNT_ID} = $name;
+  $OAuthServer->envs->{ACCOUNT_NAME} = $name . '-san';
   $OAuthServer->plackup ($root_path->child ('plackup'));
-  $OAuthServer->set_option ('--host' => '127.0.0.1');
+  $OAuthServer->set_option ('--host' => $_[0] || '127.0.0.1');
   $OAuthServer->set_app_code (q{
     use Wanage::HTTP;
     use Wanage::URL;
     use Web::UserAgent::Functions qw(http_post);
     use JSON::PS;
     use MIME::Base64;
+    use Data::Dumper;
     my $ClientID = $ENV{CLIENT_ID};
     my $ClientSecret = $ENV{CLIENT_SECRET};
+    my $AccountID = $ENV{ACCOUNT_ID};
+    my $AccountName = $ENV{ACCOUNT_NAME};
     my $TempToken;
     my $TempTokenSecret;
+    my $CallbackURL;
+    my $Code;
+    my $AccessToken;
+    my $AccessTokenSecret;
     sub {
       my $env = shift;
       my $http = Wanage::HTTP->new_from_psgi_env ($env);
       my $path = $http->url->{path};
+      my $auth_params = {};
+      if (($http->get_request_header ('Authorization') // '') =~ /^\s*[Oo][Aa][Uu][Tt][Hh]\s+(.+)$/) {
+        $auth_params = {map { map { s/^"//; s/"$//; percent_decode_c $_ } split /=/, $_, 2 } split /\s*,\s*/, $1};
+      }
       if ($path eq '/oauth1/temp') {
         $TempToken = rand;
         $TempTokenSecret = rand;
+        $CallbackURL = $auth_params->{oauth_callback};
         $http->send_response_body_as_text (sprintf 'oauth_token=%s&oauth_token_secret=%s&oauth_callback_confirmed=true', percent_encode_c $TempToken, percent_encode_c $TempTokenSecret);
+      } elsif ($path eq '/oauth1/authorize') {
+        if ($http->request_method eq 'POST') {
+          $http->set_status (302);
+          my $url = $CallbackURL // 'about:blank';
+          $url .= $url =~ /\?/ ? '&' : '?';
+          $Code = rand;
+          $url .= sprintf 'oauth_verifier=%s', percent_encode_c $Code;
+          $http->set_response_header ('Location' => $url);
+        } else {
+          $http->set_response_header ('Content-Type', 'text/html; charset=utf-8');
+          $http->send_response_body_as_text (q{
+            <form method=post action>
+              <input type=submit>
+            </form>
+          });
+        }
+      } elsif ($path eq '/oauth1/token') {
+        if ($auth_params->{oauth_token} eq $TempToken and
+            $auth_params->{oauth_verifier} eq $Code) {
+          $AccessToken = rand;
+          $AccessTokenSecret = rand;
+          $http->send_response_body_as_text (sprintf q{oauth_token=%s&oauth_token_secret=%s&url_name=%s&display_name=%s}, percent_encode_c $AccessToken, percent_encode_c $AccessTokenSecret, percent_encode_c $AccountID, percent_encode_c $AccountName);
+        } else {
+          $http->send_response_body_as_text (Dumper {
+            _ => 'Bad params',
+            params => $params,
+          });
+        }
       }
-
       $http->close_response_body;
       return $http->send_response;
     };
@@ -79,8 +121,10 @@ sub oauth_server () {
 } # oauth_server
 
 push @EXPORT, qw(web_server);
-sub web_server (;$) {
+sub web_server (;$$$) {
   my $web_host = $_[0];
+  my $oauth_host = $_[1] || $web_host;
+  my $oauth_hostname_for_docker = $_[2];
   my $cv = AE::cv;
   my $keys;
   $MySQLServer = Promised::Mysqld->new;
@@ -88,7 +132,7 @@ sub web_server (;$) {
   my $OAuth2AuthEndpoint;
   Promise->all ([
     $MySQLServer->start,
-    oauth_server,
+    oauth_server ($oauth_host),
   ])->then (sub {
     my $dsn = $MySQLServer->get_dsn_string (dbname => 'account_test');
     $MySQLServer->{_temp} = my $temp = File::Temp->newdir;
@@ -116,6 +160,7 @@ sub web_server (;$) {
             "temp_endpoint" => "/oauth1/temp",
             "temp_params" => {"scope" => ""},
             "auth_endpoint" => "/oauth1/authorize",
+            auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
             "token_endpoint" => "/oauth1/token",
             "token_res_params" => ["url_name", "display_name"],
             "linked_name_field" => "display_name",
@@ -200,7 +245,7 @@ sub app_server ($$$) {
             params => {
               sk => $json->{sk},
               sk_context => 'app.cookie',
-              server => 'hatena',
+              server => 'oauth1server',
               callback_url => $cb_url,
             };
         my $json = json_bytes2perl $res->content;
@@ -266,16 +311,17 @@ push @EXPORT, qw(web_server_and_driver);
 sub web_server_and_driver () {
   $ENV{TEST_MAX_CONCUR} ||= 1;
   my $cv = AE::cv;
-  my $cv1 = web_server ('127.0.0.1');
-  $cv1->cb (sub {
-    my $data = $_[0]->recv;
-    my $wd = $Browsers->{chrome} = Promised::Docker::WebDriver->chrome;
-    $wd->start->then (sub {
+  my $wd = $Browsers->{chrome} = Promised::Docker::WebDriver->chrome;
+  $wd->start->then (sub {
+    my $cv1 = web_server ('127.0.0.1', '0.0.0.0', $wd->get_docker_host_hostname_for_container);
+    $cv1->cb (sub {
+      my $data = $_[0]->recv;
       $data->{wd_url} = $wd->get_url_prefix;
       my $api_token = $data->{keys}->{'auth.bearer'};
       my $api_host = '127.0.0.1:' . $HTTPServer->get_port;
-      return app_server ('0.0.0.0', $api_token, $api_host)->then (sub {
+      app_server ('0.0.0.0', $api_token, $api_host)->then (sub {
         $data->{host_for_browser} = $wd->get_docker_host_hostname_for_container . ':' . $AppServer->get_port;
+        $data->{oauth_server_account_name} = $OAuthServer->envs->{ACCOUNT_NAME};
         $cv->send ($data);
       });
     });

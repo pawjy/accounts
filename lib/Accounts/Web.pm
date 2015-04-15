@@ -163,7 +163,7 @@ sub main ($$) {
             oauth_consumer_key => $server->{client_id},
             client_shared_secret => $server->{client_secret},
             params => {scope => $scope},
-            auth => {pathquery => $server->{auth_endpoint}},
+            auth => {host => $server->{auth_host}, pathquery => $server->{auth_endpoint}},
             timeout => 10,
             anyevent => 1,
             cb => sub {
@@ -176,7 +176,7 @@ sub main ($$) {
             };
       }) : Promise->new (sub {
         my ($ok, $ng) = @_;
-        my $auth_url = q<https://> . ($server->{auth_host} // $server->{host}) . ($server->{auth_endpoint}) . '?' . join '&', map {
+        my $auth_url = ($server->{url_scheme} || 'https') . q<://> . ($server->{auth_host} // $server->{host}) . ($server->{auth_endpoint}) . '?' . join '&', map {
           (percent_encode_c $_->[0]) . '=' . (percent_encode_c $_->[1])
         } (
           [client_id => $server->{client_id}],
@@ -325,7 +325,7 @@ sub main ($$) {
       return $json unless defined $id;
       return $app->db->select ('account_link', {
         account_id => Dongry::Type->serialize ('text', $id),
-        service_name => $server->{name},
+        service_name => Dongry::Type->serialize ('text', $server->{name}),
       }, source_name => 'master', fields => ['linked_token1', 'linked_token2'])->then (sub {
         my $r = $_[0]->first;
         if (defined $r) {
@@ -570,10 +570,10 @@ sub create_account ($$%) {
   #my $link_id = $app->bare_param ('account_link_id') // '';
   return ((length $link_id ? $app->db->execute ('SELECT account_link_id, account_id FROM account_link WHERE account_link_id = ? AND service_name = ? AND linked_id = ?', {
     account_link_id => $link_id,
-    service_name => $service,
+    service_name => Dongry::Type->serialize ('text', $service),
     linked_id => $id,
   }, source_name => 'master') : $app->db->execute ('SELECT account_link_id, account_id FROM account_link WHERE service_name = ? AND linked_id = ?', {
-    service_name => $service,
+    service_name => Dongry::Type->serialize ('text', $service),
     linked_id => $id,
   }, source_name => 'master'))->then (sub {
     my $links = $_[0]->all;
