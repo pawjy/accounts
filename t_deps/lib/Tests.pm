@@ -34,8 +34,6 @@ my $OAuthServer;
 my $Browsers = {};
 
 my $root_path = path (__FILE__)->parent->parent->parent;
-#my $config_keys_path = $root_path->child ('local/keys/test/config-keys.json');
-#my $config_keys_file = Promised::File->new_from_path ($config_keys_path);
 
 sub db_sqls () {
   my $file = Promised::File->new_from_path
@@ -68,6 +66,7 @@ sub oauth_server ($) {
     my $TempToken;
     my $TempTokenSecret;
     my $CallbackURL;
+    my $State;
     my $Code;
     my $AccessToken;
     my $AccessTokenSecret;
@@ -83,11 +82,16 @@ sub oauth_server ($) {
         $TempToken = rand;
         $TempTokenSecret = rand;
         $CallbackURL = $auth_params->{oauth_callback};
-        $http->send_response_body_as_text (sprintf 'oauth_token=%s&oauth_token_secret=%s&oauth_callback_confirmed=true', percent_encode_c $TempToken, percent_encode_c $TempTokenSecret);
+        if (defined $CallbackURL) {
+          $http->send_response_body_as_text (sprintf 'oauth_token=%s&oauth_token_secret=%s&oauth_callback_confirmed=true', percent_encode_c $TempToken, percent_encode_c $TempTokenSecret);
+        } else {
+          $http->set_status (400);
+          $http->send_response_body_as_text ('Bad callback URL');
+        }
       } elsif ($path eq '/oauth1/authorize') {
         if ($http->request_method eq 'POST') {
           $http->set_status (302);
-          my $url = $CallbackURL // 'about:blank';
+          my $url = $CallbackURL // 'data:text/plain,no callback URL';
           $url .= $url =~ /\?/ ? '&' : '?';
           $Code = rand;
           $url .= sprintf 'oauth_verifier=%s', percent_encode_c $Code;
@@ -108,11 +112,66 @@ sub oauth_server ($) {
           $http->send_response_body_as_text (sprintf q{oauth_token=%s&oauth_token_secret=%s&url_name=%s&display_name=%s}, percent_encode_c $AccessToken, percent_encode_c $AccessTokenSecret, percent_encode_c $AccountID, percent_encode_c $AccountName);
         } else {
           $http->send_response_body_as_text (Dumper {
+            _ => 'Bad auth-params',
+            params => $auth_params,
+          });
+        }
+      }
+
+      if ($path eq '/oauth2/authorize') {
+        if ($http->request_method eq 'POST') {
+          $http->set_status (302);
+          my $url = $CallbackURL // 'data:text/plain,no callback URL';
+          $url .= $url =~ /\?/ ? '&' : '?';
+          $Code = rand;
+          $url .= sprintf 'code=%s&state=%s', percent_encode_c $Code, percent_encode_c $State;
+          $http->set_response_header ('Location' => $url);
+        } else {
+          $CallbackURL = $http->query_params->{redirect_uri}->[0];
+          if (defined $CallbackURL) {
+            $State = $http->query_params->{state}->[0];
+            $http->set_response_header ('Content-Type', 'text/html; charset=utf-8');
+            $http->send_response_body_as_text (q{
+              <form method=post action>
+                <input type=submit>
+              </form>
+            });
+          } else {
+            $http->set_status (400);
+            $http->send_response_body_as_text ('Bad callback URL');
+          }
+        }
+      } elsif ($path eq '/oauth2/token') {
+        my $params = $http->request_body_params;
+        if ($params->{redirect_uri}->[0] eq $CallbackURL and
+            $params->{code}->[0] eq $Code and
+            $params->{client_id}->[0] eq $ClientID and
+            $params->{client_secret}->[0] eq $ClientSecret) {
+          $AccessToken = undef;
+          $AccessTokenSecret = rand;
+          $http->set_response_header ('Content-Type' => 'application/json');
+          $http->send_response_body_as_text (perl2json_bytes +{
+            access_token => $AccessTokenSecret,
+          });
+        } else {
+          $http->send_response_body_as_text (Dumper {
             _ => 'Bad params',
             params => $params,
           });
         }
+      } elsif ($path eq '/profile') {
+        if ($http->get_request_header ('Authorization') =~ /^token\s+(\Q$AccessTokenSecret\E)$/) {
+          $http->set_response_header ('Content-Type' => 'application/json');
+          $http->send_response_body_as_text (perl2json_bytes +{
+            id => $AccountID,
+            name => $AccountName,
+          });
+        } else {
+          $http->set_status (403);
+          $http->send_response_body_as_text ("Bad bearer");
+        }
       }
+
       $http->close_response_body;
       return $http->send_response;
     };
@@ -126,7 +185,7 @@ sub web_server (;$$$) {
   my $oauth_host = $_[1] || $web_host;
   my $oauth_hostname_for_docker = $_[2];
   my $cv = AE::cv;
-  my $keys;
+  my $bearer = rand;
   $MySQLServer = Promised::Mysqld->new;
   my $OAuth1AuthEndpoint;
   my $OAuth2AuthEndpoint;
@@ -141,49 +200,56 @@ sub web_server (;$$$) {
     my $temp_file = Promised::File->new_from_path ($temp_path);
     $HTTPServer = Promised::Plackup->new;
     $HTTPServer->envs->{APP_CONFIG} = $temp_path;
+    my $host = $OAuthServer->get_host;
+    $OAuth1AuthEndpoint = sprintf q<http://%s/oauth1/authorize>, $host;
+    $OAuth2AuthEndpoint = sprintf q<http://%s/oauth2/authorize>, $host;
     my $servers_json_path = $temp_dir_path->child ('servers.json');
     return Promise->all ([
       db_sqls->then (sub {
         $MySQLServer->create_db_and_execute_sqls (account_test => $_[0]);
       }),
-      Promised::File->new_from_path ($root_path->child ('config/servers.json'))->read_byte_string->then (sub {
-        my $json = json_bytes2perl $_[0];
-        my $host = $OAuthServer->get_host;
-        $OAuth1AuthEndpoint = sprintf q<http://%s/oauth1/authorize>, $host;
-        $OAuth2AuthEndpoint = sprintf q<http://%s/oauth2/authorize>, $host;
-        return Promised::File->new_from_path ($servers_json_path)->write_byte_string (perl2json_bytes +{
-          %$json,
-          oauth1server => {
-            name => 'oauth1server',
-            url_scheme => 'http',
-            host => $host,
-            "temp_endpoint" => "/oauth1/temp",
-            "temp_params" => {"scope" => ""},
-            "auth_endpoint" => "/oauth1/authorize",
-            auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
-            "token_endpoint" => "/oauth1/token",
-            "token_res_params" => ["url_name", "display_name"],
-            "linked_name_field" => "display_name",
-            "linked_id_field" => "url_name",
-          },
-        });
+      Promised::File->new_from_path ($servers_json_path)->write_byte_string (perl2json_bytes +{
+        oauth1server => {
+          name => 'oauth1server',
+          url_scheme => 'http',
+          host => $host,
+          "temp_endpoint" => "/oauth1/temp",
+          "temp_params" => {"scope" => ""},
+          "auth_endpoint" => "/oauth1/authorize",
+          auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
+          "token_endpoint" => "/oauth1/token",
+          "token_res_params" => ["url_name", "display_name"],
+          "linked_name_field" => "display_name",
+          "linked_id_field" => "url_name",
+        },
+        oauth2server => {
+          name => 'oauth2server',
+          url_scheme => 'http',
+          host => $host,
+          auth_endpoint => '/oauth2/authorize',
+          auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
+          token_endpoint => '/oauth2/token',
+          "profile_endpoint" => "/profile",
+          "profile_id_field" => "id",
+          "profile_key_field" => "login",
+          "profile_name_field" => "name",
+          "auth_scheme" => "token",
+          "linked_id_field" => "profile_id",
+          "linked_key_field" => "profile_key",
+          "linked_name_field" => "profile_name",
+          "scope_separator" => ","
+        },
       }),
-      #$config_keys_file->read_byte_string->then (sub {
-      #  $keys = json_bytes2perl $_[0];
-      do {
-        $keys = {
-          "auth.bearer" => rand,
-          "oauth1server.client_id" => $OAuthServer->envs->{CLIENT_ID},
-          "oauth1server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET},
-        };
-        $temp_file->write_byte_string (perl2json_bytes {
-          %$keys,
-          alt_dsns => {master => {account => $dsn}},
-          #dsns => {account => $dsn},
-          servers_json_file => $servers_json_path,
-        });
-      #}),
-      },
+      $temp_file->write_byte_string (perl2json_bytes +{
+        "auth.bearer" => $bearer,
+        "oauth1server.client_id" => $OAuthServer->envs->{CLIENT_ID},
+        "oauth1server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET},
+        "oauth2server.client_id" => $OAuthServer->envs->{CLIENT_ID},
+        "oauth2server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET},
+        servers_json_file => $servers_json_path,
+        alt_dsns => {master => {account => $dsn}},
+        #dsns => {account => $dsn},
+      }),
     ]);
   })->then (sub {
     $HTTPServer->plackup ($root_path->child ('plackup'));
@@ -191,14 +257,8 @@ sub web_server (;$$$) {
     $HTTPServer->set_option ('--app' => $root_path->child ('bin/server.psgi'));
     return $HTTPServer->start;
   })->then (sub {
-    for my $key (keys %$keys) {
-      my $value = $keys->{$key};
-      if (defined $value and ref $value eq 'ARRAY' and
-          defined $value->[0] and $value->[0] eq 'Base64') {
-        $keys->{$key} = decode_base64 $value->[1];
-      }
-    }
-    $cv->send ({host => $HTTPServer->get_host, keys => $keys,
+    $cv->send ({host => $HTTPServer->get_host,
+                keys => {'auth.bearer' => $bearer},
                 oauth1_auth_url => $OAuth1AuthEndpoint,
                 oauth2_auth_url => $OAuth2AuthEndpoint});
   });
@@ -245,7 +305,7 @@ sub app_server ($$$) {
             params => {
               sk => $json->{sk},
               sk_context => 'app.cookie',
-              server => 'oauth1server',
+              server => $http->query_params->{server},
               callback_url => $cb_url,
             };
         my $json = json_bytes2perl $res->content;
@@ -255,13 +315,14 @@ sub app_server ($$$) {
       } elsif ($path eq '/cb') {
         my (undef, $res) = http_post
             url => qq<http://$host/cb>,
+timeout => 30,
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $http->request_cookies->{sk},
               sk_context => 'app.cookie',
               oauth_token => $http->query_params->{oauth_token},
               oauth_verifier => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{oauth_verifier},
-              code => $http->query_params->{code},
+              code => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{code},
               state => $http->query_params->{bad_state} ? 'aaa' : $http->query_params->{state},
             };
         if ($res->code == 200) {

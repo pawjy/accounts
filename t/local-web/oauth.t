@@ -65,6 +65,8 @@ sub get ($) {
   });
 } # get
 
+for my $server_type (qw(oauth1server oauth2server)) {
+
 test {
   my $c = shift;
   my $host = $c->received_data->{host_for_browser};
@@ -77,7 +79,7 @@ test {
     my $json = $_[0];
     my $sid = $json->{sessionId};
     return post ("$wd/session/$sid/url", {
-      url => qq<http://$host/start?app_data=ho%E3%81%82%00e>,
+      url => qq<http://$host/start?app_data=ho%E3%81%82%00e&server=> . $server_type,
     })->then (sub {
       return post ("$wd/session/$sid/execute", {
         script => q{
@@ -106,7 +108,7 @@ test {
       } $c;
     })->then (sub {
       return post ("$wd/session/$sid/url", {
-        url => qq<http://$host/token?server=oauth1server>,
+        url => qq<http://$host/token?server=> . $server_type,
       });
     })->then (sub {
       return post ("$wd/session/$sid/execute", {
@@ -116,9 +118,15 @@ test {
     })->then (sub {
       my $json = json_bytes2perl $_[0]->{value};
       test {
-        is ref $json->{access_token}, 'ARRAY';
-        like $json->{access_token}->[0], qr{.+};
-        like $json->{access_token}->[1], qr{.+};
+        if ($server_type =~ /oauth1/) {
+          is ref $json->{access_token}, 'ARRAY';
+          like $json->{access_token}->[0], qr{.+};
+          like $json->{access_token}->[1], qr{.+};
+        } else {
+          is ref $json->{access_token}, '';
+          like $json->{access_token}, qr{.+};
+          ok 1;
+        }
       } $c, name => '/token';
       return $json->{account_id};
     })->then (sub {
@@ -166,7 +174,7 @@ test {
       my $json = $_[0];
       my $sid = $json->{sessionId};
       return post ("$wd/session/$sid/url", {
-        url => qq<http://$host/start>,
+        url => qq<http://$host/start?server=> . $server_type,
       })->then (sub {
         return post ("$wd/session/$sid/execute", {
           script => q{
@@ -195,7 +203,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 13, name => '/oauth oauth1';
+} wait => $wait, n => 13, name => ['/oauth', $server_type];
 
 test {
   my $c = shift;
@@ -209,7 +217,7 @@ test {
     my $json = $_[0];
     my $sid = $json->{sessionId};
     return post ("$wd/session/$sid/url", {
-      url => qq<http://$host/start?bad_state=1>,
+      url => qq<http://$host/start?bad_state=1&server=> . $server_type,
     })->then (sub {
       return post ("$wd/session/$sid/execute", {
         script => q{
@@ -239,7 +247,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 2, name => '/oauth bad state';
+} wait => $wait, n => 2, name => ['/oauth bad state', $server_type];
 
 test {
   my $c = shift;
@@ -253,7 +261,7 @@ test {
     my $json = $_[0];
     my $sid = $json->{sessionId};
     return post ("$wd/session/$sid/url", {
-      url => qq<http://$host/start?bad_code=1>,
+      url => qq<http://$host/start?bad_code=1&server=> . $server_type,
     })->then (sub {
       return post ("$wd/session/$sid/execute", {
         script => q{
@@ -283,7 +291,9 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 2, name => '/oauth bad code';
+} wait => $wait, n => 2, name => ['/oauth bad code', $server_type];
+
+}
 
 run_tests;
 stop_web_server_and_driver;

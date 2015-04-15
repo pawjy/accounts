@@ -530,7 +530,7 @@ sub get_resource_owner_profile ($$%) {
       $param{header_fields}->{Authorization} = 'token ' . $session_data->{$service}->{access_token};
     }
     http_get
-        url => ('https://' . ($server->{profile_host} // $server->{host}) . $server->{profile_endpoint}),
+        url => (($server->{url_scheme} // 'https') . '://' . ($server->{profile_host} // $server->{host}) . $server->{profile_endpoint}),
         %param,
         timeout => 30,
         anyevent => 1,
