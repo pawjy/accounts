@@ -33,7 +33,7 @@ my $AppServer;
 my $OAuthServer;
 my $Browsers = {};
 
-my $root_path = path (__FILE__)->parent->parent->parent;
+my $root_path = path (__FILE__)->parent->parent->parent->absolute;
 
 sub db_sqls () {
   my $file = Promised::File->new_from_path
