@@ -278,6 +278,7 @@ sub app_server ($$$) {
   $AppServer->set_app_code (q{
     use Wanage::HTTP;
     use Wanage::URL;
+    use AnyEvent;
     use Web::UserAgent::Functions qw(http_post);
     use JSON::PS;
     use MIME::Base64;
@@ -288,13 +289,19 @@ sub app_server ($$$) {
       my $http = Wanage::HTTP->new_from_psgi_env ($env);
       my $path = $http->url->{path};
       if ($path eq '/start') {
-        my (undef, $res) = http_post
+        my $cv = AE::cv;
+        http_post
             url => qq<http://$host/session>,
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $http->request_cookies->{sk},
               sk_context => 'app.cookie',
+            },
+            anyevent => 1,
+            cb => sub {
+              $cv->send ($_[1]);
             };
+        my $res = $cv->recv;
         my $json = json_bytes2perl $res->content;
         $http->set_response_cookie (sk => $json->{sk}, expires => $json->{sk_expires}, path => q</>, httponly => 0, secure => 0)
             if $json->{set_sk};
@@ -302,7 +309,8 @@ sub app_server ($$$) {
         my $cb_url = $http->url->resolve_string ('/cb?')->stringify;
         $cb_url .= '&bad_state=1' if $http->query_params->{bad_state};
         $cb_url .= '&bad_code=1' if $http->query_params->{bad_code};
-        my (undef, $res) = http_post
+        my $cv = AE::cv;
+        http_post
             url => qq<http://$host/login?app_data=> . (percent_encode_b $http->query_params->{app_data}->[0] // ''),
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
@@ -310,15 +318,20 @@ sub app_server ($$$) {
               sk_context => 'app.cookie',
               server => $http->query_params->{server},
               callback_url => $cb_url,
+            },
+            anyevent => 1,
+            cb => sub {
+              $cv->send ($_[1]);
             };
+        my $res = $cv->recv;
         my $json = json_bytes2perl $res->content;
         $http->set_status (302);
         my $url = $json->{authorization_url};
         $http->set_response_header (Location => $url);
       } elsif ($path eq '/cb') {
-        my (undef, $res) = http_post
+        my $cv = AE::cv;
+        http_post
             url => qq<http://$host/cb>,
-timeout => 30,
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $http->request_cookies->{sk},
@@ -327,7 +340,12 @@ timeout => 30,
               oauth_verifier => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{oauth_verifier},
               code => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{code},
               state => $http->query_params->{bad_state} ? 'aaa' : $http->query_params->{state},
+            },
+            anyevent => 1,
+            cb => sub {
+              $cv->send ($_[1]);
             };
+        my $res = $cv->recv;
         if ($res->code == 200) {
           my $json = json_bytes2perl $res->content;
           $http->set_status (200);
@@ -337,31 +355,49 @@ timeout => 30,
           $http->send_response_body_as_text ($res->code);
         }
       } elsif ($path eq '/info') {
-        my (undef, $res) = http_post
+        my $cv = AE::cv;
+        http_post
             url => qq<http://$host/info>,
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $http->request_cookies->{sk},
               sk_context => 'app.cookie',
+            },
+            anyevent => 1,
+            cb => sub {
+              $cv->send ($_[1]);
             };
+        my $res = $cv->recv;
         $http->send_response_body_as_ref (\($res->content));
       } elsif ($path eq '/profiles') {
-        my (undef, $res) = http_post
+        my $cv = AE::cv;
+        http_post
             url => qq<http://$host/profiles>,
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               account_id => $http->query_params->{account_id},
+            },
+            anyevent => 1,
+            cb => sub {
+              $cv->send ($_[1]);
             };
+        my $res = $cv->recv;
         $http->send_response_body_as_ref (\($res->content));
       } elsif ($path eq '/token') {
-        my (undef, $res) = http_post
+        my $cv = AE::cv;
+        http_post
             url => qq<http://$host/token>,
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $http->request_cookies->{sk},
               sk_context => 'app.cookie',
               server => $http->query_params->{server},
+            },
+            anyevent => 1,
+            cb => sub {
+              $cv->send ($_[1]);
             };
+        my $res = $cv->recv;
         $http->send_response_body_as_ref (\($res->content));
       }
       $http->close_response_body;
