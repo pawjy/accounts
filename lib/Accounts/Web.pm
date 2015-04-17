@@ -135,11 +135,11 @@ sub main ($$) {
       my $session_data = $session_row->get ('data');
 
       my $server = $app->config->get_oauth_server ($app->bare_param ('server'))
-          or return $app->throw_error (400, reason_phrase => 'Bad |server|');
+          or return $app->send_error_json ({reason => 'Bad |server|'});
       ## Application must specify a legal |callback_url| in the
       ## context of the application.
       my $cb = $app->text_param ('callback_url')
-          // return $app->throw_error (400, reason_phrase => 'Bad |callback_url|');
+          // return $app->send_error_json ({reason => 'Bad |callback_url|'});
 
       my $state = id 50;
       my $scope = join $server->{scope_separator} // ' ', grep { defined }
@@ -174,7 +174,7 @@ sub main ($$) {
                   = [$temp_token, $temp_token_secret];
               $ok->($auth_url);
             };
-      }) : Promise->new (sub {
+      }) : defined $server->{auth_endpoint} ? Promise->new (sub {
         my ($ok, $ng) = @_;
         my $auth_url = ($server->{url_scheme} || 'https') . q<://> . ($server->{auth_host} // $server->{host}) . ($server->{auth_endpoint}) . '?' . join '&', map {
           (percent_encode_c $_->[0]) . '=' . (percent_encode_c $_->[1])
@@ -186,7 +186,7 @@ sub main ($$) {
           [scope => $scope],
         );
         $ok->($auth_url);
-      }))->then (sub {
+      }) : Promise->reject ($app->send_error_json ({reason => 'Not a loginable |server|'})))->then (sub {
         my $auth_url = $_[0];
         return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
           return $app->send_json ({authorization_url => $auth_url});

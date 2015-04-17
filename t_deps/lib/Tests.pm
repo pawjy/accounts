@@ -325,9 +325,14 @@ sub app_server ($$$) {
             };
         my $res = $cv->recv;
         my $json = json_bytes2perl $res->content;
-        $http->set_status (302);
         my $url = $json->{authorization_url};
-        $http->set_response_header (Location => $url);
+        if (defined $url) {
+          $http->set_status (302);
+          $http->set_response_header (Location => $url);
+        } else {
+          $http->set_status (400);
+          $http->send_response_body_as_text (perl2json_chars_for_record $json);
+        }
       } elsif ($path eq '/cb') {
         my $cv = AE::cv;
         http_post
