@@ -40,12 +40,7 @@ sub get ($$) {
 
 sub get_oauth_server ($$) {
   my ($self, $server_name) = @_;
-  my $def = $self->{servers}->{$server_name // ''} or return undef;
-
-  $def->{client_id} = $self->{json}->{$server_name . ".client_id"};
-  $def->{client_secret} = $self->{json}->{$server_name . ".client_secret"};
-
-  return $def;
+  return $self->{servers}->{$server_name // ''}; # or undef
 } # get_oauth_server
 
 $Dongry::Types->{json} = {

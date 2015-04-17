@@ -217,6 +217,91 @@ test {
     my $json = $_[0];
     my $sid = $json->{sessionId};
     return post ("$wd/session/$sid/url", {
+      url => qq<http://$host/start?app_data=ho%E3%81%82%00e&sk_context=sk2&server=> . $server_type,
+    })->then (sub {
+      return post ("$wd/session/$sid/execute", {
+        script => q{
+          document.querySelector ('form [type=submit]').click ();
+        },
+        args => [],
+      });
+    })->then (sub {
+      return get ("$wd/session/$sid/url")->then (sub {
+        my $value = $_[0]->{value};
+        test {
+          like $value, qr{^http://$host/cb\?};
+        } $c;
+      });
+    })->then (sub {
+      return post ("$wd/session/$sid/execute", {
+        script => q{ return document.body.textContent },
+        args => [],
+      });
+    })->then (sub {
+      my $value = $_[0]->{value};
+      test {
+        my $json = json_bytes2perl decode_base64 $value;
+        is $json->{status}, 200, 'oauth login result';
+        is $json->{app_data}, "ho\x{3042}\x00e";
+      } $c;
+    })->then (sub {
+      return post ("$wd/session/$sid/url", {
+        url => qq<http://$host/token?sk_context=sk2&server=> . $server_type,
+      });
+    })->then (sub {
+      return post ("$wd/session/$sid/execute", {
+        script => q{ return document.body.textContent },
+        args => [],
+      });
+    })->then (sub {
+      my $json = json_bytes2perl $_[0]->{value};
+      test {
+        if ($server_type =~ /oauth1/) {
+          is ref $json->{access_token}, 'ARRAY';
+          like $json->{access_token}->[0], qr{.+};
+          like $json->{access_token}->[1], qr{.+\.SK2\z};
+        } else {
+          is ref $json->{access_token}, '';
+          like $json->{access_token}, qr{.+\.SK2\z};
+          ok 1;
+        }
+      } $c, name => '/token';
+      return $json->{account_id};
+    })->then (sub {
+      return post ("$wd/session/$sid/url", {
+        url => qq<http://$host/info?sk_context=sk2>,
+      });
+    })->then (sub {
+      return post ("$wd/session/$sid/execute", {
+        script => q{ return document.body.textContent },
+        args => [],
+      });
+    })->then (sub {
+      my $json = json_bytes2perl $_[0]->{value};
+      test {
+        is $json->{name}, $c->received_data->{oauth_server_account_name};
+        ok $json->{account_id};
+      } $c;
+      return $json->{account_id};
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} wait => $wait, n => 8, name => ['/oauth', $server_type, 'another oauth application'], timeout => 120;
+
+test {
+  my $c = shift;
+  my $host = $c->received_data->{host_for_browser};
+  my $wd = $c->received_data->{wd_url};
+  return post ("$wd/session", {
+    desiredCapabilities => {
+      browserName => 'firefox', # XXX
+    },
+  })->then (sub {
+    my $json = $_[0];
+    my $sid = $json->{sessionId};
+    return post ("$wd/session/$sid/url", {
       url => qq<http://$host/start?bad_state=1&server=> . $server_type,
     })->then (sub {
       return post ("$wd/session/$sid/execute", {
