@@ -19,6 +19,7 @@ IO::Handle~1.28
 LWP::MediaTypes~6.02
 Module::Runtime~0.014
 Unicode::Normalize~1.18
+HTML::Entities~3.69
 Parallel::Prefork~0.17
 DBIx::RewriteDSN~0.05
 Socket~2.018
@@ -32,8 +33,8 @@ Proc::Wait3~0.04
 Filesys::Notify::Simple~0.12
 LWP::UserAgent~6.13
 MIME::Base64~3.15
-HTML::Tagset~3.20
 Devel::StackTrace::AsHTML~0.14
+HTML::Tagset~3.20
 Exporter::Tiny~0.042
 File::ShareDir::Install~0.10
 Carp::Heavy~1.36
@@ -55,10 +56,9 @@ Term::ANSIColor~4.03
 Test::Class~0.48
 Server::Starter~0.25
 Exporter::Lite~0.06
-HTML::HeadParser~3.71
 Twiggy~0.1025
-HTTP::Cookies~6.01
 AnyEvent::HTTP~2.21
+HTTP::Cookies~6.01
 File::Temp~0.2304
 File::Copy::Recursive~0.38
 Signal::Mask~0.008
@@ -78,6 +78,7 @@ MRO::Compat~0.12
 File::Slurp~9999.19
 Hash::MultiValue~0.16
 IO::Socket::SSL~2.012
+HTTP::Headers::Util~6.03
 Apache::LogFormat::Compiler~0.32
 Time::HiRes~1.9726
 HTTP::Date~6.02
