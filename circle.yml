@@ -34,3 +34,4 @@ deployment:
          timeout: 600
       - XTEST_ORIGIN=https://$HEROKU_APP_NAME.herokuapp.com make test-external-http-or-rollback HEROKU_APP_NAME=$HEROKU_APP_NAME
       - curl -f -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"master\",\"head\":\"`cat head.txt`\",\"commit_message\":\"auto-merge staging into master\"}" "https://api.github.com/repos/wakaba/accounts/merges"
+
