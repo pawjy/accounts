@@ -21,7 +21,7 @@ deployment:
   nightly:
     branch: nightly
     commands:
-      - curl -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"staging\",\"head\":\"`git rev-parse HEAD`\",\"commit_message\":\"auto-merge nightly into staging\"}" "https://api.github.com/repos/wakaba/accounts/merges"
+      - curl -f -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"staging\",\"head\":\"`git rev-parse HEAD`\",\"commit_message\":\"auto-merge nightly into staging\"}" "https://api.github.com/repos/wakaba/accounts/merges"
   staging:
     branch: staging
     commands:
