@@ -168,7 +168,7 @@ test {
   })->then (sub { test { ok 0 } $c }, sub {
     my $error = $_[0];
     test {
-      is $error, undef;
+      is $error->{reason}, 'Bad |server|';
     } $c;
   })->then (sub {
     done $c;

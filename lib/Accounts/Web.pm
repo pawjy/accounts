@@ -135,11 +135,11 @@ sub main ($$) {
       my $session_data = $session_row->get ('data');
 
       my $server = $app->config->get_oauth_server ($app->bare_param ('server'))
-          or return $app->throw_error (400, reason_phrase => 'Bad |server|');
+          or return $app->send_error_json ({reason => 'Bad |server|'});
       ## Application must specify a legal |callback_url| in the
       ## context of the application.
       my $cb = $app->text_param ('callback_url')
-          // return $app->throw_error (400, reason_phrase => 'Bad |callback_url|');
+          // return $app->send_error_json ({reason => 'Bad |callback_url|'});
 
       my $state = id 50;
       my $scope = join $server->{scope_separator} // ' ', grep { defined }
@@ -151,17 +151,24 @@ sub main ($$) {
                                  state => $state,
                                  app_data => $app->text_param ('app_data')};
 
+      my $sk_context = $session_row->get ('sk_context');
+      my $client_id = $app->config->get ($server->{name} . '.client_id.' . $sk_context) //
+                      $app->config->get ($server->{name} . '.client_id');
+      my $client_secret = $app->config->get ($server->{name} . '.client_secret.' . $sk_context) //
+                          $app->config->get ($server->{name} . '.client_secret');
+
       return (defined $server->{temp_endpoint} ? Promise->new (sub {
         my ($ok, $ng) = @_;
         $cb .= $cb =~ /\?/ ? '&' : '?';
         $cb .= 'state=' . $state;
+
         http_oauth1_request_temp_credentials
             url_scheme => $server->{url_scheme},
             host => $server->{host},
             pathquery => $server->{temp_endpoint},
             oauth_callback => $cb,
-            oauth_consumer_key => $server->{client_id},
-            client_shared_secret => $server->{client_secret},
+            oauth_consumer_key => $client_id,
+            client_shared_secret => $client_secret,
             params => {scope => $scope},
             auth => {host => $server->{auth_host}, pathquery => $server->{auth_endpoint}},
             timeout => 10,
@@ -174,19 +181,19 @@ sub main ($$) {
                   = [$temp_token, $temp_token_secret];
               $ok->($auth_url);
             };
-      }) : Promise->new (sub {
+      }) : defined $server->{auth_endpoint} ? Promise->new (sub {
         my ($ok, $ng) = @_;
         my $auth_url = ($server->{url_scheme} || 'https') . q<://> . ($server->{auth_host} // $server->{host}) . ($server->{auth_endpoint}) . '?' . join '&', map {
           (percent_encode_c $_->[0]) . '=' . (percent_encode_c $_->[1])
         } (
-          [client_id => $server->{client_id}],
+          [client_id => $client_id],
           [redirect_uri => $cb],
           [response_type => 'code'],
           [state => $state],
           [scope => $scope],
         );
         $ok->($auth_url);
-      }))->then (sub {
+      }) : Promise->reject ($app->send_error_json ({reason => 'Not a loginable |server|'})))->then (sub {
         my $auth_url = $_[0];
         return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
           return $app->send_json ({authorization_url => $auth_url});
@@ -219,14 +226,20 @@ sub main ($$) {
           ($session_data->{action}->{server})
           or $app->send_error (500);
 
+      my $sk_context = $session_row->get ('sk_context');
+      my $client_id = $app->config->get ($server->{name} . '.client_id.' . $sk_context) //
+                      $app->config->get ($server->{name} . '.client_id');
+      my $client_secret = $app->config->get ($server->{name} . '.client_secret.' . $sk_context) //
+                          $app->config->get ($server->{name} . '.client_secret');
+
       return ((defined $session_data->{action}->{temp_credentials} ? Promise->new (sub {
         my ($ok, $ng) = @_;
         http_oauth1_request_token # or die
             url_scheme => $server->{url_scheme},
             host => $server->{host},
             pathquery => $server->{token_endpoint},
-            oauth_consumer_key => $server->{client_id},
-            client_shared_secret => $server->{client_secret},
+            oauth_consumer_key => $client_id,
+            client_shared_secret => $client_secret,
             temp_token => $session_data->{action}->{temp_credentials}->[0],
             temp_token_secret => $session_data->{action}->{temp_credentials}->[1],
             oauth_token => $app->bare_param ('oauth_token'),
@@ -248,8 +261,8 @@ sub main ($$) {
         http_post
             url => (($server->{url_scheme} // 'https') . '://' . $server->{host} . $server->{token_endpoint}),
             params => {
-              client_id => $server->{client_id},
-              client_secret => $server->{client_secret},
+              client_id => $client_id,
+              client_secret => $client_secret,
               redirect_uri => $session_data->{action}->{callback_url},
               code => $app->text_param ('code'),
               grant_type => 'authorization_code',

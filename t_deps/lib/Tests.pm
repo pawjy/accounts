@@ -33,7 +33,7 @@ my $AppServer;
 my $OAuthServer;
 my $Browsers = {};
 
-my $root_path = path (__FILE__)->parent->parent->parent;
+my $root_path = path (__FILE__)->parent->parent->parent->absolute;
 
 sub db_sqls () {
   my $file = Promised::File->new_from_path
@@ -106,10 +106,11 @@ sub oauth_server ($) {
         }
       } elsif ($path eq '/oauth1/token') {
         if ($auth_params->{oauth_token} eq $TempToken and
-            $auth_params->{oauth_verifier} eq $Code) {
+            $auth_params->{oauth_verifier} eq $Code and
+            $auth_params->{oauth_consumer_key} =~ /\A\Q$ClientID\E\.oauth1(\.\w+|)\z/) {
           $AccessToken = rand;
           $AccessTokenSecret = rand;
-          $http->send_response_body_as_text (sprintf q{oauth_token=%s&oauth_token_secret=%s&url_name=%s&display_name=%s}, percent_encode_c $AccessToken, percent_encode_c $AccessTokenSecret, percent_encode_c $AccountID, percent_encode_c $AccountName);
+          $http->send_response_body_as_text (sprintf q{oauth_token=%s&oauth_token_secret=%s&url_name=%s&display_name=%s}, percent_encode_c $AccessToken, percent_encode_c $AccessTokenSecret.$1, percent_encode_c $AccountID, percent_encode_c $AccountName);
         } else {
           $http->send_response_body_as_text (Dumper {
             _ => 'Bad auth-params',
@@ -145,13 +146,13 @@ sub oauth_server ($) {
         my $params = $http->request_body_params;
         if ($params->{redirect_uri}->[0] eq $CallbackURL and
             $params->{code}->[0] eq $Code and
-            $params->{client_id}->[0] eq $ClientID and
-            $params->{client_secret}->[0] eq $ClientSecret) {
+            $params->{client_id}->[0] =~ /\A\Q$ClientID\E\.oauth2(\.\w+|)\z/ and
+            $params->{client_secret}->[0] =~ /\A\Q$ClientSecret\E\.oauth2(\Q$1\E)\z/) {
           $AccessToken = undef;
           $AccessTokenSecret = rand;
           $http->set_response_header ('Content-Type' => 'application/json');
           $http->send_response_body_as_text (perl2json_bytes +{
-            access_token => $AccessTokenSecret,
+            access_token => $AccessTokenSecret.$1,
           });
         } else {
           $http->send_response_body_as_text (Dumper {
@@ -160,7 +161,7 @@ sub oauth_server ($) {
           });
         }
       } elsif ($path eq '/profile') {
-        if ($http->get_request_header ('Authorization') =~ /^token\s+(\Q$AccessTokenSecret\E)$/) {
+        if ($http->get_request_header ('Authorization') =~ /^token\s+(\Q$AccessTokenSecret\E(?:\.SK2|))$/) {
           $http->set_response_header ('Content-Type' => 'application/json');
           $http->send_response_body_as_text (perl2json_bytes +{
             id => $AccountID,
@@ -245,10 +246,14 @@ sub web_server (;$$$) {
       }),
       $temp_file->write_byte_string (perl2json_bytes +{
         "auth.bearer" => $bearer,
-        "oauth1server.client_id" => $OAuthServer->envs->{CLIENT_ID},
-        "oauth1server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET},
-        "oauth2server.client_id" => $OAuthServer->envs->{CLIENT_ID},
-        "oauth2server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET},
+        "oauth1server.client_id" => $OAuthServer->envs->{CLIENT_ID}.".oauth1",
+        "oauth1server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth1",
+        "oauth2server.client_id" => $OAuthServer->envs->{CLIENT_ID}.".oauth2",
+        "oauth2server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth2",
+        "oauth1server.client_id.sk2" => $OAuthServer->envs->{CLIENT_ID}.".oauth1.SK2",
+        "oauth1server.client_secret.sk2" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth1.SK2",
+        "oauth2server.client_id.sk2" => $OAuthServer->envs->{CLIENT_ID}.".oauth2.SK2",
+        "oauth2server.client_secret.sk2" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth2.SK2",
         servers_json_file => $servers_json_path,
         alt_dsns => {master => {account => $dsn}},
         #dsns => {account => $dsn},
@@ -278,6 +283,7 @@ sub app_server ($$$) {
   $AppServer->set_app_code (q{
     use Wanage::HTTP;
     use Wanage::URL;
+    use AnyEvent;
     use Web::UserAgent::Functions qw(http_post);
     use JSON::PS;
     use MIME::Base64;
@@ -288,46 +294,69 @@ sub app_server ($$$) {
       my $http = Wanage::HTTP->new_from_psgi_env ($env);
       my $path = $http->url->{path};
       if ($path eq '/start') {
-        my (undef, $res) = http_post
+        my $cv = AE::cv;
+        http_post
             url => qq<http://$host/session>,
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $http->request_cookies->{sk},
-              sk_context => 'app.cookie',
+              sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
+            },
+            anyevent => 1,
+            cb => sub {
+              $cv->send ($_[1]);
             };
+        my $res = $cv->recv;
         my $json = json_bytes2perl $res->content;
         $http->set_response_cookie (sk => $json->{sk}, expires => $json->{sk_expires}, path => q</>, httponly => 0, secure => 0)
             if $json->{set_sk};
 
         my $cb_url = $http->url->resolve_string ('/cb?')->stringify;
-        $cb_url .= '&bad_state=1' if $http->query_params->{bad_state};
-        $cb_url .= '&bad_code=1' if $http->query_params->{bad_code};
-        my (undef, $res) = http_post
+        $cb_url .= '&bad_state=1' if $http->query_params->{bad_state}->[0];
+        $cb_url .= '&bad_code=1' if $http->query_params->{bad_code}->[0];
+        $cb_url .= '&sk_context=' . percent_encode_c $http->query_params->{sk_context}->[0] if defined $http->query_params->{sk_context}->[0];
+        my $cv = AE::cv;
+        http_post
             url => qq<http://$host/login?app_data=> . (percent_encode_b $http->query_params->{app_data}->[0] // ''),
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $json->{sk},
-              sk_context => 'app.cookie',
+              sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
               server => $http->query_params->{server},
               callback_url => $cb_url,
+            },
+            anyevent => 1,
+            cb => sub {
+              $cv->send ($_[1]);
             };
+        my $res = $cv->recv;
         my $json = json_bytes2perl $res->content;
-        $http->set_status (302);
         my $url = $json->{authorization_url};
-        $http->set_response_header (Location => $url);
+        if (defined $url) {
+          $http->set_status (302);
+          $http->set_response_header (Location => $url);
+        } else {
+          $http->set_status (400);
+          $http->send_response_body_as_text (perl2json_chars_for_record $json);
+        }
       } elsif ($path eq '/cb') {
-        my (undef, $res) = http_post
+        my $cv = AE::cv;
+        http_post
             url => qq<http://$host/cb>,
-timeout => 30,
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $http->request_cookies->{sk},
-              sk_context => 'app.cookie',
+              sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
               oauth_token => $http->query_params->{oauth_token},
               oauth_verifier => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{oauth_verifier},
               code => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{code},
               state => $http->query_params->{bad_state} ? 'aaa' : $http->query_params->{state},
+            },
+            anyevent => 1,
+            cb => sub {
+              $cv->send ($_[1]);
             };
+        my $res = $cv->recv;
         if ($res->code == 200) {
           my $json = json_bytes2perl $res->content;
           $http->set_status (200);
@@ -337,31 +366,49 @@ timeout => 30,
           $http->send_response_body_as_text ($res->code);
         }
       } elsif ($path eq '/info') {
-        my (undef, $res) = http_post
+        my $cv = AE::cv;
+        http_post
             url => qq<http://$host/info>,
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $http->request_cookies->{sk},
-              sk_context => 'app.cookie',
+              sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
+            },
+            anyevent => 1,
+            cb => sub {
+              $cv->send ($_[1]);
             };
+        my $res = $cv->recv;
         $http->send_response_body_as_ref (\($res->content));
       } elsif ($path eq '/profiles') {
-        my (undef, $res) = http_post
+        my $cv = AE::cv;
+        http_post
             url => qq<http://$host/profiles>,
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               account_id => $http->query_params->{account_id},
+            },
+            anyevent => 1,
+            cb => sub {
+              $cv->send ($_[1]);
             };
+        my $res = $cv->recv;
         $http->send_response_body_as_ref (\($res->content));
       } elsif ($path eq '/token') {
-        my (undef, $res) = http_post
+        my $cv = AE::cv;
+        http_post
             url => qq<http://$host/token>,
             header_fields => {Authorization => 'Bearer ' . $api_token},
             params => {
               sk => $http->request_cookies->{sk},
-              sk_context => 'app.cookie',
+              sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
               server => $http->query_params->{server},
+            },
+            anyevent => 1,
+            cb => sub {
+              $cv->send ($_[1]);
             };
+        my $res = $cv->recv;
         $http->send_response_body_as_ref (\($res->content));
       }
       $http->close_response_body;

@@ -21,7 +21,7 @@ deployment:
   nightly:
     branch: nightly
     commands:
-      - curl -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"master\",\"head\":\"`git rev-parse HEAD`\",\"commit_message\":\"auto-merge nightly into master\"}" "https://api.github.com/repos/wakaba/accounts/merges"
+      - curl -f -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"staging\",\"head\":\"`git rev-parse HEAD`\",\"commit_message\":\"auto-merge nightly into staging\"}" "https://api.github.com/repos/wakaba/accounts/merges"
   staging:
     branch: staging
     commands:
@@ -33,4 +33,5 @@ deployment:
       - git push git@heroku.com:$HEROKU_APP_NAME.git +`git rev-parse HEAD`:master  :
          timeout: 600
       - XTEST_ORIGIN=https://$HEROKU_APP_NAME.herokuapp.com make test-external-http-or-rollback HEROKU_APP_NAME=$HEROKU_APP_NAME
-      - curl -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"master\",\"head\":\"`cat head.txt`\",\"commit_message\":\"auto-merge staging into master\"}" "https://api.github.com/repos/wakaba/accounts/merges"
+      - curl -f -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"master\",\"head\":\"`cat head.txt`\",\"commit_message\":\"auto-merge staging into master\"}" "https://api.github.com/repos/wakaba/accounts/merges"
+
