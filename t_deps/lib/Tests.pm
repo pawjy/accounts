@@ -200,6 +200,7 @@ sub web_server (;$$$) {
     my $temp_path = $temp_dir_path->child ('file');
     my $temp_file = Promised::File->new_from_path ($temp_path);
     $HTTPServer = Promised::Plackup->new;
+    $HTTPServer->set_option ('--server' => 'Twiggy::Prefork');
     $HTTPServer->envs->{APP_CONFIG} = $temp_path;
     my $host = $OAuthServer->get_host;
     $OAuth1AuthEndpoint = sprintf q<http://%s/oauth1/authorize>, $host;
