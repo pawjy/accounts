@@ -15,6 +15,10 @@ use Accounts::AppServer;
 use Web::UserAgent::Functions qw(http_post http_get);
 use Web::UserAgent::Functions::OAuth;
 
+sub format_id ($) {
+  return sprintf '%llu', $_[0];
+} # format_id
+
 sub psgi_app ($$) {
   my ($class, $config) = @_;
   return sub {
@@ -107,7 +111,7 @@ sub main ($$) {
       my $session_row = $_[0]
           // return $app->send_error_json ({reason => 'Bad session'});
       return $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master')->then (sub {
-        my $account_id = ''.($_[0]->first->{uuid});
+        my $account_id = format_id ($_[0]->first->{uuid});
         my $time = time;
         return $app->db->insert ('account', [{
           account_id => $account_id,
@@ -447,7 +451,7 @@ sub main ($$) {
               account_id => Dongry::Type->serialize ('text', $id),
             }, source_name => 'master', fields => ['name'])->then (sub {
               my $r = $_[0]->first_as_row // die "Account |$id| has no data";
-              $json->{account_id} = ''.$id;
+              $json->{account_id} = format_id $id;
               $json->{name} = $r->get ('name');
             });
           }
@@ -470,7 +474,7 @@ sub main ($$) {
       return $_[0]->all_as_rows->to_a;
     }) : Promise->resolve ([]))->then (sub {
       return $app->send_json ({accounts => {map { $_->get ('account_id') => {
-        account_id => ''.$_->get ('account_id'),
+        account_id => format_id $_->get ('account_id'),
         name => $_->get ('name'),
       } } @{$_[0]}}});
     }));
@@ -501,7 +505,7 @@ sub main ($$) {
         }
         my $aid = $row->get ('account_id');
         $accounts->{$aid}->{services}->{$row->get ('service_name')} = $v;
-        $accounts->{$aid}->{account_id} = ''.$aid;
+        $accounts->{$aid}->{account_id} = format_id $aid;
       }
       # XXX filter by account.user_status && account.admin_status
       return $app->send_json ({accounts => $accounts});
@@ -603,8 +607,8 @@ sub create_account ($$%) {
     if (@$links == 0) { # new account
       return $app->db->execute ('SELECT UUID_SHORT() AS account_id, UUID_SHORT() AS link_id', undef, source_name => 'master')->then (sub {
         my $uuids = $_[0]->first;
-        $uuids->{account_id} .= '';
-        $uuids->{account_link_id} .= '';
+        $uuids->{account_id} = format_id $uuids->{account_id};
+        $uuids->{account_link_id} = format_id $uuids->{account_link_id};
         my $time = time;
         my $name = $uuids->{account_id};
         my $linked_name = $session_data->{$service}->{$server->{linked_name_field} // ''} // '';
@@ -677,7 +681,7 @@ sub create_account ($$%) {
     if ($account->{terms_version} < $expected_version) {
       die "XXX Not implemented yet";
     }
-    $session_data->{account_id} = ''.$account->{account_id};
+    $session_data->{account_id} = format_id $account->{account_id};
   });
 } # create_account
 
