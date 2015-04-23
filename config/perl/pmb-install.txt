@@ -9,8 +9,8 @@ Test::Builder~1.001014
 Digest::SHA~5.95
 File::Path~2.09
 Time::Local~1.2300
-AnyEvent~7.08
 parent~0.232
+AnyEvent~7.08
 Term::ANSIColor~4.03
 Exporter::Lite~0.06
 AnyEvent::HTTP~2.21
@@ -19,7 +19,7 @@ File::Temp~0.2304
 Path::Class~0.35
 common::sense~3.73
 Unicode::Stringprep~1.105
-Scalar::Util~1.41
+Scalar::Util~1.42
 LWP::MediaTypes~6.02
 IO::Handle~1.28
 Encode::Locale~1.04
