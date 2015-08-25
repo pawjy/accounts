@@ -9,9 +9,6 @@ RUN mv /app /app.orig && \
     mv /app.orig/* /app/ && \
     cd /app && make deps PMBP_OPTIONS=--execute-system-package-installer && \
     echo '#!/bin/bash' > /server && \
-    echo 'export MYSQL_DSNS_JSON=/config/dsns.json' >> /server && \
-    echo 'export KARASUMA_CONFIG_FILE_DIR_NAME=/config/keys' >> /server && \
-    echo 'export KARASUMA_CONFIG_JSON=/config/config.json' >> /server && \
     echo 'cd /app && ./plackup bin/server.psgi -p 8080 -s Twiggy::Prefork --max-workers 5' >> /server && \
     chmod u+x /server && \
     rm -fr /app/deps /app.orig
