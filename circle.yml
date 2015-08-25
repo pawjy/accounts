@@ -7,4 +7,3 @@ dependencies:
 test:
   override:
     - true;
-deployment:
