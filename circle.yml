@@ -1,5 +1,6 @@
 machine:
   services:
+    - docker
 dependencies:
   override:
     - true;
