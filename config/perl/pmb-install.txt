@@ -1,4 +1,4 @@
-Net::SSLeay~1.68
+Net::SSLeay~1.69
 Carp::Heavy~1.36
 Pod::Usage~1.67
 Test::NoWarnings~1.04
@@ -10,8 +10,8 @@ Digest::SHA~5.95
 File::Path~2.09
 Time::Local~1.2300
 AnyEvent~7.09
-parent~0.234
 Term::ANSIColor~4.03
+parent~0.234
 Exporter::Lite~0.06
 AnyEvent::HTTP~2.22
 HTTP::Response~6.04
@@ -27,7 +27,6 @@ Unicode::Normalize~1.18
 Socket~2.019
 Path::Tiny~0.068
 URI~1.67
-Test::Tester~0.114
 Time::HiRes~1.9726
 Exporter~5.70
 HTTP::Date~6.02
