@@ -39,6 +39,34 @@ test {
   });
 } wait => $wait, n => 1, name => '/index GET';
 
+test {
+  my $c = shift;
+  my $host = $c->received_data->{host};
+  return Promise->new (sub {
+    my ($ok, $ng) = @_;
+    http_get
+        url => qq<http://$host/robots.txt>,
+        anyevent => 1,
+        max_redirect => 0,
+        cb => sub {
+          my $res = $_[1];
+          if ($res->code == 200) {
+            $ok->($res);
+          } else {
+            $ng->($res->code);
+          }
+        };
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->code, 200;
+      is $res->content, qq{User-agent: *\nDisallow: /};
+    } $c;
+    done $c;
+    undef $c;
+  });
+} wait => $wait, n => 2, name => '/robots.txt GET';
+
 run_tests;
 stop_web_server;
 

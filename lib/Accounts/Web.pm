@@ -512,6 +512,11 @@ sub main ($$) {
     }));
   } # /search
 
+  if (@$path == 1 and $path->[0] eq 'robots.txt') {
+    # /robots.txt
+    return $app->send_plain_text ("User-agent: *\nDisallow: /");
+  }
+
   return $app->send_error (404);
 } # main
 
