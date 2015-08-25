@@ -1,37 +1,5 @@
-machine:
-  services:
-    - docker
 dependencies:
-  cache_directories:
-    - "local/perlbrew/perls"
   override:
-    - make deps test-deps:
-        timeout: 600
-    - docker info
-    - docker pull wakaba/docker-chromedriver:stable
-    - git config --global user.email "temp@circleci.test"
-    - git config --global user.name "CircleCI"
 test:
   override:
-    - make test-local-http-circle :
-        timeout: 600
-    - WEBUA_DEBUG=1 TEST_WEBDRIVER_BROWSERS="chrome" make test-local-web-circle:
-        timeout: 600
 deployment:
-  nightly:
-    branch: nightly
-    commands:
-      - curl -f -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"staging\",\"head\":\"`git rev-parse HEAD`\",\"commit_message\":\"auto-merge nightly into staging\"}" "https://api.github.com/repos/wakaba/accounts/merges"
-  staging:
-    branch: staging
-    commands:
-      - git fetch --unshallow
-      - git rev-parse HEAD > head.txt
-      - git clone $KEYS_REPO_URL local/keys
-      - make heroku-save-current-release HEROKU_APP_NAME=$HEROKU_APP_NAME
-      - make create-commit-for-heroku
-      - git push git@heroku.com:$HEROKU_APP_NAME.git +`git rev-parse HEAD`:master  :
-         timeout: 600
-      - XTEST_ORIGIN=https://$HEROKU_APP_NAME.herokuapp.com make test-external-http-or-rollback HEROKU_APP_NAME=$HEROKU_APP_NAME
-      - curl -f -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"master\",\"head\":\"`cat head.txt`\",\"commit_message\":\"auto-merge staging into master\"}" "https://api.github.com/repos/wakaba/accounts/merges"
-
