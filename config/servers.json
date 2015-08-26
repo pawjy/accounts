@@ -43,8 +43,22 @@
     "host": "accounts.google.com",
     "auth_endpoint": "/o/oauth2/auth",
     "token_endpoint": "/o/oauth2/token",
-    "login_scope": "openid profile",
-    "page_url_template": "https://plus.google.com/u/0/{id}/"
+    "login_scope": "openid profile email",
+    "profile_host": "www.googleapis.com",
+    "profile_endpoint": "/plus/v1/people/me/openIdConnect",
+    "profile_id_field": "sub",
+    "profile_name_field": "name",
+    "profile_email_field": "email",
+    "profile_data_fields": {
+      "email_verified": "email_verified",
+      "icon_url": "picture",
+      "page_url": "profile"
+    },
+    "linked_id_field": "profile_id",
+    "linked_name_field": "profile_name",
+    "linked_email_field": "profile_email",
+    "page_url_template": "https://plus.google.com/u/0/{id}/",
+    "auth_scheme": "header"
   },
   "facebook": {
     "name": "facebook",

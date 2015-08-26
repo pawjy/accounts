@@ -1,2 +1,6 @@
 To get the email address of a facebook user, the |email| scope must be
 specified in the |login_scope| parameter of the server configuration.
+
+To get localized realname of a facebook user, append |locale=ja_JP|
+(for Japanese) query parameter to the URL |/me| for the
+|profile_endpoint| parameter of the server configuration.
