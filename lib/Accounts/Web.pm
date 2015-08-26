@@ -39,11 +39,16 @@ sub psgi_app ($$) {
         scalar gmtime, $app->http->request_method, $app->http->url->stringify;
 
     return $app->execute_by_promise (sub {
-      return Promise->resolve ($class->main ($app))->then (sub {
+      return Promise->resolve->then (sub {
+        return $class->main ($app);
+      })->then (sub {
         return $app->shutdown;
       }, sub {
         my $error = $_[0];
         return $app->shutdown->then (sub { die $error });
+      })->catch (sub {
+        $app->error_log ($_[0]) unless UNIVERSAL::isa ($_[0], 'Wanage::App::Done');
+        die $_[0];
       });
     });
   };
