@@ -1,0 +1,34 @@
+An account has following properties:
+
+  account_id
+
+    A unique ID for the account.  This is a 64-bit unsigned integer.
+
+  name
+
+    The label for the account, which is expected to be a short
+    human-readable string.
+
+  user_status
+
+    An integer, which is intended to be used for the user-controllable
+    status of the account.  Its semantics is application dependent.
+    This is a 8-bit unsigned integer.
+
+    For an account created by </create> or </cb>, its value will be 1.
+
+  admin_status
+
+    An integer, which is intended to be used for the
+    administrator-controlled status of the account.  Its semantics is
+    application dependent.  This is a 8-bit unsigned integer.
+
+    For an account created by </create> or </cb>, its value will be 1.
+
+  terms_version
+
+    An integer, which is intended to be used as the last revision
+    number of the terms of the application, agreed with the account's
+    user.
+
+    For an account created by </create> or </cb>, its value will be 0.
