@@ -482,6 +482,7 @@ sub session ($;%) {
   });
 
   if ($args{account}) {
+    $args{account} = {} unless ref $args{account};
     $p = $p->then (sub {
       my $session = $_[0];
       return Promise->new (sub {

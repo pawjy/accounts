@@ -12,8 +12,9 @@ An account has following properties:
   user_status
 
     An integer, which is intended to be used for the user-controllable
-    status of the account.  Its semantics is application dependent.
-    This is a 8-bit unsigned integer.
+    status of the account.  Its semantics is application dependent
+    (XXX this is not true for </cb>).  This is a 8-bit unsigned
+    integer.
 
     For an account created by </create> or </cb>, its value will be 1.
 
@@ -21,7 +22,8 @@ An account has following properties:
 
     An integer, which is intended to be used for the
     administrator-controlled status of the account.  Its semantics is
-    application dependent.  This is a 8-bit unsigned integer.
+    application dependent (XXX this is not true for </cb>).  This is a
+    8-bit unsigned integer.
 
     For an account created by </create> or </cb>, its value will be 1.
 
