@@ -500,13 +500,15 @@ sub main ($$) {
       })->then (sub {
         return $class->load_linked ($app => [$_[0]]);
       })->then (sub {
+        return $class->load_data ($app => $_[0]);
+      })->then (sub {
         return $app->send_json ($_[0]->[0]);
       });
     });
   } # /info
 
   if (@$path == 1 and $path->[0] eq 'profiles') {
-    ## /profiles - Public account data
+    ## /profiles - Account data
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
@@ -523,11 +525,50 @@ sub main ($$) {
         };
       } @{$_[0]}]);
     })->then (sub {
+      return $class->load_data ($app => $_[0]);
+    })->then (sub {
       return $app->send_json ({
         accounts => {map { $_->{account_id} => $_ } @{$_[0]}},
       });
     }));
   } # /profiles
+
+  if (@$path == 1 and $path->[0] eq 'data') {
+    ## /data - Account data
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    return $class->resume_session ($app)->then (sub {
+      my $session_row = $_[0];
+      my $account_id = defined $session_row ? $session_row->get ('data')->{account_id} : undef;
+
+      return $app->send_error_json ({reason => 'Not a login user'})
+          unless defined $account_id;
+
+      my $names = $app->text_param_list ('name');
+      my $values = $app->text_param_list ('value');
+      my @data;
+      for (0..$#$names) {
+        push @data, {
+          account_id => Dongry::Type->serialize ('text', $account_id),
+          key => Dongry::Type->serialize ('text', $names->[$_]),
+          value => Dongry::Type->serialize ('text', $values->[$_]),
+          created => time,
+          updated => time,
+        } if defined $values->[$_];
+      }
+      if (@data) {
+        return $app->db->insert ('account_data', \@data, duplicate => {
+          value => $app->db->bare_sql_fragment ('VALUES(`value`)'),
+          updated => $app->db->bare_sql_fragment ('VALUES(updated)'),
+        })->then (sub {
+          return $app->send_json ({});
+        });
+      } else {
+        return $app->send_json ({});
+      }
+    });
+  } # /data
 
   if (@$path == 1 and $path->[0] eq 'search') {
     ## /search - User search
@@ -820,6 +861,32 @@ sub load_linked ($$$) {
     return $items;
   });
 } # load_linked
+
+sub load_data ($$$) {
+  my ($class, $app, $items) = @_;
+
+  my $account_id_to_json = {};
+  my @account_id = map {
+    $account_id_to_json->{$_->{account_id}} = $_;
+    Dongry::Type->serialize ('text', $_->{account_id});
+  } grep { defined $_->{account_id} } @$items;
+  return $items unless @account_id;
+
+  my @field = map { Dongry::Type->serialize ('text', $_) } $app->text_param_list ('with_data')->to_list;
+  return $items unless @field;
+
+  return $app->db->select ('account_data', {
+    account_id => {-in => \@account_id},
+    key => {-in => \@field},
+  }, source_name => 'master')->then (sub {
+    for (@{$_[0]->all}) {
+      my $json = $account_id_to_json->{$_->{account_id}};
+      $json->{data}->{$_->{key}} = Dongry::Type->parse ('text', $_->{value})
+          if defined $_->{value} and length $_->{value};
+    }
+    return $items;
+  });
+} # load_data
 
 1;
 
