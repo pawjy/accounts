@@ -17,7 +17,9 @@
     "token_endpoint": "/oauth/token",
     "token_res_params": ["url_name", "display_name"],
     "linked_name_field": "display_name",
-    "linked_id_field": "url_name"
+    "linked_id_field": "url_name",
+    "icon_url_template": "https://www.hatena.ne.jp/users/{id:2}/{id}/profile.gif",
+    "page_url_template": "https://profile.hatena.ne.jp/{id}/"
   },
   "bitbucket": {
     "name": "bitbucket",
@@ -51,7 +53,9 @@
     "linked_name_field": "profile_name",
     "linked_email_field": "profile_email",
     "auth_scheme": "query",
-    "login_scope": "email"
+    "login_scope": "email",
+    "icon_url_template": "https://graph.facebook.com/{id}/picture",
+    "page_url_template": "https://facebook.com/{id}"
   },
   "github": {
     "name": "github",

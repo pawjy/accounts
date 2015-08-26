@@ -131,6 +131,39 @@ test {
 test {
   my $c = shift;
   my $host = $c->received_data->{host};
+  session ($c)->then (sub {
+    my $session = $_[0];
+    return Promise->new (sub {
+      my ($ok, $ng) = @_;
+      http_post
+          url => qq<http://$host/info>,
+          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
+          params => {sk => $session->{sk}, with_linked => ['id', 'realname', 'icon_url']},
+          anyevent => 1,
+          max_redirect => 0,
+          cb => sub {
+            my $res = $_[1];
+            if ($res->code == 200) {
+              $ok->(json_bytes2perl $res->content);
+            } else {
+              $ng->($res->code);
+            }
+          };
+    });
+  })->then (sub {
+    my $json = $_[0];
+    test {
+      is $json->{account_id}, undef;
+      is $json->{name}, undef;
+    } $c;
+    done $c;
+    undef $c;
+  });
+} wait => $wait, n => 2, name => '/info with linked (no match)';
+
+test {
+  my $c = shift;
+  my $host = $c->received_data->{host};
   Promise->resolve->then (sub {
     my $session = $_[0];
     return Promise->new (sub {
