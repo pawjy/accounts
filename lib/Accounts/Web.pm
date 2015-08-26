@@ -816,7 +816,7 @@ sub load_linked ($$$) {
   my $account_id_to_json = {};
   my @account_id = map {
     $account_id_to_json->{$_->{account_id}} = $_;
-    $_->{account_id};
+    Dongry::Type->serialize ('text', $_->{account_id});
   } grep { defined $_->{account_id} } @$items;
   return $items unless @account_id;
 
