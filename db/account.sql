@@ -43,6 +43,17 @@ CREATE TABLE IF NOT EXISTS `account_link` (
   KEY (linked_email)
 ) DEFAULT CHARSET=BINARY ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS account_data (
+  account_id BIGINT UNSIGNED NOT NULL,
+  `key` VARBINARY(63) NOT NULL,
+  `value` MEDIUMBLOB NOT NULL,
+  created DOUBLE NOT NULL,
+  updated DOUBLE NOT NULL,
+  PRIMARY KEY (`account_id`, `key`),
+  KEY (created),
+  KEY (updated)
+) DEFAULT CHARSET=BINARY ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS account_log (
   log_id BIGINT UNSIGNED NOT NULL,
   account_id BIGINT UNSIGNED NOT NULL,
