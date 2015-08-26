@@ -117,8 +117,10 @@ sub main ($$) {
         return $app->db->insert ('account', [{
           account_id => $account_id,
           created => $time,
-          name => $account_id,
-          user_status => 1, admin_status => 1, terms_version => 0,
+          name => Dongry::Type->serialize ('text', $app->text_param ('name') // $account_id),
+          user_status => $app->bare_param ('user_status') // 1,
+          admin_status => $app->bare_param ('admin_status') // 1,
+          terms_version => $app->bare_param ('terms_version') // 0,
         }], source_name => 'master')->then (sub {
           my $session_data = $session_row->get ('data');
           $session_data->{account_id} = $account_id;
@@ -487,11 +489,14 @@ sub main ($$) {
           if (defined $id) {
             return $app->db->select ('account', {
               account_id => Dongry::Type->serialize ('text', $id),
-            }, source_name => 'master', fields => ['name'])->then (sub {
+            }, source_name => 'master', fields => ['name', 'user_status', 'admin_status', 'terms_version'])->then (sub {
               my $r = $_[0]->first_as_row // die "Account |$id| has no data";
               my $json = {};
               $json->{account_id} = format_id $id;
               $json->{name} = $r->get ('name');
+              $json->{user_status} = $r->get ('user_status');
+              $json->{admin_status} = $r->get ('admin_status');
+              $json->{terms_version} = $r->get ('terms_version');
               return $json;
             });
           }
