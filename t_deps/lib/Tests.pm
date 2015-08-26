@@ -482,6 +482,7 @@ sub session ($;%) {
   });
 
   if ($args{account}) {
+    $args{account} = {} unless ref $args{account};
     $p = $p->then (sub {
       my $session = $_[0];
       return Promise->new (sub {
@@ -490,7 +491,12 @@ sub session ($;%) {
         http_post
             url => qq<http://$host/create>,
             header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-            params => {sk_context => 'tests', sk => $session->{sk}},
+            params => {
+              sk_context => 'tests', sk => $session->{sk},
+              name => $args{account}->{name},
+              user_status => $args{account}->{user_status},
+              admin_status => $args{account}->{admin_status},
+            },
             anyevent => 1,
             max_redirect => 0,
             cb => sub {
