@@ -17,7 +17,7 @@ $ENV{WEBUA_DEBUG} //= 1;
 my $root_path = path (__FILE__)->parent->parent->absolute;
 my $config_path = $root_path->child ('local/local-server/config/config.json');
 my $config_file = Promised::File->new_from_path ($config_path);
-my $config_keys_path = $root_path->child ('local/keys/devel/config-keys.json');
+my $config_keys_path = $root_path->child ('local/keys/devel/config-keys-local.json');
 my $config_keys_file = Promised::File->new_from_path ($config_keys_path);
 
 my $main_cv = AE::cv;

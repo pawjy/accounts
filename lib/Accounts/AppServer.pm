@@ -6,6 +6,7 @@ push our @ISA, qw(Warabe::App);
 use Path::Tiny;
 use JSON::PS;
 use Promise;
+use Web::UserAgent::Functions qw(http_post);
 
 sub new_from_http_and_config ($$$) {
   my $self = $_[0]->SUPER::new_from_http ($_[1]);
@@ -21,9 +22,30 @@ sub db ($) {
   return $_[0]->{db} ||= $_[0]->config->get_db;
 } # db
 
+
+my $ThisHost = `hostname`;
+chomp $ThisHost;
+
+my $AppName = __PACKAGE__;
+$AppName =~ s{::AppServer$}{};
+
+sub ikachan ($$$) {
+  my ($self, $is_privmsg, $msg) = @_;
+  my $config = $self->config;
+  my $prefix = $config->get ('ikachan.url_prefix');
+  return unless defined $prefix;
+  http_post
+      url => $prefix . '/' . ($is_privmsg ? 'privmsg' : 'notice'),
+      params => {
+        channel => $config->get ('ikachan.channel'),
+        message => sprintf "%s[%s] %s", $AppName, $ThisHost, $msg,
+      },
+      anyevent => 1;
+} # ikachan
+
 sub error_log ($$) {
-  #$_[0]->ikachan (1, $_[1]);
-  warn "ERROR: $_[1]\n"; # XXX blocking I/O
+  $_[0]->ikachan (1, $_[1]);
+  warn "ERROR: $_[1]\n";
 } # error_log
 
 sub requires_api_key ($) {
