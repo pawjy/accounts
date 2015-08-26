@@ -1,3 +1,4 @@
+OAuth::Lite
 Net::SSLeay~1.69
 Carp::Heavy~1.36
 Pod::Usage~1.67

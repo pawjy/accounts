@@ -316,6 +316,7 @@ sub main ($$) {
             $app,
             server => $server,
             session_data => $session_data,
+            sk_context => $sk_context,
           );
         })->then (sub {
           my $data = $session_data->{$server->{name}} ||= {};
@@ -480,7 +481,6 @@ sub main ($$) {
 
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0];
-      my $json = {};
       return Promise->resolve->then (sub {
         if (defined $session_row) {
           my $id = $session_row->get ('data')->{account_id};
@@ -489,51 +489,18 @@ sub main ($$) {
               account_id => Dongry::Type->serialize ('text', $id),
             }, source_name => 'master', fields => ['name'])->then (sub {
               my $r = $_[0]->first_as_row // die "Account |$id| has no data";
+              my $json = {};
               $json->{account_id} = format_id $id;
               $json->{name} = $r->get ('name');
+              return $json;
             });
           }
         }
+        return {};
       })->then (sub {
-        return unless defined $json->{account_id};
-        my $with = {};
-        for (@{$app->bare_param_list ('with_linked')}) {
-          $with->{$_} = 1;
-        }
-        my @field;
-        push @field, 'linked_id' if delete $with->{id};
-        push @field, 'linked_key' if delete $with->{key};
-        push @field, 'linked_name' if delete $with->{name};
-        push @field, 'linked_email' if delete $with->{email};
-        if (keys %$with) {
-          push @field, 'linked_data';
-        }
-        return unless @field;
-        push @field, 'service_name';
-        return $app->db->select ('account_link', {
-          account_id => Dongry::Type->serialize ('text', $json->{account_id}),
-        }, fields => \@field, source_name => 'master')->then (sub {
-          for (@{$_[0]->all}) {
-            my $link = $json->{links}->{$_->{service_name}} ||= {};
-            #my $server = $app->config->get_oauth_server ($_->{service_name}) || {};
-            $link->{id} = ''.$_->{linked_id}
-                if defined $_->{linked_id} and length $_->{linked_id};
-            $link->{key} = Dongry::Type->parse ('text', $_->{linked_key})
-                if defined $_->{linked_key} and length $_->{linked_key};
-            $link->{name} = Dongry::Type->parse ('text', $_->{linked_name})
-                if defined $_->{linked_name} and length $_->{linked_name};
-            $link->{email} = Dongry::Type->parse ('text', $_->{linked_email})
-                if defined $_->{linked_email} and length $_->{linked_email};
-            if (defined $_->{linked_data}) {
-              my $data = Dongry::Type->parse ('json', $_->{linked_data});
-              for (keys %$with) {
-                $link->{$_} = $data->{$_} if defined $data->{$_};
-              }
-            }
-          }
-        });
+        return $class->load_linked ($app => [$_[0]]);
       })->then (sub {
-        return $app->send_json ($json);
+        return $app->send_json ($_[0]->[0]);
       });
     });
   } # /info
@@ -549,10 +516,16 @@ sub main ($$) {
     }, source_name => 'master', fields => ['account_id', 'name'])->then (sub {
       return $_[0]->all_as_rows->to_a;
     }) : Promise->resolve ([]))->then (sub {
-      return $app->send_json ({accounts => {map { $_->get ('account_id') => {
-        account_id => format_id $_->get ('account_id'),
-        name => $_->get ('name'),
-      } } @{$_[0]}}});
+      return $class->load_linked ($app, [map {
+        +{
+          account_id => format_id $_->get ('account_id'),
+          name => $_->get ('name'),
+        };
+      } @{$_[0]}]);
+    })->then (sub {
+      return $app->send_json ({
+        accounts => {map { $_->{account_id} => $_ } @{$_[0]}},
+      });
     }));
   } # /profiles
 
@@ -628,6 +601,16 @@ sub get_resource_owner_profile ($$%) {
       $param{params}->{access_token} = $session_data->{$service}->{access_token};
     } elsif ($server->{auth_scheme} eq 'token') {
       $param{header_fields}->{Authorization} = 'token ' . $session_data->{$service}->{access_token};
+    } elsif ($server->{auth_scheme} eq 'oauth1') {
+      my $client_id = $app->config->get ($server->{name} . '.client_id.' . $args{sk_context}) //
+                      $app->config->get ($server->{name} . '.client_id');
+      my $client_secret = $app->config->get ($server->{name} . '.client_secret.' . $args{sk_context}) //
+                          $app->config->get ($server->{name} . '.client_secret');
+
+      $param{oauth} = [$client_id, $client_secret,
+                       @{$session_data->{$service}->{access_token}}];
+      $param{params}->{user_id} = $session_data->{$service}->{user_id}
+          if $server->{name} eq 'twitter';
     }
     http_get
         url => (($server->{url_scheme} // 'https') . '://' . ($server->{profile_host} // $server->{host}) . $server->{profile_endpoint}),
@@ -778,6 +761,58 @@ sub create_account ($$%) {
     $session_data->{account_id} = format_id $account->{account_id};
   });
 } # create_account
+
+sub load_linked ($$$) {
+  my ($class, $app, $items) = @_;
+
+  my $account_id_to_json = {};
+  my @account_id = map {
+    $account_id_to_json->{$_->{account_id}} = $_;
+    $_->{account_id};
+  } grep { defined $_->{account_id} } @$items;
+  return $items unless @account_id;
+
+  my $with = {};
+  for (@{$app->bare_param_list ('with_linked')}) {
+    $with->{$_} = 1;
+  }
+  my @field;
+  push @field, 'linked_id' if delete $with->{id};
+  push @field, 'linked_key' if delete $with->{key};
+  push @field, 'linked_name' if delete $with->{name};
+  push @field, 'linked_email' if delete $with->{email};
+  if (keys %$with) {
+    push @field, 'linked_data';
+  }
+  return $items unless @field;
+  push @field, 'service_name';
+  push @field, 'account_id';
+
+  return $app->db->select ('account_link', {
+    account_id => {-in => \@account_id},
+  }, fields => \@field, source_name => 'master')->then (sub {
+    for (@{$_[0]->all}) {
+      my $json = $account_id_to_json->{$_->{account_id}};
+      my $link = $json->{links}->{$_->{service_name}} ||= {};
+      #my $server = $app->config->get_oauth_server ($_->{service_name}) || {};
+      $link->{id} = format_id $_->{linked_id}
+          if defined $_->{linked_id} and length $_->{linked_id};
+      $link->{key} = Dongry::Type->parse ('text', $_->{linked_key})
+          if defined $_->{linked_key} and length $_->{linked_key};
+      $link->{name} = Dongry::Type->parse ('text', $_->{linked_name})
+          if defined $_->{linked_name} and length $_->{linked_name};
+      $link->{email} = Dongry::Type->parse ('text', $_->{linked_email})
+          if defined $_->{linked_email} and length $_->{linked_email};
+      if (defined $_->{linked_data}) {
+        my $data = Dongry::Type->parse ('json', $_->{linked_data});
+        for (keys %$with) {
+          $link->{$_} = $data->{$_} if defined $data->{$_};
+        }
+      }
+    }
+    return $items;
+  });
+} # load_linked
 
 1;
 

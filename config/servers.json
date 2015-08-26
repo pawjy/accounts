@@ -6,7 +6,16 @@
     "auth_endpoint": "/oauth/authenticate",
     "token_endpoint": "/oauth/access_token",
     "token_res_params": ["user_id", "screen_name"],
-    "linked_id_field": "user_id"
+    "auth_scheme": "oauth1",
+    "profile_endpoint": "/1.1/users/show.json",
+    "profile_name_field": "name",
+    "profile_data_fields": {
+      "icon_url": "profile_image_url_https"
+    },
+    "linked_id_field": "user_id",
+    "linked_key_field": "screen_name",
+    "linked_name_field": "profile_name",
+    "page_url_template": "https://twitter.com/{key}"
   },
   "hatena": {
     "name": "hatena",
@@ -34,7 +43,8 @@
     "host": "accounts.google.com",
     "auth_endpoint": "/o/oauth2/auth",
     "token_endpoint": "/o/oauth2/token",
-    "login_scope": "openid profile"
+    "login_scope": "openid profile",
+    "page_url_template": "https://plus.google.com/u/0/{id}/"
   },
   "facebook": {
     "name": "facebook",
