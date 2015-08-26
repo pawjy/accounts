@@ -244,7 +244,7 @@ sub main ($$) {
             unless length $token;
         return $app->send_error_json ({reason => 'No |oauth_verifier|'})
             unless length $verifier;
-        my $p = Promise->new (sub {
+        $p = Promise->new (sub {
           my ($ok, $ng) = @_;
           http_oauth1_request_token # or die
               url_scheme => $server->{url_scheme},
@@ -273,7 +273,7 @@ sub main ($$) {
         my $code = $app->bare_param ('code') // '';
         return $app->send_error_json ({reason => 'No |code|'})
             unless length $code;
-        my $p = Promise->new (sub {
+        $p = Promise->new (sub {
           my ($ok, $ng) = @_;
           http_post
               url => (($server->{url_scheme} // 'https') . '://' . $server->{host} . $server->{token_endpoint}),
