@@ -241,8 +241,6 @@ sub main ($$) {
       if (defined $session_data->{action}->{temp_credentials}) { # OAuth 1.0
         my $token = $app->bare_param ('oauth_token') // '';
         my $verifier = $app->bare_param ('oauth_verifier') // '';
-        return $app->send_error_json ({reason => 'No |oauth_token|'})
-            unless length $token;
         return $app->send_error_json ({reason => 'No |oauth_verifier|'})
             unless length $verifier;
         $p = Promise->new (sub {
@@ -653,7 +651,7 @@ sub create_account ($$%) {
           %$account,
           name => Dongry::Type->serialize ('text', $name),
         }, source_name => 'master', table_name => 'account')->then (sub {
-          return $app->db->execute ('INSERT INTO account_link (account_link_id, account_id, service_name, created, updated, linked_name, linked_id, linked_key, linked_token1, linked_token2, linked_email, linked_data) VALUES (:account_link_id, :account_id, :service_name, :created, :updated, :linked_name, :linked_id, :linked_key, :linked_token1, :linked_token2, :linked_email, :linked_token)', {
+          return $app->db->execute ('INSERT INTO account_link (account_link_id, account_id, service_name, created, updated, linked_name, linked_id, linked_key, linked_token1, linked_token2, linked_email, linked_data) VALUES (:account_link_id, :account_id, :service_name, :created, :updated, :linked_name, :linked_id, :linked_key, :linked_token1, :linked_token2, :linked_email, :linked_data)', {
             account_link_id => $uuids->{link_id},
             account_id => $uuids->{account_id},
             service_name => Dongry::Type->serialize ('text', $server->{name}),
