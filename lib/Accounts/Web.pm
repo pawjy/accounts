@@ -311,11 +311,33 @@ sub main ($$) {
       }
 
       return $p->then (sub {
-        return Promise->resolve ($class->get_resource_owner_profile (
-          $app,
-          server => $server,
-          session_data => $session_data,
-        ))->then (sub {
+        return Promise->resolve->then (sub {
+          return $class->get_resource_owner_profile (
+            $app,
+            server => $server,
+            session_data => $session_data,
+          );
+        })->then (sub {
+          my $data = $session_data->{$server->{name}} ||= {};
+          my $linked = $data->{linked_data} ||= {};
+          my $id = $data->{$server->{linked_id_field} // ''};
+          my $key = $data->{$server->{linked_key_field} // ''};
+          for (['page_url_template' => 'page_url'],
+               ['icon_url_template' => 'icon_url']) {
+            if (defined $server->{$_->[0]}) {
+              $linked->{$_->[1]} = $server->{$_->[0]};
+              if (defined $id) {
+                $linked->{$_->[1]} =~ s/\{id\}/$id/g;
+                $linked->{$_->[1]} =~ s/\{id:2\}/substr $id, 0, 2/ge;
+              }
+              if (defined $key) {
+                $linked->{$_->[1]} =~ s/\{key\}/$key/g;
+                $linked->{$_->[1]} =~ s/\{key:2\}/substr $key, 0, 2/ge;
+              }
+            }
+          }
+
+        })->then (sub {
           return $class->create_account (
             $app,
             server => $server,
@@ -472,6 +494,44 @@ sub main ($$) {
             });
           }
         }
+      })->then (sub {
+        return unless defined $json->{account_id};
+        my $with = {};
+        for (@{$app->bare_param_list ('with_linked')}) {
+          $with->{$_} = 1;
+        }
+        my @field;
+        push @field, 'linked_id' if delete $with->{id};
+        push @field, 'linked_key' if delete $with->{key};
+        push @field, 'linked_name' if delete $with->{name};
+        push @field, 'linked_email' if delete $with->{email};
+        if (keys %$with) {
+          push @field, 'linked_data';
+        }
+        return unless @field;
+        push @field, 'service_name';
+        return $app->db->select ('account_link', {
+          account_id => Dongry::Type->serialize ('text', $json->{account_id}),
+        }, fields => \@field, source_name => 'master')->then (sub {
+          for (@{$_[0]->all}) {
+            my $link = $json->{links}->{$_->{service_name}} ||= {};
+            #my $server = $app->config->get_oauth_server ($_->{service_name}) || {};
+            $link->{id} = ''.$_->{linked_id}
+                if defined $_->{linked_id} and length $_->{linked_id};
+            $link->{key} = Dongry::Type->parse ('text', $_->{linked_key})
+                if defined $_->{linked_key} and length $_->{linked_key};
+            $link->{name} = Dongry::Type->parse ('text', $_->{linked_name})
+                if defined $_->{linked_name} and length $_->{linked_name};
+            $link->{email} = Dongry::Type->parse ('text', $_->{linked_email})
+                if defined $_->{linked_email} and length $_->{linked_email};
+            if (defined $_->{linked_data}) {
+              my $data = Dongry::Type->parse ('json', $_->{linked_data});
+              for (keys %$with) {
+                $link->{$_} = $data->{$_} if defined $data->{$_};
+              }
+            }
+          }
+        });
       })->then (sub {
         return $app->send_json ($json);
       });
