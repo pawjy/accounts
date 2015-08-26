@@ -10,6 +10,7 @@ use JSON::PS;
 use Wanage::URL;
 use Wanage::HTTP;
 use Dongry::Type;
+use Dongry::Type::JSONPS;
 use Dongry::SQL;
 use Accounts::AppServer;
 use Web::UserAgent::Functions qw(http_post http_get);
@@ -236,66 +237,80 @@ sub main ($$) {
       my $client_secret = $app->config->get ($server->{name} . '.client_secret.' . $sk_context) //
                           $app->config->get ($server->{name} . '.client_secret');
 
-      return ((defined $session_data->{action}->{temp_credentials} ? Promise->new (sub {
-        my ($ok, $ng) = @_;
-        http_oauth1_request_token # or die
-            url_scheme => $server->{url_scheme},
-            host => $server->{host},
-            pathquery => $server->{token_endpoint},
-            oauth_consumer_key => $client_id,
-            client_shared_secret => $client_secret,
-            temp_token => $session_data->{action}->{temp_credentials}->[0],
-            temp_token_secret => $session_data->{action}->{temp_credentials}->[1],
-            oauth_token => $app->bare_param ('oauth_token'),
-            oauth_verifier => $app->bare_param ('oauth_verifier'),
-            timeout => 10,
-            anyevent => 1,
-            cb => sub {
-              my ($access_token, $access_token_secret, $params) = @_;
-              return $ng->("Access token request failed")
-                  unless defined $access_token;
-              $session_data->{$server->{name}}->{access_token} = [$access_token, $access_token_secret];
-              for (@{$server->{token_res_params} or []}) {
-                $session_data->{$server->{name}}->{$_} = $params->{$_};
-              }
-              $ok->();
-            };
-      }) : Promise->new (sub {
-        my ($ok, $ng) = @_;
-        http_post
-            url => (($server->{url_scheme} // 'https') . '://' . $server->{host} . $server->{token_endpoint}),
-            params => {
-              client_id => $client_id,
-              client_secret => $client_secret,
-              redirect_uri => $session_data->{action}->{callback_url},
-              code => $app->text_param ('code'),
-              grant_type => 'authorization_code',
-            },
-            timeout => 10,
-            anyevent => 1,
-            cb => sub {
-              my (undef, $res) = @_;
-              my $access_token;
-              my $refresh_token;
-              if ($res->content_type =~ /json/) { ## Standard
-                my $json = json_bytes2perl $res->content;
-                if (ref $json eq 'HASH' and defined $json->{access_token}) {
-                  $access_token = $json->{access_token};
-                  $refresh_token = $json->{refresh_token};
+      my $p;
+      if (defined $session_data->{action}->{temp_credentials}) { # OAuth 1.0
+        my $token = $app->bare_param ('oauth_token') // '';
+        my $verifier = $app->bare_param ('oauth_verifier') // '';
+        return $app->send_error_json ({reason => 'No |oauth_verifier|'})
+            unless length $verifier;
+        $p = Promise->new (sub {
+          my ($ok, $ng) = @_;
+          http_oauth1_request_token # or die
+              url_scheme => $server->{url_scheme},
+              host => $server->{host},
+              pathquery => $server->{token_endpoint},
+              oauth_consumer_key => $client_id,
+              client_shared_secret => $client_secret,
+              temp_token => $session_data->{action}->{temp_credentials}->[0],
+              temp_token_secret => $session_data->{action}->{temp_credentials}->[1],
+              oauth_token => $token,
+              oauth_verifier => $verifier,
+              timeout => 10,
+              anyevent => 1,
+              cb => sub {
+                my ($access_token, $access_token_secret, $params) = @_;
+                return $ng->("Access token request failed")
+                    unless defined $access_token;
+                $session_data->{$server->{name}}->{access_token} = [$access_token, $access_token_secret];
+                for (@{$server->{token_res_params} or []}) {
+                  $session_data->{$server->{name}}->{$_} = $params->{$_};
                 }
-              } else { ## Facebook
-                my $parsed = parse_form_urlencoded_b $res->content;
-                $access_token = $parsed->{access_token}->[0];
-                $refresh_token = $parsed->{refresh_token}->[0];
-              }
-              return $ng->("Access token request failed")
-                  unless defined $access_token;
-              $session_data->{$server->{name}}->{access_token} = $access_token;
-              $session_data->{$server->{name}}->{refresh_token} = $refresh_token
-                  if defined $refresh_token;
-              $ok->();
-            };
-      }))->then (sub {
+                $ok->();
+              };
+        });
+      } else { # OAuth 2.0
+        my $code = $app->bare_param ('code') // '';
+        return $app->send_error_json ({reason => 'No |code|'})
+            unless length $code;
+        $p = Promise->new (sub {
+          my ($ok, $ng) = @_;
+          http_post
+              url => (($server->{url_scheme} // 'https') . '://' . $server->{host} . $server->{token_endpoint}),
+              params => {
+                client_id => $client_id,
+                client_secret => $client_secret,
+                redirect_uri => $session_data->{action}->{callback_url},
+                code => $app->text_param ('code'),
+                grant_type => 'authorization_code',
+              },
+              timeout => 10,
+              anyevent => 1,
+              cb => sub {
+                my (undef, $res) = @_;
+                my $access_token;
+                my $refresh_token;
+                if ($res->content_type =~ /json/) { ## Standard
+                  my $json = json_bytes2perl $res->content;
+                  if (ref $json eq 'HASH' and defined $json->{access_token}) {
+                    $access_token = $json->{access_token};
+                    $refresh_token = $json->{refresh_token};
+                  }
+                } else { ## Facebook
+                  my $parsed = parse_form_urlencoded_b $res->content;
+                  $access_token = $parsed->{access_token}->[0];
+                  $refresh_token = $parsed->{refresh_token}->[0];
+                }
+                return $ng->("Access token request failed")
+                    unless defined $access_token;
+                $session_data->{$server->{name}}->{access_token} = $access_token;
+                $session_data->{$server->{name}}->{refresh_token} = $refresh_token
+                    if defined $refresh_token;
+                $ok->();
+              };
+        });
+      }
+
+      return $p->then (sub {
         return Promise->resolve ($class->get_resource_owner_profile (
           $app,
           server => $server,
@@ -314,11 +329,12 @@ sub main ($$) {
           });
         });
       }, sub {
+        warn $_[0];
         return $app->send_error_json ({reason => 'OAuth token endpoint failed',
                                        error_for_dev => "$_[0]"});
       })->then (sub {
         return $class->delete_old_sessions ($app);
-      }));
+      });
     });
   } # /cb
 
@@ -548,7 +564,9 @@ sub get_resource_owner_profile ($$%) {
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     my %param;
-    if ($server->{auth_scheme} eq 'token') {
+    if ($server->{auth_scheme} eq 'query') {
+      $param{params}->{access_token} = $session_data->{$service}->{access_token};
+    } elsif ($server->{auth_scheme} eq 'token') {
       $param{header_fields}->{Authorization} = 'token ' . $session_data->{$service}->{access_token};
     }
     http_get
@@ -572,6 +590,13 @@ sub get_resource_owner_profile ($$%) {
         if defined $server->{profile_key_field};
     $session_data->{$service}->{profile_name} = $json->{$server->{profile_name_field}}
         if defined $server->{profile_name_field};
+    $session_data->{$service}->{profile_email} = $json->{$server->{profile_email_field}}
+        if defined $server->{profile_email_field};
+    for (keys %{$server->{profile_data_fields} or {}}) {
+      my $v = $server->{profile_data_fields}->{$_};
+      $session_data->{$service}->{linked_data}->{$_} = $json->{$v}
+          if defined $json->{$v};
+    }
   });
 } # get_resource_owner_profile
 
@@ -626,7 +651,7 @@ sub create_account ($$%) {
           %$account,
           name => Dongry::Type->serialize ('text', $name),
         }, source_name => 'master', table_name => 'account')->then (sub {
-          return $app->db->execute ('INSERT INTO account_link (account_link_id, account_id, service_name, created, updated, linked_name, linked_id, linked_key, linked_token1, linked_token2) VALUES (:account_link_id, :account_id, :service_name, :created, :updated, :linked_name, :linked_id, :linked_key, :linked_token1, :linked_token2)', {
+          return $app->db->execute ('INSERT INTO account_link (account_link_id, account_id, service_name, created, updated, linked_name, linked_id, linked_key, linked_token1, linked_token2, linked_email, linked_data) VALUES (:account_link_id, :account_id, :service_name, :created, :updated, :linked_name, :linked_id, :linked_key, :linked_token1, :linked_token2, :linked_email, :linked_data)', {
             account_link_id => $uuids->{link_id},
             account_id => $uuids->{account_id},
             service_name => Dongry::Type->serialize ('text', $server->{name}),
@@ -635,8 +660,10 @@ sub create_account ($$%) {
             linked_name => Dongry::Type->serialize ('text', $linked_name),
             linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
             linked_key => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_key_field} // ''} // ''),
+            linked_email => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_email_field} // ''} // ''),
             linked_token1 => Dongry::Type->serialize ('text', $token1),
             linked_token2 => Dongry::Type->serialize ('text', $token2),
+            linked_data => Dongry::Type->serialize ('json', $session_data->{$service}->{linked_data} || {}),
           }, source_name => 'master', table_name => 'account_link')->then (sub {
             my $account_link = {account_link_id => $uuids->{link_id}};
             return [$account, $account_link];
@@ -658,7 +685,7 @@ sub create_account ($$%) {
             account_id => $account_id,
           }, source_name => 'master', table_name => 'account');
         }),
-        $app->db->execute ('UPDATE account_link SET linked_name = ?, linked_id = ?, linked_key = ?, linked_token1 = ?, linked_token2 = ?, updated = ? WHERE account_link_id = ? AND account_id = ?', {
+        $app->db->execute ('UPDATE account_link SET linked_name = ?, linked_id = ?, linked_key = ?, linked_token1 = ?, linked_token2 = ?, linked_email = ?, linked_data = ?, updated = ? WHERE account_link_id = ? AND account_id = ?', {
           account_link_id => $links->[0]->{account_link_id},
           account_id => $account_id,
           linked_name => Dongry::Type->serialize ('text', $linked_name),
@@ -666,6 +693,8 @@ sub create_account ($$%) {
           linked_key => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_key_field} // ''} // ''),
           linked_token1 => Dongry::Type->serialize ('text', $token1),
           linked_token2 => Dongry::Type->serialize ('text', $token2),
+          linked_email => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_email_field} // ''} // ''),
+          linked_data => Dongry::Type->serialize ('json', $session_data->{$service}->{linked_data} || {}),
           updated => time,
         }, source_name => 'master'),
       ])->then (sub {
