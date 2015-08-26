@@ -1,0 +1,2 @@
+To get the email address of a facebook user, the |email| scope must be
+specified in the |login_scope| parameter of the server configuration.

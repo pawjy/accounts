@@ -5,7 +5,8 @@
     "temp_endpoint": "/oauth/request_token",
     "auth_endpoint": "/oauth/authenticate",
     "token_endpoint": "/oauth/access_token",
-    "token_res_params": ["user_id", "screen_name"]
+    "token_res_params": ["user_id", "screen_name"],
+    "linked_id_field": "user_id"
   },
   "hatena": {
     "name": "hatena",
@@ -38,7 +39,19 @@
     "host": "graph.facebook.com",
     "auth_host": "www.facebook.com",
     "auth_endpoint": "/dialog/oauth",
-    "token_endpoint": "/oauth/access_token"
+    "token_endpoint": "/oauth/access_token",
+    "profile_endpoint": "/me?fields=id,name,email",
+    "profile_id_field": "id",
+    "profile_name_field": "name",
+    "profile_email_field": "email",
+    "profile_data_fields": {
+      "realname": "name"
+    },
+    "linked_id_field": "profile_id",
+    "linked_name_field": "profile_name",
+    "linked_email_field": "profile_email",
+    "auth_scheme": "query",
+    "login_scope": "email"
   },
   "github": {
     "name": "github",

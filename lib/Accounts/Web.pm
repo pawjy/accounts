@@ -10,6 +10,7 @@ use JSON::PS;
 use Wanage::URL;
 use Wanage::HTTP;
 use Dongry::Type;
+use Dongry::Type::JSONPS;
 use Dongry::SQL;
 use Accounts::AppServer;
 use Web::UserAgent::Functions qw(http_post http_get);
@@ -330,6 +331,7 @@ sub main ($$) {
           });
         });
       }, sub {
+        warn $_[0];
         return $app->send_error_json ({reason => 'OAuth token endpoint failed',
                                        error_for_dev => "$_[0]"});
       })->then (sub {
@@ -564,7 +566,9 @@ sub get_resource_owner_profile ($$%) {
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     my %param;
-    if ($server->{auth_scheme} eq 'token') {
+    if ($server->{auth_scheme} eq 'query') {
+      $param{params}->{access_token} = $session_data->{$service}->{access_token};
+    } elsif ($server->{auth_scheme} eq 'token') {
       $param{header_fields}->{Authorization} = 'token ' . $session_data->{$service}->{access_token};
     }
     http_get
@@ -588,6 +592,13 @@ sub get_resource_owner_profile ($$%) {
         if defined $server->{profile_key_field};
     $session_data->{$service}->{profile_name} = $json->{$server->{profile_name_field}}
         if defined $server->{profile_name_field};
+    $session_data->{$service}->{profile_email} = $json->{$server->{profile_email_field}}
+        if defined $server->{profile_email_field};
+    for (keys %{$server->{profile_data_fields} or {}}) {
+      my $v = $server->{profile_data_fields}->{$_};
+      $session_data->{$service}->{linked_data}->{$_} = $json->{$v}
+          if defined $json->{$v};
+    }
   });
 } # get_resource_owner_profile
 
@@ -642,7 +653,7 @@ sub create_account ($$%) {
           %$account,
           name => Dongry::Type->serialize ('text', $name),
         }, source_name => 'master', table_name => 'account')->then (sub {
-          return $app->db->execute ('INSERT INTO account_link (account_link_id, account_id, service_name, created, updated, linked_name, linked_id, linked_key, linked_token1, linked_token2) VALUES (:account_link_id, :account_id, :service_name, :created, :updated, :linked_name, :linked_id, :linked_key, :linked_token1, :linked_token2)', {
+          return $app->db->execute ('INSERT INTO account_link (account_link_id, account_id, service_name, created, updated, linked_name, linked_id, linked_key, linked_token1, linked_token2, linked_email, linked_data) VALUES (:account_link_id, :account_id, :service_name, :created, :updated, :linked_name, :linked_id, :linked_key, :linked_token1, :linked_token2, :linked_email, :linked_token)', {
             account_link_id => $uuids->{link_id},
             account_id => $uuids->{account_id},
             service_name => Dongry::Type->serialize ('text', $server->{name}),
@@ -651,8 +662,10 @@ sub create_account ($$%) {
             linked_name => Dongry::Type->serialize ('text', $linked_name),
             linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
             linked_key => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_key_field} // ''} // ''),
+            linked_email => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_email_field} // ''} // ''),
             linked_token1 => Dongry::Type->serialize ('text', $token1),
             linked_token2 => Dongry::Type->serialize ('text', $token2),
+            linked_data => Dongry::Type->serialize ('json', $session_data->{$service}->{linked_data} || {}),
           }, source_name => 'master', table_name => 'account_link')->then (sub {
             my $account_link = {account_link_id => $uuids->{link_id}};
             return [$account, $account_link];
@@ -674,7 +687,7 @@ sub create_account ($$%) {
             account_id => $account_id,
           }, source_name => 'master', table_name => 'account');
         }),
-        $app->db->execute ('UPDATE account_link SET linked_name = ?, linked_id = ?, linked_key = ?, linked_token1 = ?, linked_token2 = ?, updated = ? WHERE account_link_id = ? AND account_id = ?', {
+        $app->db->execute ('UPDATE account_link SET linked_name = ?, linked_id = ?, linked_key = ?, linked_token1 = ?, linked_token2 = ?, linked_email = ?, linked_data = ?, updated = ? WHERE account_link_id = ? AND account_id = ?', {
           account_link_id => $links->[0]->{account_link_id},
           account_id => $account_id,
           linked_name => Dongry::Type->serialize ('text', $linked_name),
@@ -682,6 +695,8 @@ sub create_account ($$%) {
           linked_key => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_key_field} // ''} // ''),
           linked_token1 => Dongry::Type->serialize ('text', $token1),
           linked_token2 => Dongry::Type->serialize ('text', $token2),
+          linked_email => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_email_field} // ''} // ''),
+          linked_data => Dongry::Type->serialize ('json', $session_data->{$service}->{linked_data} || {}),
           updated => time,
         }, source_name => 'master'),
       ])->then (sub {

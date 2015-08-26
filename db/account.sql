@@ -31,13 +31,16 @@ CREATE TABLE IF NOT EXISTS `account_link` (
   linked_id VARBINARY(511) NOT NULL,
   linked_token1 VARBINARY(1023) NOT NULL,
   linked_token2 VARBINARY(1023) NOT NULL,
+  linked_email VARBINARY(1023) NOT NULL,
+  linked_data MEDIUMBLOB NOT NULL,
   PRIMARY KEY (account_link_id),
   UNIQUE KEY (account_id, service_name, linked_id),
   UNIQUE KEY (account_id, service_name, linked_key),
   KEY (created),
   KEY (updated),
   KEY (service_name, linked_id),
-  KEY (service_name, linked_key)
+  KEY (service_name, linked_key),
+  KEY (linked_email)
 ) DEFAULT CHARSET=BINARY ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS account_log (
