@@ -305,6 +305,7 @@ sub main ($$) {
                 $session_data->{$server->{name}}->{access_token} = $access_token;
                 $session_data->{$server->{name}}->{refresh_token} = $refresh_token
                     if defined $refresh_token;
+
                 $ok->();
               };
         });
@@ -337,7 +338,6 @@ sub main ($$) {
               }
             }
           }
-
         })->then (sub {
           return $class->create_account (
             $app,
@@ -597,7 +597,9 @@ sub get_resource_owner_profile ($$%) {
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     my %param;
-    if ($server->{auth_scheme} eq 'query') {
+    if ($server->{auth_scheme} eq 'header') {
+      $param{header_fields}->{Authorization} = 'Bearer ' . $session_data->{$service}->{access_token};
+    } elsif ($server->{auth_scheme} eq 'query') {
       $param{params}->{access_token} = $session_data->{$service}->{access_token};
     } elsif ($server->{auth_scheme} eq 'token') {
       $param{header_fields}->{Authorization} = 'token ' . $session_data->{$service}->{access_token};
@@ -640,6 +642,11 @@ sub get_resource_owner_profile ($$%) {
       $session_data->{$service}->{linked_data}->{$_} = $json->{$v}
           if defined $json->{$v};
     }
+    if (defined $session_data->{$service}->{profile_email} and
+        defined $server->{profile_data_fields}->{email_verified} and
+        ($session_data->{$service}->{linked_data}->{email_verified} // '') ne 'true') {
+      delete $session_data->{$service}->{linked_data}->{profile_email};
+    }
   });
 } # get_resource_owner_profile
 
@@ -649,11 +656,11 @@ sub create_account ($$%) {
   my $service = $server->{name};
   my $session_data = $args{session_data} or die;
 
-  return $app->send_error (400, reason_phrase => 'Non-loginable |service|')
+  return $app->throw_error (400, reason_phrase => 'Non-loginable |service|')
       unless defined $server->{linked_id_field};
 
   my $id = $session_data->{$service}->{$server->{linked_id_field}};
-  return $app->send_error (400, reason_phrase => 'Non-loginable server account')
+  return $app->throw_error (400, reason_phrase => 'Non-loginable server account')
       unless defined $id and length $id;
   $id = Dongry::Type->serialize ('text', $id);
   my $link_id = '';
