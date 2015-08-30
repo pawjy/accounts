@@ -83,6 +83,7 @@ sub start ($) {
       ]);
     });
   })->then (sub {
+    $self->{http}->wd ($RootPath);
     $self->{http}->plackup ($RootPath->child ('plackup'));
     my $web_host = $self->{web_host};
     $self->{http}->set_option ('--host' => $web_host) if defined $web_host;
