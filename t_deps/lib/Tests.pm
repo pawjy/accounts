@@ -10,6 +10,7 @@ use Promised::File;
 use Promised::Plackup;
 use Promised::Mysqld;
 use Promised::Docker::WebDriver;
+use Test::AccountServer;
 use MIME::Base64;
 use JSON::PS;
 use Web::UserAgent::Functions qw(http_get http_post);
@@ -27,21 +28,12 @@ sub import ($;@) {
   }
 } # import
 
-my $MySQLServer;
-my $HTTPServer;
+my $AccountServer;
 my $AppServer;
 my $OAuthServer;
 my $Browsers = {};
 
 my $root_path = path (__FILE__)->parent->parent->parent->absolute;
-
-sub db_sqls () {
-  my $file = Promised::File->new_from_path
-      ($root_path->child ('db/account.sql'));
-  return $file->read_byte_string->then (sub {
-    return [split /;/, $_[0]];
-  });
-} # db_sqls
 
 sub oauth_server ($) {
   $OAuthServer = Promised::Plackup->new;
@@ -185,91 +177,64 @@ sub web_server (;$$$) {
   my $web_host = $_[0];
   my $oauth_host = $_[1] || $web_host;
   my $oauth_hostname_for_docker = $_[2];
+
+  $AccountServer = Test::AccountServer->new;
+  $AccountServer->set_web_host ($web_host);
+  $AccountServer->onbeforestart (sub {
+    my ($self, %args) = @_;
+    return oauth_server ($oauth_host)->then (sub {
+      my $host = $OAuthServer->get_host;
+      $args{data}->{oauth1_auth_url} = sprintf q<http://%s/oauth1/authorize>, $host;
+      $args{data}->{oauth2_auth_url} = sprintf q<http://%s/oauth2/authorize>, $host;
+
+      $args{servers}->{oauth1server} = {
+        name => 'oauth1server',
+        url_scheme => 'http',
+        host => $host,
+        "temp_endpoint" => "/oauth1/temp",
+        "temp_params" => {"scope" => ""},
+        "auth_endpoint" => "/oauth1/authorize",
+        auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
+        "token_endpoint" => "/oauth1/token",
+        "token_res_params" => ["url_name", "display_name"],
+        "linked_name_field" => "display_name",
+        "linked_id_field" => "url_name",
+      };
+      $args{servers}->{oauth2server} = {
+        name => 'oauth2server',
+        url_scheme => 'http',
+        host => $host,
+        auth_endpoint => '/oauth2/authorize',
+        auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
+        token_endpoint => '/oauth2/token',
+        "profile_endpoint" => "/profile",
+        "profile_id_field" => "id",
+        "profile_key_field" => "login",
+        "profile_name_field" => "name",
+        "auth_scheme" => "token",
+        "linked_id_field" => "profile_id",
+        "linked_key_field" => "profile_key",
+        "linked_name_field" => "profile_name",
+        "scope_separator" => ","
+      };
+      $args{servers}->{ssh} = {
+        name => 'ssh',
+      };
+      
+      $args{config}->{"oauth1server.client_id"} = $OAuthServer->envs->{CLIENT_ID}.".oauth1";
+      $args{config}->{"oauth1server.client_secret"} = $OAuthServer->envs->{CLIENT_SECRET}.".oauth1";
+      $args{config}->{"oauth2server.client_id"} = $OAuthServer->envs->{CLIENT_ID}.".oauth2";
+      $args{config}->{"oauth2server.client_secret"} = $OAuthServer->envs->{CLIENT_SECRET}.".oauth2";
+      $args{config}->{"oauth1server.client_id.sk2"} = $OAuthServer->envs->{CLIENT_ID}.".oauth1.SK2";
+      $args{config}->{"oauth1server.client_secret.sk2"} = $OAuthServer->envs->{CLIENT_SECRET}.".oauth1.SK2";
+      $args{config}->{"oauth2server.client_id.sk2"} = $OAuthServer->envs->{CLIENT_ID}.".oauth2.SK2";
+      $args{config}->{"oauth2server.client_secret.sk2"} = $OAuthServer->envs->{CLIENT_SECRET}.".oauth2.SK2";
+    });
+  });
+
   my $cv = AE::cv;
-  my $bearer = rand;
-  $MySQLServer = Promised::Mysqld->new;
-  my $OAuth1AuthEndpoint;
-  my $OAuth2AuthEndpoint;
-  Promise->all ([
-    $MySQLServer->start,
-    oauth_server ($oauth_host),
-  ])->then (sub {
-    my $dsn = $MySQLServer->get_dsn_string (dbname => 'account_test');
-    $MySQLServer->{_temp} = my $temp = File::Temp->newdir;
-    my $temp_dir_path = path ($temp)->absolute;
-    my $temp_path = $temp_dir_path->child ('file');
-    my $temp_file = Promised::File->new_from_path ($temp_path);
-    $HTTPServer = Promised::Plackup->new;
-    $HTTPServer->set_option ('--server' => 'Twiggy::Prefork');
-    $HTTPServer->envs->{APP_CONFIG} = $temp_path;
-    my $host = $OAuthServer->get_host;
-    $OAuth1AuthEndpoint = sprintf q<http://%s/oauth1/authorize>, $host;
-    $OAuth2AuthEndpoint = sprintf q<http://%s/oauth2/authorize>, $host;
-    my $servers_json_path = $temp_dir_path->child ('servers.json');
-    return Promise->all ([
-      db_sqls->then (sub {
-        $MySQLServer->create_db_and_execute_sqls (account_test => $_[0]);
-      }),
-      Promised::File->new_from_path ($servers_json_path)->write_byte_string (perl2json_bytes +{
-        oauth1server => {
-          name => 'oauth1server',
-          url_scheme => 'http',
-          host => $host,
-          "temp_endpoint" => "/oauth1/temp",
-          "temp_params" => {"scope" => ""},
-          "auth_endpoint" => "/oauth1/authorize",
-          auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
-          "token_endpoint" => "/oauth1/token",
-          "token_res_params" => ["url_name", "display_name"],
-          "linked_name_field" => "display_name",
-          "linked_id_field" => "url_name",
-        },
-        oauth2server => {
-          name => 'oauth2server',
-          url_scheme => 'http',
-          host => $host,
-          auth_endpoint => '/oauth2/authorize',
-          auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
-          token_endpoint => '/oauth2/token',
-          "profile_endpoint" => "/profile",
-          "profile_id_field" => "id",
-          "profile_key_field" => "login",
-          "profile_name_field" => "name",
-          "auth_scheme" => "token",
-          "linked_id_field" => "profile_id",
-          "linked_key_field" => "profile_key",
-          "linked_name_field" => "profile_name",
-          "scope_separator" => ","
-        },
-        ssh => {
-          name => 'ssh',
-        },
-      }),
-      $temp_file->write_byte_string (perl2json_bytes +{
-        "auth.bearer" => $bearer,
-        "oauth1server.client_id" => $OAuthServer->envs->{CLIENT_ID}.".oauth1",
-        "oauth1server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth1",
-        "oauth2server.client_id" => $OAuthServer->envs->{CLIENT_ID}.".oauth2",
-        "oauth2server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth2",
-        "oauth1server.client_id.sk2" => $OAuthServer->envs->{CLIENT_ID}.".oauth1.SK2",
-        "oauth1server.client_secret.sk2" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth1.SK2",
-        "oauth2server.client_id.sk2" => $OAuthServer->envs->{CLIENT_ID}.".oauth2.SK2",
-        "oauth2server.client_secret.sk2" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth2.SK2",
-        servers_json_file => $servers_json_path,
-        alt_dsns => {master => {account => $dsn}},
-        #dsns => {account => $dsn},
-      }),
-    ]);
-  })->then (sub {
-    $HTTPServer->plackup ($root_path->child ('plackup'));
-    $HTTPServer->set_option ('--host' => $web_host) if defined $web_host;
-    $HTTPServer->set_option ('--app' => $root_path->child ('bin/server.psgi'));
-    return $HTTPServer->start;
-  })->then (sub {
-    $cv->send ({host => $HTTPServer->get_host,
-                keys => {'auth.bearer' => $bearer},
-                oauth1_auth_url => $OAuth1AuthEndpoint,
-                oauth2_auth_url => $OAuth2AuthEndpoint});
+  $AccountServer->start->then (sub {
+    $cv->send ($_[0]);
   });
   return $cv;
 } # web_server
@@ -430,7 +395,7 @@ sub web_server_and_driver () {
       my $data = $_[0]->recv;
       $data->{wd_url} = $wd->get_url_prefix;
       my $api_token = $data->{keys}->{'auth.bearer'};
-      my $api_host = '127.0.0.1:' . $HTTPServer->get_port;
+      my $api_host = '127.0.0.1:' . $AccountServer->get_web_port;
       app_server ('0.0.0.0', $api_token, $api_host)->then (sub {
         $data->{host_for_browser} = $wd->get_docker_host_hostname_for_container . ':' . $AppServer->get_port;
         $data->{oauth_server_account_name} = $OAuthServer->envs->{ACCOUNT_NAME};
@@ -445,7 +410,7 @@ push @EXPORT, qw(stop_web_server);
 sub stop_web_server () {
   my $cv = AE::cv;
   $cv->begin;
-  for ($HTTPServer, $MySQLServer, $AppServer, $OAuthServer, values %$Browsers) {
+  for ($AccountServer, $AppServer, $OAuthServer, values %$Browsers) {
     next unless defined $_;
     $cv->begin;
     $_->stop->then (sub { $cv->end });
