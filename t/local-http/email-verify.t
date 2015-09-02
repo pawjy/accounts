@@ -37,7 +37,7 @@ test {
   return POST ($c, q</email/verify>)->then (sub { test { ok 0 } $c }, sub {
     my $json = $_[0];
     test {
-      is $json->{reason}, 'Bad email address';
+      is $json->{reason}, 'Bad session';
     } $c;
     done $c;
     undef $c;
