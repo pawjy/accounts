@@ -860,14 +860,14 @@ sub create_account ($$%) {
           %$account,
           name => Dongry::Type->serialize ('text', $name),
         }, source_name => 'master', table_name => 'account')->then (sub {
-          return $app->db->execute ('INSERT INTO account_link (account_link_id, account_id, service_name, created, updated, linked_name, linked_id, linked_key, linked_token1, linked_token2, linked_email, linked_data) VALUES (:account_link_id, :account_id, :service_name, :created, :updated, :linked_name, :linked_id, :linked_key, :linked_token1, :linked_token2, :linked_email, :linked_data)', {
+          return $app->db->execute ('INSERT INTO account_link (account_link_id, account_id, service_name, created, updated, linked_name, linked_id, linked_key, linked_token1, linked_token2, linked_email, linked_data) VALUES (:account_link_id, :account_id, :service_name, :created, :updated, :linked_name, :linked_id, :linked_key:nullable, :linked_token1, :linked_token2, :linked_email, :linked_data)', {
             account_link_id => $uuids->{link_id},
             account_id => $uuids->{account_id},
             service_name => Dongry::Type->serialize ('text', $server->{name}),
             created => $time,
             updated => $time,
             linked_name => Dongry::Type->serialize ('text', $linked_name),
-            linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''}), # or undef
+            linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
             linked_key => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_key_field} // ''}), # or undef
             linked_email => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_email_field} // ''} // ''),
             linked_token1 => Dongry::Type->serialize ('text', $token1),
@@ -894,11 +894,11 @@ sub create_account ($$%) {
             account_id => $account_id,
           }, source_name => 'master', table_name => 'account');
         }),
-        $app->db->execute ('UPDATE account_link SET linked_name = ?, linked_id = ?, linked_key = ?, linked_token1 = ?, linked_token2 = ?, linked_email = ?, linked_data = ?, updated = ? WHERE account_link_id = ? AND account_id = ?', {
+        $app->db->execute ('UPDATE account_link SET linked_name = ?, linked_id = ?, linked_key = :linked_key:nullable, linked_token1 = ?, linked_token2 = ?, linked_email = ?, linked_data = ?, updated = ? WHERE account_link_id = ? AND account_id = ?', {
           account_link_id => $links->[0]->{account_link_id},
           account_id => $account_id,
           linked_name => Dongry::Type->serialize ('text', $linked_name),
-          linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''}), # or undef
+          linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
           linked_key => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_key_field} // ''}), # or undef
           linked_token1 => Dongry::Type->serialize ('text', $token1),
           linked_token2 => Dongry::Type->serialize ('text', $token2),
