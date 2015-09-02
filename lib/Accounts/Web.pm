@@ -7,6 +7,7 @@ use Promise;
 use Promised::File;
 use Promised::Command;
 use JSON::PS;
+use Digest::SHA qw(sha1_hex);
 use Wanage::URL;
 use Wanage::HTTP;
 use Dongry::Type;
@@ -47,18 +48,22 @@ sub psgi_app ($$) {
         my $error = $_[0];
         return $app->shutdown->then (sub { die $error });
       })->catch (sub {
-        $app->error_log ($_[0]) unless UNIVERSAL::isa ($_[0], 'Wanage::App::Done');
+        $app->error_log ($_[0])
+            unless UNIVERSAL::isa ($_[0], 'Warabe::App::Done');
         die $_[0];
       });
     });
   };
 } # psgi_app
 
-sub id ($) {
-  my $key = '';
-  $key .= ['A'..'Z', 'a'..'z', 0..9]->[rand 36] for 1..$_[0];
-  return $key;
-} # id
+{
+  my @alphabet = ('A'..'Z', 'a'..'z', 0..9);
+  sub id ($) {
+    my $key = '';
+    $key .= $alphabet[rand @alphabet] for 1..$_[0];
+    return $key;
+  } # id
+}
 
 my $SessionTimeout = 60*60*24*10;
 
@@ -367,6 +372,102 @@ sub main ($$) {
       });
     });
   } # /cb
+
+  if (@$path == 2 and $path->[0] eq 'email') {
+    if ($path->[1] eq 'input') {
+      ## /email/input - Associate an email address to the session
+      $app->requires_request_method ({POST => 1});
+      $app->requires_api_key;
+
+      my $addr = $app->text_param ('addr') // '';
+      unless ($addr =~ /\A[\x21-\x3F\x41-\x7E]+\@[\x21-\x3F\x41-\x7E]+\z/) {
+        return $app->send_error_json ({reason => 'Bad email address'});
+      }
+      my $email_id = sha1_hex $addr;
+
+      my $session_row;
+      my $session_data;
+      my $account_id;
+      my $json = {};
+      return $class->resume_session ($app)->then (sub {
+        $session_row = $_[0]
+            // return $app->throw_error_json ({reason => 'Bad session'});
+        $session_data = $session_row->get ('data');
+        $account_id = $session_data->{account_id}; # or undef
+
+        if (defined $account_id) {
+          return $app->db->select ('account_link', {
+            account_id => Dongry::Type->serialize ('text', $account_id),
+            service_name => 'email',
+            linked_id => $email_id,
+          }, source_name => 'master', fields => ['created'])->then (sub {
+            if ($_[0]->first) {
+              return 0;
+            } else {
+              return 1;
+            }
+          });
+        } else {
+          return 1;
+        }
+      })->then (sub {
+        if ($_[0]) {
+          $json->{key} = id 30;
+          my $session_data = $session_row->get ('data');
+          $session_data->{email_verifications}->{$json->{key}} = {
+            addr => $addr,
+            id => $email_id,
+          };
+          return $session_row->update ({data => $session_data}, source_name => 'master');
+        }
+      })->then (sub {
+        return $app->send_json ($json);
+      });
+    }
+
+    if ($path->[1] eq 'verify') {
+      ## /email/verify - Save the email address association to the account
+      $app->requires_request_method ({POST => 1});
+      $app->requires_api_key;
+
+      my $key = $app->bare_param ('key') // '';
+      return $class->resume_session ($app)->then (sub {
+        my $session_row = $_[0]
+            // return $app->throw_error_json ({reason => 'Bad session'});
+        my $session_data = $session_row->get ('data');
+        my $account_id = $session_data->{account_id}
+            // return $app->throw_error_json ({reason => 'Not a login user'});
+        my $def = $session_data->{email_verifications}->{$key}
+            // return $app->throw_error_json ({reason => 'Bad key'});
+
+        return $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master')->then (sub {
+          my $time = time;
+          return $app->db->insert ('account_link', [{
+            account_link_id => $_[0]->first->{uuid},
+            account_id => Dongry::Type->serialize ('text', $account_id),
+            service_name => 'email',
+            created => $time,
+            updated => $time,
+            linked_name => '',
+            linked_id => Dongry::Type->serialize ('text', $def->{id}), # or undef
+            linked_key => undef,
+            linked_email => Dongry::Type->serialize ('text', $def->{addr}),
+            linked_token1 => '',
+            linked_token2 => '',
+            linked_data => '{}',
+          }], source_name => 'master', duplicate => {
+            updated => $app->db->bare_sql_fragment ('VALUES(updated)'),
+          });
+        })->then (sub {
+          delete $session_data->{email_verifications}->{$key};
+          return $session_row->update ({data => $session_data}, source_name => 'master'); # XXX transaction
+        })->then (sub {
+          return $app->send_json ({});
+        });
+        # XXX account_log
+      });
+    }
+  }
 
   if (@$path == 1 and $path->[0] eq 'token') {
     ## /token - Get access token of an OAuth server
@@ -759,7 +860,7 @@ sub create_account ($$%) {
           %$account,
           name => Dongry::Type->serialize ('text', $name),
         }, source_name => 'master', table_name => 'account')->then (sub {
-          return $app->db->execute ('INSERT INTO account_link (account_link_id, account_id, service_name, created, updated, linked_name, linked_id, linked_key, linked_token1, linked_token2, linked_email, linked_data) VALUES (:account_link_id, :account_id, :service_name, :created, :updated, :linked_name, :linked_id, :linked_key, :linked_token1, :linked_token2, :linked_email, :linked_data)', {
+          return $app->db->execute ('INSERT INTO account_link (account_link_id, account_id, service_name, created, updated, linked_name, linked_id, linked_key, linked_token1, linked_token2, linked_email, linked_data) VALUES (:account_link_id, :account_id, :service_name, :created, :updated, :linked_name, :linked_id, :linked_key:nullable, :linked_token1, :linked_token2, :linked_email, :linked_data)', {
             account_link_id => $uuids->{link_id},
             account_id => $uuids->{account_id},
             service_name => Dongry::Type->serialize ('text', $server->{name}),
@@ -767,7 +868,7 @@ sub create_account ($$%) {
             updated => $time,
             linked_name => Dongry::Type->serialize ('text', $linked_name),
             linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
-            linked_key => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_key_field} // ''} // ''),
+            linked_key => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_key_field} // ''}), # or undef
             linked_email => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_email_field} // ''} // ''),
             linked_token1 => Dongry::Type->serialize ('text', $token1),
             linked_token2 => Dongry::Type->serialize ('text', $token2),
@@ -793,12 +894,12 @@ sub create_account ($$%) {
             account_id => $account_id,
           }, source_name => 'master', table_name => 'account');
         }),
-        $app->db->execute ('UPDATE account_link SET linked_name = ?, linked_id = ?, linked_key = ?, linked_token1 = ?, linked_token2 = ?, linked_email = ?, linked_data = ?, updated = ? WHERE account_link_id = ? AND account_id = ?', {
+        $app->db->execute ('UPDATE account_link SET linked_name = ?, linked_id = ?, linked_key = :linked_key:nullable, linked_token1 = ?, linked_token2 = ?, linked_email = ?, linked_data = ?, updated = ? WHERE account_link_id = ? AND account_id = ?', {
           account_link_id => $links->[0]->{account_link_id},
           account_id => $account_id,
           linked_name => Dongry::Type->serialize ('text', $linked_name),
           linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
-          linked_key => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_key_field} // ''} // ''),
+          linked_key => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_key_field} // ''}), # or undef
           linked_token1 => Dongry::Type->serialize ('text', $token1),
           linked_token2 => Dongry::Type->serialize ('text', $token2),
           linked_email => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_email_field} // ''} // ''),
@@ -858,9 +959,10 @@ sub load_linked ($$$) {
   }, fields => \@field, source_name => 'master')->then (sub {
     for (@{$_[0]->all}) {
       my $json = $account_id_to_json->{$_->{account_id}};
-      my $link = $json->{links}->{$_->{service_name}} ||= {};
+      my $link = $json->{links}->{$_->{service_name}, $_->{linked_id}} ||= {};
       #my $server = $app->config->get_oauth_server ($_->{service_name}) || {};
-      $link->{id} = format_id $_->{linked_id}
+      $link->{service_name} = $_->{service_name};
+      $link->{id} = ''.$_->{linked_id}
           if defined $_->{linked_id} and length $_->{linked_id};
       $link->{key} = Dongry::Type->parse ('text', $_->{linked_key})
           if defined $_->{linked_key} and length $_->{linked_key};

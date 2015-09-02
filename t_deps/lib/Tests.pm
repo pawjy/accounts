@@ -422,6 +422,62 @@ sub stop_web_server () {
 push @EXPORT, qw(stop_web_server_and_driver);
 *stop_web_server_and_driver = \&stop_web_server;
 
+push @EXPORT, qw(GET);
+sub GET ($$;%) {
+  my ($c, $path, %args) = @_;
+  my $host = $c->received_data->{host};
+  if ($args{session}) {
+    $args{params}->{sk_context} //= 'tests';
+    $args{params}->{sk} //= $args{session}->{sk};
+  }
+  return Promise->new (sub {
+    my ($ok, $ng) = @_;
+    http_get
+        url => qq<http://$host$path>,
+        header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
+        params => $args{params},
+        anyevent => 1,
+        max_redirect => 0,
+        cb => sub {
+          my $res = $_[1];
+          if ($res->code == 200) {
+            $ok->(json_bytes2perl $res->content);
+          } else {
+            $ng->($res->code);
+          }
+        };
+  });
+} # GET
+
+push @EXPORT, qw(POST);
+sub POST ($$;%) {
+  my ($c, $path, %args) = @_;
+  my $host = $c->received_data->{host};
+  if ($args{session}) {
+    $args{params}->{sk_context} //= 'tests';
+    $args{params}->{sk} //= $args{session}->{sk};
+  }
+  return Promise->new (sub {
+    my ($ok, $ng) = @_;
+    http_post
+        url => qq<http://$host$path>,
+        header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'} . ($args{bad_bearer} ? 'a' : '')},
+        params => $args{params},
+        anyevent => 1,
+        max_redirect => 0,
+        cb => sub {
+          my $res = $_[1];
+          if ($res->code == 200) {
+            $ok->(json_bytes2perl $res->content);
+          } elsif ($res->code == 400 and $res->header ('Content-Type') =~ m{^application/json\b}) {
+            $ng->(json_bytes2perl $res->content);
+          } else {
+            $ng->($res->code);
+          }
+        };
+  });
+} # POST
+
 push @EXPORT, qw(session);
 sub session ($;%) {
   my ($c, %args) = @_;
@@ -479,6 +535,22 @@ sub session ($;%) {
         return {%$session, %$account};
       });
     });
+
+    if (defined $args{account}->{email}) {
+      $p = $p->then (sub {
+        my $session = $_[0];
+        return POST ($c, q</email/input>, params => {
+          addr => $args{account}->{email},
+        }, session => $session)->then (sub {
+          my $json = $_[0];
+          return POST ($c, q</email/verify>, params => {
+            key => $json->{key},
+          }, session => $session);
+        })->then (sub {
+          return $session;
+        });
+      });
+    }
   }
 
   return $p;
