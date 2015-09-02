@@ -1,0 +1,2 @@
+The "email" server has special semantics; it is used to associate
+email addresses with an account.

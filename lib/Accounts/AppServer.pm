@@ -81,6 +81,11 @@ sub send_error_json ($$) {
   $self->http->close_response_body;
 } # send_error_json
 
+sub throw_error_json ($$) {
+  $_[0]->send_error_json ($_[1]);
+  $_[0]->throw;
+} # throw_error_json
+
 my $RootPath = path (__FILE__)->parent->parent->parent;
 
 sub send_file ($$$) {
