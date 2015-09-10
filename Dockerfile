@@ -11,6 +11,10 @@ RUN mv /app /app.orig && \
     echo '#!/bin/bash' > /server && \
     echo 'cd /app && ./plackup bin/server.psgi -p 8080 -s Twiggy::Prefork --max-workers 5' >> /server && \
     chmod u+x /server && \
+    echo '#!/bin/bash' > /setup-db-for-test && \
+    echo 'cd /app' >> /setup-db-for-test && \
+    echo 'exec ./perl t_deps/bin/setup-db-for-test.pl "$@"' >> /setup-db-for-test && \
+    chmod u+x /setup-db-for-test && \
     rm -fr /app/deps /app.orig
 
 ## License: Public Domain.
