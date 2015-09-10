@@ -2,10 +2,10 @@ Net::SSLeay~1.70
 Carp::Heavy~1.36
 Pod::Usage~1.67
 Test::NoWarnings~1.04
+HTTP::Status~6.10
 File::Listing~6.04
 IO::HTML~1.001
 Encode~2.76
-HTTP::Headers~6.10
 Crypt::OpenSSL::Random~0.10
 Test::Builder~1.001014
 AnyEvent::Util
