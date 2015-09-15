@@ -688,6 +688,28 @@ sub main ($$) {
     });
   } # /data
 
+  if (@$path == 1 and $path->[0] eq 'agree') {
+    ## /agree - Agree with terms
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    return $class->resume_session ($app)->then (sub {
+      my $session_row = $_[0];
+      my $account_id = defined $session_row ? $session_row->get ('data')->{account_id} : undef;
+      return $app->send_error_json ({reason => 'Not a login user'})
+          unless defined $account_id;
+
+      my $version = $app->bare_param ('version') || 0;
+      return $app->db->execute ('UPDATE `account` SET `terms_version` = :version WHERE `account_id` = :account_id AND `terms_version` < :version', {
+        account_id => Dongry::Type->serialize ('text', $account_id),
+        version => $version,
+      }, source_name => 'master')->then (sub {
+        die "UPDATE failed" unless $_[0]->row_count <= 1;
+        return $app->send_json ({});
+      });
+    });
+  } # /agree
+
   if (@$path == 1 and $path->[0] eq 'search') {
     ## /search - User search
     $app->requires_request_method ({POST => 1});
@@ -919,10 +941,6 @@ sub create_account ($$%) {
     }
     unless ($account->{admin_status} == 1) {
       die "XXX Account suspended";
-    }
-    my $expected_version = 0;
-    if ($account->{terms_version} < $expected_version) {
-      die "XXX Not implemented yet";
     }
     $session_data->{account_id} = format_id $account->{account_id};
   });
