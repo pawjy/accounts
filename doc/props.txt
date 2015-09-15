@@ -30,7 +30,9 @@ An account has following properties:
   terms_version
 
     An integer, which is intended to be used as the last revision
-    number of the terms of the application, agreed with the account's
-    user.
+    number of the terms (Terms of Use, EULA, Privacy Policy, or like)
+    of the application, agreed with the account's user.
 
     For an account created by </create> or </cb>, its value will be 0.
+    The value can be incremented by </agree> end point with the
+    |version| parameter.
