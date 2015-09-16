@@ -700,7 +700,8 @@ sub main ($$) {
           unless defined $account_id;
 
       my $version = $app->bare_param ('version') || 0;
-      return $app->db->execute ('UPDATE `account` SET `terms_version` = :version WHERE `account_id` = :account_id AND `terms_version` < :version', {
+      my $dg = $app->bare_param ('downgrade');
+      return $app->db->execute ('UPDATE `account` SET `terms_version` = :version WHERE `account_id` = :account_id'.($dg?'':' AND `terms_version` < :version'), {
         account_id => Dongry::Type->serialize ('text', $account_id),
         version => $version,
       }, source_name => 'master')->then (sub {
