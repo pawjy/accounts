@@ -199,11 +199,26 @@ test {
       test {
         is $json->{terms_version}, 255;
       } $c;
+      return POST ($c, q</agree>, params => {
+        version => 0,
+        downgrade => 1,
+      }, session => $session);
+    })->then (sub {
+      my $json = $_[0];
+      test {
+        is ref $json, 'HASH';
+      } $c;
+      return POST ($c, q</info>, session => $session);
+    })->then (sub {
+      my $json = $_[0];
+      test {
+        is $json->{terms_version}, 0;
+      } $c;
       done $c;
       undef $c;
     });
   });
-} wait => $wait, n => 12, name => '/agree updated';
+} wait => $wait, n => 14, name => '/agree updated';
 
 run_tests;
 stop_web_server;
