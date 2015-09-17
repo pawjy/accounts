@@ -217,56 +217,6 @@ test {
     my $json = $_[0];
     my $sid = $json->{sessionId};
     return post ("$wd/session/$sid/url", {
-      url => qq<http://$host/start?copied_data_field=id:abcid&copied_data_field=name:fuga&server=> . $server_type,
-    })->then (sub {
-      return post ("$wd/session/$sid/execute", {
-        script => q{
-          document.querySelector ('form [type=submit]').click ();
-        },
-        args => [],
-      });
-    })->then (sub {
-      return get ("$wd/session/$sid/url")->then (sub {
-        my $value = $_[0]->{value};
-        test {
-          like $value, qr{^http://$host/cb\?};
-        } $c;
-      });
-    })->then (sub {
-      return post ("$wd/session/$sid/url", {
-        url => qq<http://$host/info?with_data=abcid&with_data=fuga>,
-      });
-    })->then (sub {
-      return post ("$wd/session/$sid/execute", {
-        script => q{ return document.body.textContent },
-        args => [],
-      });
-    })->then (sub {
-      my $json = json_bytes2perl $_[0]->{value};
-      test {
-        is $json->{data}->{abcid}, $c->received_data->{oauth_server_account_id};
-        is $json->{data}->{fuga}, $c->received_data->{oauth_server_account_name};
-      } $c, name => '/info';
-      return $json->{account_id};
-    });
-  })->then (sub {
-    done $c;
-    undef $c;
-  });
-} wait => $wait, n => 3, name => ['/oauth copied_data_field', $server_type], timeout => 120;
-
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host_for_browser};
-  my $wd = $c->received_data->{wd_url};
-  return post ("$wd/session", {
-    desiredCapabilities => {
-      browserName => 'firefox', # XXX
-    },
-  })->then (sub {
-    my $json = $_[0];
-    my $sid = $json->{sessionId};
-    return post ("$wd/session/$sid/url", {
       url => qq<http://$host/start?app_data=ho%E3%81%82%00e&sk_context=sk2&server=> . $server_type,
     })->then (sub {
       return post ("$wd/session/$sid/execute", {
