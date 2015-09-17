@@ -1020,7 +1020,7 @@ sub load_linked ($$$) {
     $with->{$_} = 1;
   }
   my @field;
-  push @field, 'linked_id' if delete $with->{id};
+  push @field, 'linked_id'; #if delete $with->{id}; ## Used as hash key
   push @field, 'linked_key' if delete $with->{key};
   push @field, 'linked_name' if delete $with->{name};
   push @field, 'linked_email' if delete $with->{email};
