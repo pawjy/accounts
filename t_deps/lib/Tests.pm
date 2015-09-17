@@ -42,9 +42,12 @@ sub oauth_server ($) {
   my $name = rand;
   $OAuthServer->envs->{ACCOUNT_ID} = $name;
   $OAuthServer->envs->{ACCOUNT_NAME} = $name . '-san';
+  $OAuthServer->envs->{ACCOUNT_EMAIL} = $name . '@test';
   $OAuthServer->plackup ($root_path->child ('plackup'));
   $OAuthServer->set_option ('--host' => $_[0] || '127.0.0.1');
   $OAuthServer->set_app_code (q{
+    use strict;
+    use warnings;
     use Wanage::HTTP;
     use Wanage::URL;
     use Web::UserAgent::Functions qw(http_post);
@@ -55,6 +58,7 @@ sub oauth_server ($) {
     my $ClientSecret = $ENV{CLIENT_SECRET};
     my $AccountID = $ENV{ACCOUNT_ID};
     my $AccountName = $ENV{ACCOUNT_NAME};
+    my $AccountEmail = $ENV{ACCOUNT_EMAIL};
     my $TempToken;
     my $TempTokenSecret;
     my $CallbackURL;
@@ -102,7 +106,7 @@ sub oauth_server ($) {
             $auth_params->{oauth_consumer_key} =~ /\A\Q$ClientID\E\.oauth1(\.\w+|)\z/) {
           $AccessToken = rand;
           $AccessTokenSecret = rand;
-          $http->send_response_body_as_text (sprintf q{oauth_token=%s&oauth_token_secret=%s&url_name=%s&display_name=%s}, percent_encode_c $AccessToken, percent_encode_c $AccessTokenSecret.$1, percent_encode_c $AccountID, percent_encode_c $AccountName);
+          $http->send_response_body_as_text (sprintf q{oauth_token=%s&oauth_token_secret=%s&url_name=%s&display_name=%s&email_addr=%s}, percent_encode_c $AccessToken, percent_encode_c $AccessTokenSecret.$1, percent_encode_c $AccountID, percent_encode_c $AccountName, percent_encode_c $AccountEmail);
         } else {
           $http->send_response_body_as_text (Dumper {
             _ => 'Bad auth-params',
@@ -158,6 +162,7 @@ sub oauth_server ($) {
           $http->send_response_body_as_text (perl2json_bytes +{
             id => $AccountID,
             name => $AccountName,
+            email => $AccountEmail,
           });
         } else {
           $http->set_status (403);
@@ -196,9 +201,10 @@ sub web_server (;$$$) {
         "auth_endpoint" => "/oauth1/authorize",
         auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
         "token_endpoint" => "/oauth1/token",
-        "token_res_params" => ["url_name", "display_name"],
+        "token_res_params" => ["url_name", "display_name", 'email_addr'],
         "linked_name_field" => "display_name",
         "linked_id_field" => "url_name",
+        "linked_email_field" => "email_addr",
       };
       $args{servers}->{oauth2server} = {
         name => 'oauth2server',
@@ -211,10 +217,12 @@ sub web_server (;$$$) {
         "profile_id_field" => "id",
         "profile_key_field" => "login",
         "profile_name_field" => "name",
+        "profile_email_field" => "email",
         "auth_scheme" => "token",
         "linked_id_field" => "profile_id",
         "linked_key_field" => "profile_key",
         "linked_name_field" => "profile_name",
+        "linked_email_field" => "profile_email",
         "scope_separator" => ","
       };
       $args{servers}->{ssh} = {
@@ -291,6 +299,7 @@ sub app_server ($$$) {
               server => $http->query_params->{server},
               callback_url => $cb_url,
               copied_data_field => $http->query_params->{copied_data_field},
+              create_email_link => $http->query_params->{create_email_link},
             },
             anyevent => 1,
             cb => sub {
@@ -403,6 +412,7 @@ sub web_server_and_driver () {
         $data->{host_for_browser} = $wd->get_docker_host_hostname_for_container . ':' . $AppServer->get_port;
         $data->{oauth_server_account_id} = $OAuthServer->envs->{ACCOUNT_ID};
         $data->{oauth_server_account_name} = $OAuthServer->envs->{ACCOUNT_NAME};
+        $data->{oauth_server_account_email} = $OAuthServer->envs->{ACCOUNT_EMAIL};
         $cv->send ($data);
       });
     });

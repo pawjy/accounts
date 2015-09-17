@@ -170,7 +170,8 @@ sub main ($$) {
                                  copied_data_fields => [map {
                                    my ($f, $t) = split /:/, $_, 2;
                                    [$f, $t // $f];
-                                 } @{$app->text_param_list ('copied_data_field')}]};
+                                 } @{$app->text_param_list ('copied_data_field')}],
+                                 create_email_link => $app->bare_param ('create_email_link')};
 
       my $sk_context = $session_row->get ('sk_context');
       my $client_id = $app->config->get ($server->{name} . '.client_id.' . $sk_context) //
@@ -360,6 +361,7 @@ sub main ($$) {
             server => $server,
             session_data => $session_data,
             copied_data_fields => delete $session_data->{action}->{copied_data_fields},
+            create_email_link => delete $session_data->{action}->{create_email_link},
           );
         })->then (sub {
           my $app_data = $session_data->{action}->{app_data}; # or undef
@@ -934,6 +936,28 @@ sub create_account ($$%) {
           return $app->db->insert ('account_data', \@data)->then (sub {
             return $return;
           });
+        })->then (sub {
+          my $return = $_[0];
+          my $addr = $link->{email} // '';
+          return $return unless $addr =~ /\A[\x21-\x3F\x41-\x7E]+\@[\x21-\x3F\x41-\x7E]+\z/;
+          my $email_id = sha1_hex $addr;
+          return $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master')->then (sub {
+            my $time = time;
+            return $app->db->insert ('account_link', [{
+              account_link_id => $_[0]->first->{uuid},
+              account_id => Dongry::Type->serialize ('text', $account->{account_id}),
+              service_name => 'email',
+              created => $time,
+              updated => $time,
+              linked_name => '',
+              linked_id => $email_id,
+              linked_key => undef,
+              linked_email => Dongry::Type->serialize ('text', $addr),
+              linked_token1 => '',
+              linked_token2 => '',
+              linked_data => '{}',
+            }], source_name => 'master', duplicate => 'replace');
+          })->then (sub { return $return });
         });
       });
     } elsif (@$links == 1) { # existing account
