@@ -630,16 +630,19 @@ sub main ($$) {
     ##   account_id (0..)   Account IDs
     ##   user_status (0..)  Filtering by user_status values
     ##   admin_status (0..) Filtering by admin_status values
+    ##   terms_version (0..) Filtering by terms_version values
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
     my $account_ids = $app->bare_param_list ('account_id');
     my $us = $app->bare_param_list ('user_status');
     my $as = $app->bare_param_list ('admin_status');
+    my $ts = $app->bare_param_list ('terms_version');
     return ((@$account_ids ? $app->db->select ('account', {
       account_id => {-in => $account_ids},
       (@$us ? (user_status => {-in => $us}) : ()),
       (@$as ? (admin_status => {-in => $as}) : ()),
+      (@$ts ? (terms_version => {-in => $ts}) : ()),
     }, source_name => 'master', fields => ['account_id', 'name'])->then (sub {
       return $_[0]->all_as_rows->to_a;
     }) : Promise->resolve ([]))->then (sub {
