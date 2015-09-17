@@ -166,7 +166,11 @@ sub main ($$) {
                                  server => $server->{name},
                                  callback_url => $cb,
                                  state => $state,
-                                 app_data => $app->text_param ('app_data')};
+                                 app_data => $app->text_param ('app_data'),
+                                 copied_data_fields => [map {
+                                   my ($f, $t) = split /:/, $_, 2;
+                                   [$f, $t // $f];
+                                 } @{$app->text_param_list ('copied_data_field')}]};
 
       my $sk_context = $session_row->get ('sk_context');
       my $client_id = $app->config->get ($server->{name} . '.client_id.' . $sk_context) //
@@ -355,6 +359,7 @@ sub main ($$) {
             $app,
             server => $server,
             session_data => $session_data,
+            copied_data_fields => delete $session_data->{action}->{copied_data_fields},
           );
         })->then (sub {
           my $app_data = $session_data->{action}->{app_data}; # or undef
@@ -872,12 +877,16 @@ sub create_account ($$%) {
         $uuids->{account_id} = format_id $uuids->{account_id};
         $uuids->{account_link_id} = format_id $uuids->{account_link_id};
         my $time = time;
-        my $name = $uuids->{account_id};
-        my $linked_name = $session_data->{$service}->{$server->{linked_name_field} // ''} // '';
-        $name = $linked_name if length $linked_name;
         my $account = {account_id => $uuids->{account_id},
                        user_status => 1, admin_status => 1,
                        terms_version => 0};
+        my $link = {name => $session_data->{$service}->{$server->{linked_name_field} // ''},
+                    id => $session_data->{$service}->{$server->{linked_id_field} // ''},
+                    key => $session_data->{$service}->{$server->{linked_key_field} // ''},
+                    email => $session_data->{$service}->{$server->{linked_email_field} // ''},
+                    data => $session_data->{$service}->{linked_data} || {}};
+        my $name = $link->{name};
+        $name = $account->{account_id} unless defined $name and length $name;
         return $app->db->execute ('INSERT INTO account (account_id, created, user_status, admin_status, terms_version, name) VALUES (:account_id, :created, :user_status, :admin_status, :terms_version, :name)', {
           created => $time,
           %$account,
@@ -889,16 +898,41 @@ sub create_account ($$%) {
             service_name => Dongry::Type->serialize ('text', $server->{name}),
             created => $time,
             updated => $time,
-            linked_name => Dongry::Type->serialize ('text', $linked_name),
-            linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
-            linked_key => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_key_field} // ''}), # or undef
-            linked_email => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_email_field} // ''} // ''),
+            linked_name => Dongry::Type->serialize ('text', $link->{name} // ''),
+            linked_id => Dongry::Type->serialize ('text', $link->{id} // ''),
+            linked_key => Dongry::Type->serialize ('text', $link->{key}), # or undef
+            linked_email => Dongry::Type->serialize ('text', $link->{email} // ''),
             linked_token1 => Dongry::Type->serialize ('text', $token1),
             linked_token2 => Dongry::Type->serialize ('text', $token2),
-            linked_data => Dongry::Type->serialize ('json', $session_data->{$service}->{linked_data} || {}),
+            linked_data => Dongry::Type->serialize ('json', $link->{data}),
           }, source_name => 'master', table_name => 'account_link')->then (sub {
             my $account_link = {account_link_id => $uuids->{link_id}};
             return [$account, $account_link];
+          });
+        })->then (sub {
+          my $return = $_[0];
+          my @data;
+          my $time = time;
+          for (@{$args{copied_data_fields} || []}) {
+            my ($from_name, $to_name) = @$_;
+            my $value;
+            if ($from_name eq 'name' or $from_name eq 'id' or
+                $from_name eq 'key' or $from_name eq 'email') {
+              $value = $link->{$from_name};
+            } else {
+              $value = $link->{data}->{$from_name};
+            }
+            push @data, {
+              account_id => Dongry::Type->serialize ('text', $account->{account_id}),
+              key => Dongry::Type->serialize ('text', $to_name),
+              value => Dongry::Type->serialize ('text', $value),
+              created => $time,
+              updated => $time,
+            } if defined $value;
+          }
+          return $return unless @data;
+          return $app->db->insert ('account_data', \@data)->then (sub {
+            return $return;
           });
         });
       });

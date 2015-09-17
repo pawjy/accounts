@@ -290,6 +290,7 @@ sub app_server ($$$) {
               sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
               server => $http->query_params->{server},
               callback_url => $cb_url,
+              copied_data_field => $http->query_params->{copied_data_field},
             },
             anyevent => 1,
             cb => sub {
@@ -339,6 +340,8 @@ sub app_server ($$$) {
             params => {
               sk => $http->request_cookies->{sk},
               sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
+              with_linked => $http->query_params->{with_linked},
+              with_data => $http->query_params->{with_data},
             },
             anyevent => 1,
             cb => sub {
@@ -398,6 +401,7 @@ sub web_server_and_driver () {
       my $api_host = '127.0.0.1:' . $AccountServer->get_web_port;
       app_server ('0.0.0.0', $api_token, $api_host)->then (sub {
         $data->{host_for_browser} = $wd->get_docker_host_hostname_for_container . ':' . $AppServer->get_port;
+        $data->{oauth_server_account_id} = $OAuthServer->envs->{ACCOUNT_ID};
         $data->{oauth_server_account_name} = $OAuthServer->envs->{ACCOUNT_NAME};
         $cv->send ($data);
       });
