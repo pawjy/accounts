@@ -6,6 +6,7 @@ RUN apt-get update && \
 
 RUN mv /app /app.orig && \
     git clone https://github.com/wakaba/accounts /app && \
+    cd /app && git rev-parse HEAD > rev && \
     mv /app.orig/* /app/ && \
     cd /app && make deps PMBP_OPTIONS=--execute-system-package-installer && \
     echo '#!/bin/bash' > /server && \
@@ -15,6 +16,8 @@ RUN mv /app /app.orig && \
     echo 'cd /app' >> /setup-db-for-test && \
     echo 'exec ./perl t_deps/bin/setup-db-for-test.pl "$@"' >> /setup-db-for-test && \
     chmod u+x /setup-db-for-test && \
+    echo 'cat /app/rev' > /showrev && \
+    chmod u+x /showrev && \
     rm -fr /app/deps /app.orig
 
 ## License: Public Domain.
