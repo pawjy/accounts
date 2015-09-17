@@ -16,7 +16,8 @@ RUN mv /app /app.orig && \
     echo 'cd /app' >> /setup-db-for-test && \
     echo 'exec ./perl t_deps/bin/setup-db-for-test.pl "$@"' >> /setup-db-for-test && \
     chmod u+x /setup-db-for-test && \
-    echo 'cat /app/rev' > /showrev && \
+    echo '#!/bin/bash' > /showrev && \
+    echo 'cat /app/rev' >> /showrev && \
     chmod u+x /showrev && \
     rm -fr /app/deps /app.orig
 
