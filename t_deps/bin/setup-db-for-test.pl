@@ -24,4 +24,5 @@ push @cmd, '-S' . $db->{mysql_socket} if defined $db->{mysql_socket};
 push @cmd, $db->{dbname} // $db->{database};
 
 my $cmd = join ' ', map { quotemeta $_ } @cmd;
+(system "echo 'create database account_test' | $cmd") == 0 or die $?;
 (system "$cmd < $sql_path") == 0 or die $?;
