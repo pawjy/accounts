@@ -5,7 +5,7 @@ Test::NoWarnings~1.04
 HTTP::Status~6.11
 File::Listing~6.04
 IO::HTML~1.001
-Encode~2.76
+Encode~2.77
 Crypt::OpenSSL::Random~0.10
 Test::Builder~1.001014
 AnyEvent::Util
@@ -43,8 +43,8 @@ URI~1.69
 Class::Accessor~0.34
 Time::HiRes~1.9726
 Exporter~5.72
-HTTP::Date~6.02
 Class::ErrorHandler~0.04
+HTTP::Date~6.02
 Proc::Wait3~0.04
 MIME::Base64~3.15
 HTML::Tagset~3.20
