@@ -21,8 +21,8 @@ push @cmd, '-p' . $db->{password} if defined $db->{password};
 push @cmd, '-h' . $db->{host} if defined $db->{host};
 push @cmd, '-P' . $db->{port} if defined $db->{port};
 push @cmd, '-S' . $db->{mysql_socket} if defined $db->{mysql_socket};
-push @cmd, $db->{dbname} // $db->{database};
+my $dbname = $db->{dbname} // $db->{database};
 
 my $cmd = join ' ', map { quotemeta $_ } @cmd;
-(system "echo 'create database if not exists account_test' | $cmd") == 0 or die $?;
-(system "$cmd < $sql_path") == 0 or die $?;
+(system "echo 'create database if not exists account_test' | $cmd mysql") == 0 or die $?;
+(system "$cmd \Q$dbname\E < $sql_path") == 0 or die $?;
