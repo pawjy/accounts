@@ -6,10 +6,6 @@ install:
   - copy bin\mingw32-make.exe bin\make.exe
 build_script:
   - del config\perl\version.txt
-  
-  #XXX
-  - mkdir modules\karasuma-config
-  
   - make deps
 test_script:
   - make test
