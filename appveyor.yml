@@ -1,11 +1,7 @@
 install:
-  - curl -f -L "http://downloads.sourceforge.net/project/mingw/Installer/mingw-get/mingw-get-0.6.2-beta-20131004-1/mingw-get-0.6.2-mingw32-beta-20131004-1-bin.zip" > get.zip
-  - unzip get.zip
-  - set PATH=%CD%\bin;%PATH%
-  - bin\mingw-get install mingw32-make
-  - copy bin\mingw32-make.exe bin\make.exe
+  - choco install mingw
 build_script:
-  - delete config\perl\version.txt
+  - del config\perl\version.txt
   
   #XXX
   - mkdir modules/karasuma-config
