@@ -8,7 +8,7 @@ build_script:
   - del config\perl\version.txt
   
   #XXX
-  - mkdir modules/karasuma-config
+  - mkdir modules\karasuma-config
   
   - make deps
 test_script:
