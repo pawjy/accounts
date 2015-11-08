@@ -1,5 +1,7 @@
 install:
-  - choco install dmake
+  - curl -f -L "https://github.com/mohawk2/dmake/archive/DMAKE_4_12_2_2.zip" > DMAKE.zip
+  - unzip DMAKE.zip
+  - set PATH=%CD%\dmake-DMAKE_4_12_2_2;%PATH%
   - curl -f -L "http://downloads.sourceforge.net/project/mingw/Installer/mingw-get/mingw-get-0.6.2-beta-20131004-1/mingw-get-0.6.2-mingw32-beta-20131004-1-bin.zip" > get.zip
   - unzip get.zip
   - set PATH=%CD%\bin;%PATH%
