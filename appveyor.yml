@@ -1,4 +1,5 @@
 install:
+  - choco install strawberryperl
   - curl -f -L "https://github.com/mohawk2/dmake/archive/DMAKE_4_12_2_2.zip" > DMAKE.zip
   - unzip DMAKE.zip
   - set PATH=%CD%\dmake-DMAKE_4_12_2_2;%PATH%
