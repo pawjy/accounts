@@ -37,7 +37,7 @@ my $root_path = path (__FILE__)->parent->parent->parent->absolute;
 
 sub oauth_server ($) {
   $OAuthServer = Promised::Plackup->new;
-  $OAuthServer->start_timeout (5*60);
+  $OAuthServer->start_timeout (10*60);
   $OAuthServer->envs->{CLIENT_ID} = rand;
   $OAuthServer->envs->{CLIENT_SECRET} = rand;
   my $name = rand;
@@ -206,7 +206,7 @@ sub web_server (;$$$) {
         "linked_name_field" => "display_name",
         "linked_id_field" => "url_name",
         "linked_email_field" => "email_addr",
-        timeout => 60*5,
+        timeout => 60*10,
       };
       $args{servers}->{oauth2server} = {
         name => 'oauth2server',
@@ -226,7 +226,7 @@ sub web_server (;$$$) {
         "linked_name_field" => "profile_name",
         "linked_email_field" => "profile_email",
         "scope_separator" => ","
-        timeout => 60*5,
+        timeout => 60*10,
       };
       $args{servers}->{ssh} = {
         name => 'ssh',
@@ -253,7 +253,7 @@ sub web_server (;$$$) {
 sub app_server ($$$) {
   my ($app_hostname, $api_token, $api_host) = @_;
   $AppServer = Promised::Plackup->new;
-  $AppServer->start_timeout (5*60);
+  $AppServer->start_timeout (10*60);
   $AppServer->plackup ($root_path->child ('plackup'));
   $AppServer->set_option ('--host' => $app_hostname);
   $AppServer->envs->{API_TOKEN} = $api_token;
@@ -280,7 +280,7 @@ sub app_server ($$$) {
               sk => $http->request_cookies->{sk},
               sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
             },
-            timeout => 60*5,
+            timeout => 60*10,
             anyevent => 1,
             cb => sub {
               $cv->send ($_[1]);
@@ -306,7 +306,7 @@ sub app_server ($$$) {
               copied_data_field => $http->query_params->{copied_data_field},
               create_email_link => $http->query_params->{create_email_link},
             },
-            timeout => 60*5,
+            timeout => 60*10,
             anyevent => 1,
             cb => sub {
               $cv->send ($_[1]);
@@ -334,7 +334,7 @@ sub app_server ($$$) {
               code => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{code},
               state => $http->query_params->{bad_state} ? 'aaa' : $http->query_params->{state},
             },
-            timeout => 60*5,
+            timeout => 60*10,
             anyevent => 1,
             cb => sub {
               $cv->send ($_[1]);
@@ -359,7 +359,7 @@ sub app_server ($$$) {
               with_linked => $http->query_params->{with_linked},
               with_data => $http->query_params->{with_data},
             },
-            timeout => 60*5,
+            timeout => 60*10,
             anyevent => 1,
             cb => sub {
               $cv->send ($_[1]);
@@ -374,7 +374,7 @@ sub app_server ($$$) {
             params => {
               account_id => $http->query_params->{account_id},
             },
-            timeout => 60*5,
+            timeout => 60*10,
             anyevent => 1,
             cb => sub {
               $cv->send ($_[1]);
@@ -391,7 +391,7 @@ sub app_server ($$$) {
               sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
               server => $http->query_params->{server},
             },
-            timeout => 60*5,
+            timeout => 60*10,
             anyevent => 1,
             cb => sub {
               $cv->send ($_[1]);
@@ -462,7 +462,7 @@ sub GET ($$;%) {
         params => $args{params},
         anyevent => 1,
         max_redirect => 0,
-        timeout => 60*5,
+        timeout => 60*10,
         cb => sub {
           my $res = $_[1];
           if ($res->code == 200) {
@@ -490,7 +490,7 @@ sub POST ($$;%) {
         params => $args{params},
         anyevent => 1,
         max_redirect => 0,
-        timeout => 60*5,
+        timeout => 60*10,
         cb => sub {
           my $res = $_[1];
           if ($res->code == 200) {
@@ -516,7 +516,7 @@ sub session ($;%) {
         params => {sk_context => 'tests'},
         anyevent => 1,
         max_redirect => 0,
-        timeout => 60*5,
+        timeout => 60*10,
         cb => sub {
           my $res = $_[1];
           if ($res->code == 200) {
@@ -547,7 +547,7 @@ sub session ($;%) {
             },
             anyevent => 1,
             max_redirect => 0,
-            timeout => 60*5,
+            timeout => 60*10,
             cb => sub {
               my $res = $_[1];
               if ($res->code == 200) {
