@@ -490,10 +490,11 @@ sub main ($$) {
       my $session_row = $_[0];
       return $session_row->get ('data')->{account_id} # or undef
           if defined $session_row;
+      return undef;
     }))->then (sub {
       my $id = $_[0];
-      my $json = {};
-      return $json unless defined $id;
+      return {} unless defined $id;
+      my $json = {account_id => $id};
       return $app->db->select ('account_link', {
         account_id => Dongry::Type->serialize ('text', $id),
         service_name => Dongry::Type->serialize ('text', $server->{name}),
