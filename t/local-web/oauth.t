@@ -19,7 +19,7 @@ sub post ($$) {
     http_post_data
         url => $url,
         content => perl2json_bytes ($json || {}),
-        timeout => 100,
+        timeout => 100*5,
         anyevent => 1,
         cb => sub {
           my (undef, $res) = @_;
@@ -45,7 +45,7 @@ sub get ($) {
     my ($ok, $ng) = @_;
     http_get
         url => $url,
-        timeout => 100,
+        timeout => 100*5,
         anyevent => 1,
         cb => sub {
           my (undef, $res) = @_;
