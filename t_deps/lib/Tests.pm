@@ -206,6 +206,7 @@ sub web_server (;$$$) {
         "linked_name_field" => "display_name",
         "linked_id_field" => "url_name",
         "linked_email_field" => "email_addr",
+        timeout => 60*5,
       };
       $args{servers}->{oauth2server} = {
         name => 'oauth2server',
@@ -225,6 +226,7 @@ sub web_server (;$$$) {
         "linked_name_field" => "profile_name",
         "linked_email_field" => "profile_email",
         "scope_separator" => ","
+        timeout => 60*5,
       };
       $args{servers}->{ssh} = {
         name => 'ssh',
