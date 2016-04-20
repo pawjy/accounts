@@ -37,6 +37,7 @@ my $root_path = path (__FILE__)->parent->parent->parent->absolute;
 
 sub oauth_server ($) {
   $OAuthServer = Promised::Plackup->new;
+  $OAuthServer->start_timeout (5*60);
   $OAuthServer->envs->{CLIENT_ID} = rand;
   $OAuthServer->envs->{CLIENT_SECRET} = rand;
   my $name = rand;
@@ -250,6 +251,7 @@ sub web_server (;$$$) {
 sub app_server ($$$) {
   my ($app_hostname, $api_token, $api_host) = @_;
   $AppServer = Promised::Plackup->new;
+  $AppServer->start_timeout (5*60);
   $AppServer->plackup ($root_path->child ('plackup'));
   $AppServer->set_option ('--host' => $app_hostname);
   $AppServer->envs->{API_TOKEN} = $api_token;
