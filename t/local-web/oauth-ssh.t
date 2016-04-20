@@ -132,7 +132,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 5, name => ['/oauth', 'ssh'], timeout => 120;
+} wait => $wait, n => 5, name => ['/oauth', 'ssh'], timeout => 120*5;
 
 test {
   my $c = shift;
@@ -201,7 +201,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 5, name => ['/oauth', 'unknown server'], timeout => 120;
+} wait => $wait, n => 5, name => ['/oauth', 'unknown server'], timeout => 120*5;
 
 run_tests;
 stop_web_server_and_driver;

@@ -115,7 +115,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 3, name => ['/oauth copied_data_field', $server_type], timeout => 120;
+} wait => $wait, n => 3, name => ['/oauth copied_data_field', $server_type], timeout => 120*5;
 
 }
 
