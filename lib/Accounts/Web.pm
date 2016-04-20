@@ -193,7 +193,7 @@ sub main ($$) {
             client_shared_secret => $client_secret,
             params => {scope => $scope},
             auth => {host => $server->{auth_host}, pathquery => $server->{auth_endpoint}},
-            timeout => 10,
+            timeout => $server->{timeout} || 10,
             anyevent => 1,
             cb => sub {
               my ($temp_token, $temp_token_secret, $auth_url) = @_;
@@ -272,7 +272,7 @@ sub main ($$) {
               temp_token_secret => $session_data->{action}->{temp_credentials}->[1],
               oauth_token => $token,
               oauth_verifier => $verifier,
-              timeout => 10,
+              timeout => $server->{timeout} || 10,
               anyevent => 1,
               cb => sub {
                 my ($access_token, $access_token_secret, $params) = @_;
@@ -300,7 +300,7 @@ sub main ($$) {
                 code => $app->text_param ('code'),
                 grant_type => 'authorization_code',
               },
-              timeout => 10,
+              timeout => $server->{timeout} || 10,
               anyevent => 1,
               cb => sub {
                 my (undef, $res) = @_;
@@ -490,10 +490,11 @@ sub main ($$) {
       my $session_row = $_[0];
       return $session_row->get ('data')->{account_id} # or undef
           if defined $session_row;
+      return undef;
     }))->then (sub {
       my $id = $_[0];
-      my $json = {};
-      return $json unless defined $id;
+      return {} unless defined $id;
+      my $json = {account_id => $id};
       return $app->db->select ('account_link', {
         account_id => Dongry::Type->serialize ('text', $id),
         service_name => Dongry::Type->serialize ('text', $server->{name}),
@@ -809,7 +810,7 @@ sub get_resource_owner_profile ($$%) {
     http_get
         url => (($server->{url_scheme} // 'https') . '://' . ($server->{profile_host} // $server->{host}) . $server->{profile_endpoint}),
         %param,
-        timeout => 30,
+        timeout => $server->{timeout} || 30,
         anyevent => 1,
         cb => sub {
           my (undef, $res) = @_;

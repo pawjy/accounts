@@ -19,7 +19,7 @@ sub post ($$) {
     http_post_data
         url => $url,
         content => perl2json_bytes ($json || {}),
-        timeout => 100,
+        timeout => 100*5,
         anyevent => 1,
         cb => sub {
           my (undef, $res) = @_;
@@ -45,7 +45,7 @@ sub get ($) {
     my ($ok, $ng) = @_;
     http_get
         url => $url,
-        timeout => 100,
+        timeout => 100*5,
         anyevent => 1,
         cb => sub {
           my (undef, $res) = @_;
@@ -203,7 +203,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 13, name => ['/oauth', $server_type], timeout => 120;
+} wait => $wait, n => 13, name => ['/oauth', $server_type], timeout => 120*5;
 
 test {
   my $c = shift;
@@ -288,7 +288,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 8, name => ['/oauth', $server_type, 'another oauth application'], timeout => 120;
+} wait => $wait, n => 8, name => ['/oauth', $server_type, 'another oauth application'], timeout => 120*5;
 
 test {
   my $c = shift;
@@ -332,7 +332,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 2, name => ['/oauth bad state', $server_type], timeout => 120;
+} wait => $wait, n => 2, name => ['/oauth bad state', $server_type], timeout => 120*5;
 
 test {
   my $c = shift;
@@ -376,7 +376,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 2, name => ['/oauth bad code', $server_type], timeout => 120;
+} wait => $wait, n => 2, name => ['/oauth bad code', $server_type], timeout => 120*5;
 
 }
 

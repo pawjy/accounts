@@ -19,7 +19,7 @@ sub post ($$) {
     http_post_data
         url => $url,
         content => perl2json_bytes ($json || {}),
-        timeout => 100,
+        timeout => 100*5,
         anyevent => 1,
         cb => sub {
           my (undef, $res) = @_;
@@ -45,7 +45,7 @@ sub get ($) {
     my ($ok, $ng) = @_;
     http_get
         url => $url,
-        timeout => 100,
+        timeout => 100*5,
         anyevent => 1,
         cb => sub {
           my (undef, $res) = @_;
@@ -115,7 +115,7 @@ test {
     done $c;
     undef $c;
   });
-} wait => $wait, n => 3, name => ['/oauth copied_data_field', $server_type], timeout => 120;
+} wait => $wait, n => 3, name => ['/oauth copied_data_field', $server_type], timeout => 120*5;
 
 }
 
