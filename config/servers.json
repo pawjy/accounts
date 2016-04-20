@@ -97,6 +97,18 @@
     "linked_name_field": "profile_name",
     "scope_separator": ","
   },
+  "strava": {
+    "name": "strava",
+    "host": "www.strava.com",
+    "auth_endpoint": "/oauth/authorize",
+    "token_endpoint": "/oauth/token",
+    "profile_endpoint": "/api/v3/athlete",
+    "profile_id_field": "id",
+    "profile_name_field": "lastname",
+    "linked_id_field": "profile_id",
+    "linked_name_field": "profile_name",
+    "auth_scheme": "header"
+  },
 
   "ssh": {
     "name": "ssh"
