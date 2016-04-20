@@ -225,7 +225,7 @@ sub web_server (;$$$) {
         "linked_key_field" => "profile_key",
         "linked_name_field" => "profile_name",
         "linked_email_field" => "profile_email",
-        "scope_separator" => ","
+        "scope_separator" => ",",
         timeout => 60*10,
       };
       $args{servers}->{ssh} = {
