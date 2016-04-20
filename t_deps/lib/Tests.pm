@@ -278,6 +278,7 @@ sub app_server ($$$) {
               sk => $http->request_cookies->{sk},
               sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
             },
+            timeout => 60*5,
             anyevent => 1,
             cb => sub {
               $cv->send ($_[1]);
@@ -303,6 +304,7 @@ sub app_server ($$$) {
               copied_data_field => $http->query_params->{copied_data_field},
               create_email_link => $http->query_params->{create_email_link},
             },
+            timeout => 60*5,
             anyevent => 1,
             cb => sub {
               $cv->send ($_[1]);
@@ -330,6 +332,7 @@ sub app_server ($$$) {
               code => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{code},
               state => $http->query_params->{bad_state} ? 'aaa' : $http->query_params->{state},
             },
+            timeout => 60*5,
             anyevent => 1,
             cb => sub {
               $cv->send ($_[1]);
@@ -354,6 +357,7 @@ sub app_server ($$$) {
               with_linked => $http->query_params->{with_linked},
               with_data => $http->query_params->{with_data},
             },
+            timeout => 60*5,
             anyevent => 1,
             cb => sub {
               $cv->send ($_[1]);
@@ -368,6 +372,7 @@ sub app_server ($$$) {
             params => {
               account_id => $http->query_params->{account_id},
             },
+            timeout => 60*5,
             anyevent => 1,
             cb => sub {
               $cv->send ($_[1]);
@@ -384,6 +389,7 @@ sub app_server ($$$) {
               sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
               server => $http->query_params->{server},
             },
+            timeout => 60*5,
             anyevent => 1,
             cb => sub {
               $cv->send ($_[1]);
@@ -454,6 +460,7 @@ sub GET ($$;%) {
         params => $args{params},
         anyevent => 1,
         max_redirect => 0,
+        timeout => 60*5,
         cb => sub {
           my $res = $_[1];
           if ($res->code == 200) {
@@ -481,6 +488,7 @@ sub POST ($$;%) {
         params => $args{params},
         anyevent => 1,
         max_redirect => 0,
+        timeout => 60*5,
         cb => sub {
           my $res = $_[1];
           if ($res->code == 200) {
@@ -506,6 +514,7 @@ sub session ($;%) {
         params => {sk_context => 'tests'},
         anyevent => 1,
         max_redirect => 0,
+        timeout => 60*5,
         cb => sub {
           my $res = $_[1];
           if ($res->code == 200) {
@@ -536,6 +545,7 @@ sub session ($;%) {
             },
             anyevent => 1,
             max_redirect => 0,
+            timeout => 60*5,
             cb => sub {
               my $res = $_[1];
               if ($res->code == 200) {
@@ -576,7 +586,7 @@ sub session ($;%) {
 
 =head1 LICENSE
 
-Copyright 2015 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2016 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
