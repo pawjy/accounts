@@ -7,7 +7,6 @@ File::Listing~6.04
 IO::HTML~1.001
 Encode~2.84
 Crypt::OpenSSL::Random~0.11
-HTTP::Headers~6.11
 AnyEvent::Util
 Test::Builder~1.001014
 Digest::SHA~5.95
@@ -20,11 +19,11 @@ AnyEvent~7.12
 Term::ANSIColor~4.05
 parent~0.234
 Exporter::Lite~0.08
-HTML::HeadParser~3.71
 Crypt::OpenSSL::RSA~0.28
 AnyEvent::HTTP~2.22
 Canary::Stability~2011
 HTTP::Cookies~6.01
+HTTP::Request::Common~6.11
 File::Temp~0.2304
 Path::Class~0.36
 common::sense~3.74
@@ -37,8 +36,9 @@ LWP::MediaTypes~6.02
 Encode::Locale~1.05
 HTTP::Negotiate~6.01
 Unicode::Normalize~1.25
+HTML::Entities~3.69
 Socket~2.021
-Path::Tiny~0.088
+Path::Tiny~0.090
 Net::HTTP~6.09
 URI~1.71
 Class::Accessor~0.34
