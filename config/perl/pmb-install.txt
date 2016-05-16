@@ -2,12 +2,11 @@ Net::SSLeay~1.74
 Carp::Heavy~1.38
 Pod::Usage~1.68
 Test::NoWarnings~1.04
-HTTP::Status~6.11
 File::Listing~6.04
 IO::HTML~1.001
 Encode~2.84
-Crypt::OpenSSL::Random~0.11
 Test::Builder~1.302015
+Crypt::OpenSSL::Random~0.11
 AnyEvent::Util
 Digest::SHA~5.95
 File::Path~2.12
@@ -19,10 +18,12 @@ AnyEvent~7.12
 Term::ANSIColor~4.05
 parent~0.234
 Exporter::Lite~0.08
+HTML::HeadParser~3.71
 Crypt::OpenSSL::RSA~0.28
 AnyEvent::HTTP~2.22
 Canary::Stability~2011
 HTTP::Cookies~6.01
+HTTP::Response~6.11
 File::Temp~0.2304
 Path::Class~0.36
 common::sense~3.74
@@ -35,7 +36,6 @@ LWP::MediaTypes~6.02
 Encode::Locale~1.05
 HTTP::Negotiate~6.01
 Unicode::Normalize~1.25
-HTML::Entities~3.69
 Socket~2.021
 Path::Tiny~0.090
 Net::HTTP~6.09
@@ -43,8 +43,8 @@ URI~1.71
 Class::Accessor~0.34
 Time::HiRes~1.9733
 Exporter~5.72
-HTTP::Date~6.02
 Class::ErrorHandler~0.04
+HTTP::Date~6.02
 Proc::Wait3~0.05
 MIME::Base64~3.15
 HTML::Tagset~3.20
