@@ -22,6 +22,7 @@ Crypt::OpenSSL::RSA~0.28
 HTTP::Cookies~6.01
 Canary::Stability~2011
 AnyEvent::HTTP~2.22
+HTTP::Request::Common~6.11
 File::Temp~0.2304
 Path::Class~0.36
 common::sense~3.74
@@ -29,8 +30,8 @@ WWW::RobotRules~6.02
 LWP~6.15
 Unicode::Stringprep~1.105
 Scalar::Util~1.45
-IO::Handle~1.28
 LWP::MediaTypes~6.02
+IO::Handle~1.28
 Encode::Locale~1.05
 Unicode::Normalize~1.25
 HTTP::Negotiate~6.01
@@ -40,7 +41,6 @@ Path::Tiny~0.094
 Net::HTTP~6.09
 URI~1.71
 Class::Accessor~0.34
-HTTP::Headers::Util~6.11
 Time::HiRes~1.9733
 Class::ErrorHandler~0.04
 HTTP::Date~6.02
