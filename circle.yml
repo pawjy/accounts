@@ -4,6 +4,7 @@ machine:
 dependencies:
   cache_directories:
     - "local/perlbrew/perls"
+    - "deps/pmtar"
   override:
     - make deps test-deps:
         timeout: 600
