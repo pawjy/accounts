@@ -88,6 +88,7 @@ sub start ($) {
     my $web_host = $self->{web_host};
     $self->{http}->set_option ('--host' => $web_host) if defined $web_host;
     $self->{http}->set_option ('--app' => $RootPath->child ('bin/server.psgi'));
+    $self->{http}->start_timeout (60);
     return $self->{http}->start;
   })->then (sub {
     $data->{host} = $self->{http}->get_host;
