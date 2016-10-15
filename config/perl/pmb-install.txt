@@ -1,6 +1,6 @@
 AnyEvent~7.13
 AnyEvent::HTTP~2.23
-AnyEvent::Util
+AnyEvent::Socket
 Canary::Stability~2012
 Carp::Heavy~1.38
 Class::Accessor~0.34
@@ -17,13 +17,13 @@ Exporter::Tiny~0.042
 File::Listing~6.04
 File::Path~2.12
 File::Temp~0.2304
-HTML::HeadParser~3.71
+HTML::Entities~3.69
 HTML::Tagset~3.20
 HTTP::Cookies~6.01
 HTTP::Daemon~6.01
 HTTP::Date~6.02
+HTTP::Headers::Util~6.11
 HTTP::Negotiate~6.01
-HTTP::Status~6.11
 IO::HTML~1.001
 IO::Handle~1.28
 LWP~6.15
@@ -34,7 +34,7 @@ Net::HTTP~6.09
 Net::SSLeay~1.78
 OAuth::Lite::AuthMethod
 Path::Class~0.37
-Path::Tiny~0.096
+Path::Tiny~0.098
 Pod::Usage~1.69
 Proc::Wait3~0.05
 Scalar::Util~1.46
@@ -44,8 +44,8 @@ Test::Builder~1.302059
 Time::HiRes~1.9740
 Time::Local~1.24
 UNIVERSAL::require~0.18
-URI::Escape~3.31
+URI~1.71
 WWW::RobotRules~6.02
 XSLoader~0.24
 common::sense~3.74
-parent~0.234
+parent~0.236
