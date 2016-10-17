@@ -17,3 +17,7 @@
 - "../../t_deps/modules/promised-mysql" tests
 - "../../t_deps/modules/promised-plackup" tests
 - "../../t_deps/modules/promised-docker-webdriver" tests
+
+- "../../modules/web-resource" build tests
+- "../../modules/charclass" build tests
+- "../../modules/web-datetime" build tests
