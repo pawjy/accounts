@@ -6,17 +6,9 @@
 	path = modules/ooutils
 	url = git://github.com/wakaba/perl-ooutils
 	track = master
-[submodule "modules/temma"]
-	path = modules/temma
-	url = git://github.com/wakaba/temma
-	track = master
 [submodule "modules/web-ua"]
 	path = modules/web-ua
 	url = git://github.com/wakaba/perl-web-useragent-functions
-	track = master
-[submodule "modules/charclass"]
-	path = modules/charclass
-	url = git://github.com/wakaba/perl-charclass
 	track = master
 [submodule "modules/web-dom"]
 	path = modules/web-dom
