@@ -6,6 +6,7 @@ use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/modules/*/l
 use File::Temp;
 use AnyEvent;
 use Promise;
+use Promised::Flow;
 use Promised::File;
 use Promised::Plackup;
 use Promised::Mysqld;
@@ -14,8 +15,15 @@ use Test::AccountServer;
 use MIME::Base64;
 use JSON::PS;
 use Web::UserAgent::Functions qw(http_get http_post);
+use Web::URL;
+use Web::Transport::ConnectionClient;
+use Test::X1;
+use Test::More;
 
-our @EXPORT;
+our @EXPORT = (@JSON::PS::EXPORT,
+               @Promised::Flow::EXPORT,
+               @Test::X1::EXPORT,
+               grep { not /^\$/ } @Test::More::EXPORT);
 
 sub import ($;@) {
   my $from_class = shift;
@@ -583,6 +591,84 @@ sub session ($;%) {
 
   return $p;
 } # session
+
+push @EXPORT, qw(Test);
+sub Test (&;%) {
+  my $code = shift;
+  test (sub {
+    my $current = bless {context => $_[0]}, 'Tests::Current';
+    promised_cleanup {
+      return $current->done;
+    } Promise->resolve ($current)->then ($code)->catch (sub {
+      my $error = $_[0];
+      test {
+        ok 0, 'No exception';
+        is $error, undef, 'No exception';
+      } $current->context;
+    });
+  }, @_);
+} # Test
+
+package Tests::Current;
+use JSON::PS;
+
+sub context ($) {
+  return $_[0]->{context};
+} # context
+
+sub client ($) {
+  my $self = $_[0];
+  return $self->{client} ||= do {
+    my $host = $self->{context}->received_data->{host};
+    my $url = Web::URL->parse_string ("http://$host");
+    my $http = Web::Transport::ConnectionClient->new_from_url ($url);
+    $http;
+  };
+} # client
+
+sub object ($$$) {
+  my ($self, $type, $name) = @_;
+  return $self->{objects}->{$type}->{$name} || die "Object ($type, $name) not found";
+} # object
+
+sub post ($$$;%) {
+  my ($self, $path, $params, %args) = @_;
+  my $p = {sk_context => 'tests'};
+  if (defined $args{session}) {
+    my $session = $self->object ('session', $args{session});
+    $p->{sk} = $session->{sk};
+  }
+  return $self->client->request (
+    method => 'POST',
+    path => $path,
+    bearer => $self->context->received_data->{keys}->{'auth.bearer'},
+    params => {%$p, %$params},
+  )->then (sub {
+    my $res = $_[0];
+    if ($res->status == 200 or $res->status == 400) {
+      return {res => $res,
+              status => $res->status,
+              json => json_bytes2perl $res->body_bytes};
+    }
+    die $res;
+  });
+} # post
+
+sub create_session ($$;%) {
+  my ($self, $name, %args) = @_;
+  return $self->post (['session'], {})->then (sub {
+    die $_[0]->{res} unless $_[0]->{status} == 200;
+    $self->{objects}->{session}->{$name} = $_[0]->{json};
+  });
+} # create_session
+
+sub done ($) {
+  my $self = $_[0];
+  (delete $self->{context})->done;
+  return Promise->all ([
+    (defined $self->{client} ? $self->{client}->close : undef),
+  ]);
+} # done
 
 1;
 
