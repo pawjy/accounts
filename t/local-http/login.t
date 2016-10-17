@@ -3,188 +3,93 @@ use warnings;
 use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
-use Test::More;
-use Test::X1;
-use Promise;
-use Promised::Flow;
 use Web::UserAgent::Functions qw(http_post http_get);
-use JSON::PS;
-use Web::URL;
-use Web::Transport::ConnectionClient;
 
 my $wait = web_server;
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  my $url = Web::URL->parse_string ("http://$host");
-  my $http = Web::Transport::ConnectionClient->new_from_url ($url);
-  promised_cleanup {
-    return $http->close->then (sub { done $c; undef $c });
-  } $http->request (path => ['login'])->then (sub {
+Test {
+  my $current = shift;
+  return $current->client->request (path => ['login'])->then (sub {
     my $res = $_[0];
     test {
       is $res->status, 405;
-    } $c;
+    } $current->context;
   });
 } wait => $wait, n => 1, name => '/login GET';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  my $url = Web::URL->parse_string ("http://$host");
-  my $http = Web::Transport::ConnectionClient->new_from_url ($url);
-  promised_cleanup {
-    return $http->close->then (sub { done $c; undef $c });
-  } $http->request (path => ['login'], method => 'POST')->then (sub {
+Test {
+  my $current = shift;
+  return $current->client->request (path => ['login'], method => 'POST')->then (sub {
     my $res = $_[0];
     test {
       is $res->status, 401;
-    } $c;
+    } $current->context;
   });
 } wait => $wait, n => 1, name => '/login no auth';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  my $url = Web::URL->parse_string ("http://$host");
-  my $http = Web::Transport::ConnectionClient->new_from_url ($url);
-  promised_cleanup {
-    return $http->close->then (sub { done $c; undef $c });
-  } $http->request (
-    path => ['login'], method => 'POST',
-    bearer => $c->received_data->{keys}->{'auth.bearer'},
-    params => {sk_context => 'tests'},
-  )->then (sub {
-    my $res = $_[0];
+Test {
+  my $current = shift;
+  return $current->post (['login'], {})->then (sub {
+    my $result = $_[0];
     test {
-      is $res->status, 400;
-      my $json = json_bytes2perl $res->body_bytes;
-      is $json->{reason}, 'Bad session';
-    } $c;
+      is $result->{status}, 400;
+      is $result->{json}->{reason}, 'Bad session';
+    } $current->context;
   });
 } wait => $wait, n => 2, name => '/login bad session';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  session ($c)->then (sub {
-    my $session = $_[0];
-    return Promise->new (sub {
-      my ($ok, $ng) = @_;
-      http_post
-          url => qq<http://$host/login>,
-          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {
-            sk => $session->{sk},
-            sk_context => 'not-tests',
-            server => 'oauth1server',
-            callback_url => 'http://haoa/',
-          },
-          anyevent => 1,
-          max_redirect => 0,
-          cb => sub {
-            my $res = $_[1];
-            if ($res->code == 200) {
-              $ok->(json_bytes2perl $res->content);
-            } elsif ($res->code == 400) {
-              $ng->(json_bytes2perl $res->content);
-            } else {
-              $ng->($res->code);
-            }
-          };
+Test {
+  my $current = shift;
+  return $current->post (['session'], {})->then (sub {
+    die $_[0]->{res} unless $_[0]->{status} == 200;
+    my $session = $_[0]->{json};
+    return $current->post (['login'], {
+      sk => $session->{sk},
+      sk_context => 'not-tests',
+      server => 'oauth1server',
+      callback_url => 'http://haoa/',
+    })->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->{status}, 400;
+        is $result->{json}->{reason}, 'Bad session';
+      } $current->context;
     });
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $error = $_[0];
-    test {
-      is $error->{reason}, 'Bad session';
-    } $c;
-  })->then (sub {
-    done $c;
-    undef $c;
   });
-} wait => $wait, n => 1, name => '/login bad sk_context';
+} wait => $wait, n => 2, name => '/login bad sk_context';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  session ($c)->then (sub {
-    my $session = $_[0];
-    return Promise->new (sub {
-      my ($ok, $ng) = @_;
-      http_post
-          url => qq<http://$host/login>,
-          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {
-            sk => $session->{sk},
-            sk_context => 'tests',
-            server => 'xaa',
-            callback_url => 'http://haoa/',
-          },
-          anyevent => 1,
-          max_redirect => 0,
-          cb => sub {
-            my $res = $_[1];
-            if ($res->code == 200) {
-              $ok->(json_bytes2perl $res->content);
-            } elsif ($res->code == 400) {
-              $ng->(json_bytes2perl $res->content);
-            } else {
-              $ng->($res->code);
-            }
-          };
+Test {
+  my $current = shift;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['login'], {
+      server => 'xaa',
+      callback_url => 'http://haoa/',
+    }, session => 1)->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->{status}, 400;
+        is $result->{json}->{reason}, 'Bad |server|';
+      } $current->context;
     });
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $error = $_[0];
-    test {
-      is $error->{reason}, 'Bad |server|';
-    } $c;
-  })->then (sub {
-    done $c;
-    undef $c;
   });
-} wait => $wait, n => 1, name => '/login bad server';
+} wait => $wait, n => 2, name => '/login bad server';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  session ($c)->then (sub {
-    my $session = $_[0];
-    return Promise->new (sub {
-      my ($ok, $ng) = @_;
-      http_post
-          url => qq<http://$host/login>,
-          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {
-            sk => $session->{sk},
-            sk_context => 'tests',
-            server => 'oauth1server',
-            callback_url => 'http://haoa/',
-          },
-          anyevent => 1,
-          max_redirect => 0,
-          cb => sub {
-            my $res = $_[1];
-            if ($res->code == 200) {
-              $ok->(json_bytes2perl $res->content);
-            } elsif ($res->code == 400) {
-              $ng->(json_bytes2perl $res->content);
-            } else {
-              $ng->($res->code);
-            }
-          };
-    });
+Test {
+  my $current = shift;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['login'], {
+      server => 'oauth1server',
+      callback_url => 'http://haoa/',
+    }, session => 1);
   })->then (sub {
-    my $json = $_[0];
+    my $result = $_[0];
     test {
-      my $auth = $c->received_data->{oauth1_auth_url};
-      like $json->{authorization_url}, qr{^\Q$auth\E\?oauth_token=.+$};
-    } $c;
-  }, sub { test { ok 0 } $c })->then (sub {
-    done $c;
-    undef $c;
+      is $result->{status}, 200;
+      my $auth = $current->context->received_data->{oauth1_auth_url};
+      like $result->{json}->{authorization_url}, qr{^\Q$auth\E\?oauth_token=.+$};
+    } $current->context;
   });
-} wait => $wait, n => 1, name => '/login';
+} wait => $wait, n => 2, name => '/login';
 
 run_tests;
 stop_web_server;
