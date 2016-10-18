@@ -170,9 +170,10 @@ sub main ($$) {
     ##
     ##     /link - If it successfully returns an external account (in
     ##     /cb), associate that external account with the session's
-    ##     account.  If any other external account with same |server|
-    ##     is associated with the session's account, that is replaced
-    ##     with the new one.
+    ##     account.  If the |server| does not associate a unique
+    ##     identifier to the external account, any existing external
+    ##     account with same |server| is associated with the session's
+    ##     account is replaced with the new one.
     ##
     ##   In /login, the session must not be associated with any
     ##   account.  If associated, an error is returned.
@@ -206,16 +207,19 @@ sub main ($$) {
       my $scope = join $server->{scope_separator} // ' ', grep { defined }
           $server->{login_scope},
           @{$app->text_param_list ('server_scope')};
-      $session_data->{action} = {endpoint => 'oauth',
-                                 server => $server->{name},
-                                 callback_url => $cb,
-                                 state => $state,
-                                 app_data => $app->text_param ('app_data'),
-                                 copied_data_fields => [map {
-                                   my ($f, $t) = split /:/, $_, 2;
-                                   [$f, $t // $f];
-                                 } @{$app->text_param_list ('copied_data_field')}],
-                                 create_email_link => $app->bare_param ('create_email_link')};
+      $session_data->{action} = {
+        endpoint => 'oauth',
+        operation => $path->[0], # login or link
+        server => $server->{name},
+        callback_url => $cb,
+        state => $state,
+        app_data => $app->text_param ('app_data'),
+        copied_data_fields => [map {
+          my ($f, $t) = split /:/, $_, 2;
+          [$f, $t // $f];
+        } @{$app->text_param_list ('copied_data_field')}],
+        create_email_link => $app->bare_param ('create_email_link'),
+      };
 
       my $sk_context = $session_row->get ('sk_context');
       my $client_id = $app->config->get ($server->{name} . '.client_id.' . $sk_context) //
@@ -404,8 +408,6 @@ sub main ($$) {
             $app,
             server => $server,
             session_data => $session_data,
-            copied_data_fields => delete $session_data->{action}->{copied_data_fields},
-            create_email_link => delete $session_data->{action}->{create_email_link},
           );
         })->then (sub {
           my $app_data = $session_data->{action}->{app_data}; # or undef
@@ -892,6 +894,7 @@ sub create_account ($$%) {
   my $server = $args{server} or die;
   my $service = $server->{name};
   my $session_data = $args{session_data} or die;
+  my $copied_data_fields = delete $session_data->{action}->{copied_data_fields} || [];
 
   return $app->throw_error (400, reason_phrase => 'Non-loginable |service|')
       unless defined $server->{linked_id_field};
@@ -900,6 +903,7 @@ sub create_account ($$%) {
   return $app->throw_error (400, reason_phrase => 'Non-loginable server account')
       unless defined $id and length $id;
   $id = Dongry::Type->serialize ('text', $id);
+
   my $link_id = '';
   #my $link_id = $app->bare_param ('account_link_id') // '';
   return ((length $link_id ? $app->db->execute ('SELECT account_link_id, account_id FROM account_link WHERE account_link_id = ? AND service_name = ? AND linked_id = ?', {
@@ -963,7 +967,7 @@ sub create_account ($$%) {
           my $return = $_[0];
           my @data;
           my $time = time;
-          for (@{$args{copied_data_fields} || []}) {
+          for (@$copied_data_fields) {
             my ($from_name, $to_name) = @$_;
             my $value;
             if ($from_name eq 'name' or $from_name eq 'id' or
@@ -986,6 +990,7 @@ sub create_account ($$%) {
           });
         })->then (sub {
           my $return = $_[0];
+          return $return unless $session_data->{action}->{create_email_link};
           my $addr = $link->{email} // '';
           return $return unless $addr =~ /\A[\x21-\x3F\x41-\x7E]+\@[\x21-\x3F\x41-\x7E]+\z/;
           my $email_id = sha1_hex $addr;
