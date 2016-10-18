@@ -3,143 +3,59 @@ use warnings;
 use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
-use Test::More;
-use Test::X1;
-use Promise;
-use Web::UserAgent::Functions qw(http_post http_get);
-use JSON::PS;
 
 my $wait = web_server;
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  return Promise->new (sub {
-    my ($ok, $ng) = @_;
-    http_get
-        url => qq<http://$host/cb>,
-        anyevent => 1,
-        max_redirect => 0,
-        cb => sub {
-          my $res = $_[1];
-          if ($res->code == 200) {
-            $ok->(json_bytes2perl $res->content);
-          } else {
-            $ng->($res->code);
-          }
-        };
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $status = $_[0];
+Test {
+  my $current = shift;
+  return $current->client->request (path => ['cb'])->then (sub {
+    my $res = $_[0];
     test {
-      is $status, 405;
-      done $c;
-      undef $c;
-    } $c;
+      is $res->status, 405;
+    } $current->context;
   });
 } wait => $wait, n => 1, name => '/cb GET';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  return Promise->new (sub {
-    my ($ok, $ng) = @_;
-    http_post
-        url => qq<http://$host/cb>,
-        anyevent => 1,
-        max_redirect => 0,
-        cb => sub {
-          my $res = $_[1];
-          if ($res->code == 200) {
-            $ok->(json_bytes2perl $res->content);
-          } else {
-            $ng->($res->code);
-          }
-        };
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $status = $_[0];
+Test {
+  my $current = shift;
+  return $current->client->request (path => ['cb'], method => 'POST')->then (sub {
+    my $res = $_[0];
     test {
-      is $status, 401;
-      done $c;
-      undef $c;
-    } $c;
+      is $res->status, 401;
+    } $current->context;
   });
 } wait => $wait, n => 1, name => '/cb no auth';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  return Promise->new (sub {
-    my ($ok, $ng) = @_;
-    http_post
-        url => qq<http://$host/cb>,
-        header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-        params => {sk_context => 'tests'},
-        anyevent => 1,
-        max_redirect => 0,
-        cb => sub {
-          my $res = $_[1];
-          if ($res->code == 200) {
-            $ok->(json_bytes2perl $res->content);
-          } elsif ($res->code == 400) {
-            $ng->(json_bytes2perl $res->content);
-          } else {
-            $ng->($res->code);
-          }
-        };
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $error = $_[0];
+Test {
+  my $current = shift;
+  return $current->post (['cb'], {})->then (sub {
+    my $result = $_[0];
     test {
-      is $error->{reason}, 'Bad session';
-      done $c;
-      undef $c;
-    } $c;
+      is $result->{status}, 400;
+      is $result->{json}->{reason}, 'Bad session';
+    } $current->context;
   });
-} wait => $wait, n => 1, name => '/cb bad session';
+} wait => $wait, n => 2, name => '/cb bad session';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  session ($c)->then (sub {
-    my $session = $_[0];
-    return Promise->new (sub {
-      my ($ok, $ng) = @_;
-      http_post
-          url => qq<http://$host/cb>,
-          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {
-            sk => $session->{sk},
-            sk_context => 'tests',
-          },
-          anyevent => 1,
-          max_redirect => 0,
-          cb => sub {
-            my $res = $_[1];
-            if ($res->code == 200) {
-              $ok->(json_bytes2perl $res->content);
-            } elsif ($res->code == 400) {
-              $ng->(json_bytes2perl $res->content);
-            } else {
-              $ng->($res->code);
-            }
-          };
-    });
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $error = $_[0];
-    test {
-      is $error->{reason}, 'Bad callback call';
-    } $c;
+Test {
+  my $current = shift;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['cb'], {}, session => 1);
   })->then (sub {
-    done $c;
-    undef $c;
+    my $result = $_[0];
+    test {
+      is $result->{status}, 400;
+      is $result->{json}->{reason}, 'Bad callback call';
+    } $current->context;
   });
-} wait => $wait, n => 1, name => '/cb not in flow';
+} wait => $wait, n => 2, name => '/cb not in flow';
 
 run_tests;
 stop_web_server;
 
 =head1 LICENSE
 
-Copyright 2015 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2016 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
