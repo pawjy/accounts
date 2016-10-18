@@ -69,6 +69,7 @@ Test {
 Test {
   my $current = shift;
   my $cb_url = 'http://haoa/' . rand;
+  my $account_id;
   return $current->create_session (1)->then (sub {
     return $current->post (['login'], {
       server => 'oauth2server',
@@ -104,9 +105,42 @@ Test {
       is $result->{status}, 200;
       my $links = $result->{json}->{links};
       ok grep { $_->{service_name} eq 'oauth2server' } values %$links;
+      ok $account_id = $result->{json}->{account_id}, 'new account';
+    } $current->context;
+  })->then (sub {
+    return $current->create_session (2);
+  })->then (sub {
+    return $current->post (['login'], {
+      server => 'oauth2server',
+      callback_url => $cb_url,
+    }, session => 2);
+  })->then (sub {
+    my $result = $_[0];
+    my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
+    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    return $con->request (url => $url, method => 'POST'); # user accepted!
+  })->then (sub {
+    my $result = $_[0];
+    my $location = $result->header ('Location');
+    my ($base, $query) = split /\?/, $location, 2;
+    return $current->post ("/cb?$query", {}, session => 2);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is $result->{app_data}, undef;
+    } $current->context;
+    return $current->post (['info'], {with_linked => 'id'}, session => 2);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      my $links = $result->{json}->{links};
+      ok grep { $_->{service_name} eq 'oauth2server' } values %$links;
+      is $result->{json}->{account_id}, $account_id, 'existing account';
     } $current->context;
   });
-} wait => $wait, n => 7, name => '/login then auth then /cb - new account, oauth2';
+} wait => $wait, n => 13, name => '/login then auth then /cb - oauth2';
 
 run_tests;
 stop_web_server;
