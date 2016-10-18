@@ -400,11 +400,13 @@ sub main ($$) {
             }
           }
         })->then (sub {
-          return $class->create_account (
-            $app,
-            server => $server,
-            session_data => $session_data,
-          );
+          if ($session_data->{action}->{operation} eq 'login') {
+            return $class->login_account ($app, $server, $session_data);
+          } elsif ($session_data->{action}->{operation} eq 'link') {
+            return $class->link_account ($app, $server, $session_data);
+          } else {
+            die "Bad operation |$session_data->{action}->{operation}|";
+          }
         })->then (sub {
           my $app_data = $session_data->{action}->{app_data}; # or undef
           delete $session_data->{action};
@@ -885,30 +887,26 @@ sub get_resource_owner_profile ($$%) {
   });
 } # get_resource_owner_profile
 
-sub create_account ($$%) {
-  my ($class, $app, %args) = @_;
-  my $server = $args{server} or die;
+sub login_account ($$$) {
+  my ($class, $app, $server, $session_data) = @_;
   my $service = $server->{name};
-  my $session_data = $args{session_data} or die;
 
   return $app->throw_error (400, reason_phrase => 'Non-loginable |service|')
       unless defined $server->{linked_id_field};
 
-  my $id = $session_data->{$service}->{$server->{linked_id_field}};
-  return $app->throw_error (400, reason_phrase => 'Non-loginable server account')
-      unless defined $id and length $id;
-  $id = Dongry::Type->serialize ('text', $id);
+  my $link = {name => $session_data->{$service}->{$server->{linked_name_field} // ''},
+              id => $session_data->{$service}->{$server->{linked_id_field} // ''},
+              key => $session_data->{$service}->{$server->{linked_key_field} // ''},
+              email => $session_data->{$service}->{$server->{linked_email_field} // ''},
+              data => $session_data->{$service}->{linked_data} || {}};
 
-  my $link_id = '';
-  #my $link_id = $app->bare_param ('account_link_id') // '';
-  return ((length $link_id ? $app->db->execute ('SELECT account_link_id, account_id FROM account_link WHERE account_link_id = ? AND service_name = ? AND linked_id = ?', {
-    account_link_id => $link_id,
+  return $app->throw_error (400, reason_phrase => 'Non-loginable server account')
+      unless defined $link->{id} and length $link->{id};
+
+  return $app->db->execute ('SELECT account_link_id, account_id FROM account_link WHERE service_name = ? AND linked_id = ?', {
     service_name => Dongry::Type->serialize ('text', $service),
-    linked_id => $id,
-  }, source_name => 'master') : $app->db->execute ('SELECT account_link_id, account_id FROM account_link WHERE service_name = ? AND linked_id = ?', {
-    service_name => Dongry::Type->serialize ('text', $service),
-    linked_id => $id,
-  }, source_name => 'master'))->then (sub {
+    linked_id => Dongry::Type->serialize ('text', $link->{id}),
+  }, source_name => 'master')->then (sub {
     my $links = $_[0]->all;
     # XXX filter by account status?
     $links = [$links->[0]] if @$links; # XXX
@@ -929,11 +927,6 @@ sub create_account ($$%) {
         my $account = {account_id => $uuids->{account_id},
                        user_status => 1, admin_status => 1,
                        terms_version => 0};
-        my $link = {name => $session_data->{$service}->{$server->{linked_name_field} // ''},
-                    id => $session_data->{$service}->{$server->{linked_id_field} // ''},
-                    key => $session_data->{$service}->{$server->{linked_key_field} // ''},
-                    email => $session_data->{$service}->{$server->{linked_email_field} // ''},
-                    data => $session_data->{$service}->{linked_data} || {}};
         my $name = $link->{name};
         $name = $account->{account_id} unless defined $name and length $name;
         return $app->db->execute ('INSERT INTO account (account_id, created, user_status, admin_status, terms_version, name) VALUES (:account_id, :created, :user_status, :admin_status, :terms_version, :name)', {
@@ -948,7 +941,7 @@ sub create_account ($$%) {
             created => $time,
             updated => $time,
             linked_name => Dongry::Type->serialize ('text', $link->{name} // ''),
-            linked_id => Dongry::Type->serialize ('text', $link->{id} // ''),
+            linked_id => Dongry::Type->serialize ('text', $link->{id}),
             linked_key => Dongry::Type->serialize ('text', $link->{key}), # or undef
             linked_email => Dongry::Type->serialize ('text', $link->{email} // ''),
             linked_token1 => Dongry::Type->serialize ('text', $token1),
@@ -987,8 +980,7 @@ sub create_account ($$%) {
       my $time = time;
       my $account_id = $links->[0]->{account_id};
       my $name = $account_id;
-      my $linked_name = $session_data->{$service}->{$server->{linked_name_field} // ''} // '';
-      $name = $linked_name if length $linked_name;
+      $name = $link->{name} if defined $link->{name} and length $link->{name};
       return Promise->all ([
         $app->db->execute ('UPDATE account SET name = ? WHERE account_id = ?', {
           name => Dongry::Type->serialize ('text', $name),
@@ -1001,13 +993,13 @@ sub create_account ($$%) {
         $app->db->execute ('UPDATE account_link SET linked_name = ?, linked_id = ?, linked_key = :linked_key:nullable, linked_token1 = ?, linked_token2 = ?, linked_email = ?, linked_data = ?, updated = ? WHERE account_link_id = ? AND account_id = ?', {
           account_link_id => $links->[0]->{account_link_id},
           account_id => $account_id,
-          linked_name => Dongry::Type->serialize ('text', $linked_name),
-          linked_id => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_id_field} // ''} // ''),
-          linked_key => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_key_field} // ''}), # or undef
+          linked_name => Dongry::Type->serialize ('text', $link->{name} // ''),
+          linked_id => Dongry::Type->serialize ('text', $link->{id}),
+          linked_key => Dongry::Type->serialize ('text', $link->{key}), # or undef
           linked_token1 => Dongry::Type->serialize ('text', $token1),
           linked_token2 => Dongry::Type->serialize ('text', $token2),
-          linked_email => Dongry::Type->serialize ('text', $session_data->{$service}->{$server->{linked_email_field} // ''} // ''),
-          linked_data => Dongry::Type->serialize ('json', $session_data->{$service}->{linked_data} || {}),
+          linked_email => Dongry::Type->serialize ('text', $link->{email} // ''),
+          linked_data => Dongry::Type->serialize ('json', $link->{data}),
           updated => time,
         }, source_name => 'master'),
       ])->then (sub {
@@ -1016,7 +1008,7 @@ sub create_account ($$%) {
     } else { # multiple account links
       die "XXX Not implemented yet";
     }
-  }))->then (sub {
+  })->then (sub {
     my ($account, $account_link) = @{$_[0]};
     unless ($account->{user_status} == 1) {
       die "XXX Disabled account";
@@ -1026,7 +1018,55 @@ sub create_account ($$%) {
     }
     $session_data->{account_id} = format_id $account->{account_id};
   });
-} # create_account
+} # login_account
+
+sub link_account ($$$) {
+  my ($class, $app, $server, $session_data) = @_;
+  my $service = $server->{name};
+
+  my $link = {name => $session_data->{$service}->{$server->{linked_name_field} // ''},
+              id => $session_data->{$service}->{$server->{linked_id_field} // ''},
+              key => $session_data->{$service}->{$server->{linked_key_field} // ''},
+              email => $session_data->{$service}->{$server->{linked_email_field} // ''},
+              data => $session_data->{$service}->{linked_data} || {}};
+
+  my $token1 = '';
+  my $token2 = '';
+  if (defined $server->{temp_endpoint}) { # OAuth 1.0
+    my $at = $session_data->{$service}->{access_token};
+    ($token1, $token2) = @$at if defined $at and ref $at eq 'ARRAY' and @$at == 2;
+  } else {
+    $token1 = $session_data->{$service}->{access_token} // '';
+  }
+
+  return $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master')->then (sub {
+    my $link_id = $_[0]->first->{uuid};
+    my $time = time;
+    return $app->db->insert ('account_link', [{
+      account_link_id => $link_id,
+      account_id => Dongry::Type->serialize ('text', $session_data->{account_id}),
+      service_name => Dongry::Type->serialize ('text', $server->{name}),
+      created => $time,
+      updated => $time,
+      linked_name => Dongry::Type->serialize ('text', $link->{name} // ''),
+      linked_id => Dongry::Type->serialize ('text', $link->{id}), # or undef
+      linked_key => Dongry::Type->serialize ('text', $link->{key}), # or undef
+      linked_email => Dongry::Type->serialize ('text', $link->{email} // ''),
+      linked_token1 => Dongry::Type->serialize ('text', $token1),
+      linked_token2 => Dongry::Type->serialize ('text', $token2),
+      linked_data => Dongry::Type->serialize ('json', $link->{data}),
+    }], source_name => 'master', duplicate => {
+      updated => $app->db->bare_sql_fragment ('VALUES(updated)'),
+      linked_name => $app->db->bare_sql_fragment ('VALUES(linked_name)'),
+      linked_id => $app->db->bare_sql_fragment ('VALUES(linked_id)'),
+      linked_key => $app->db->bare_sql_fragment ('VALUES(linked_key)'),
+      linked_email => $app->db->bare_sql_fragment ('VALUES(linked_email)'),
+      linked_token1 => $app->db->bare_sql_fragment ('VALUES(linked_token1)'),
+      linked_token2 => $app->db->bare_sql_fragment ('VALUES(linked_token2)'),
+      linked_data => $app->db->bare_sql_fragment ('VALUES(linked_data)'),
+    });
+  });
+} # link_account
 
 sub load_linked ($$$) {
   my ($class, $app, $items) = @_;

@@ -63,9 +63,18 @@ sub oauth_server ($) {
     use JSON::PS;
     use MIME::Base64;
     use Data::Dumper;
+    use Web::Encoding;
+
+    sub d ($) {
+      if (defined $_[0]) {
+        return decode_web_utf8 $_[0];
+      } else {
+        return undef;
+      }
+    } # d
+
     my $ClientID = $ENV{CLIENT_ID};
     my $ClientSecret = $ENV{CLIENT_SECRET};
-    my $AccountID = $ENV{ACCOUNT_ID};
     my $AccountName = $ENV{ACCOUNT_NAME};
     my $AccountEmail = $ENV{ACCOUNT_EMAIL};
     my $Sessions = {};
@@ -102,6 +111,10 @@ sub oauth_server ($) {
           $http->send_response_body_as_text ("Bad |oauth_token|");
         } elsif ($http->request_method eq 'POST') {
           $session->{code} = rand;
+          $session->{account_id} = d $http->request_body_params->{account_id}->[0];
+          $session->{account_name} = d $http->request_body_params->{account_name}->[0];
+          $session->{account_email} = d $http->request_body_params->{account_email}->[0];
+          $session->{account_no_id} = d $http->request_body_params->{account_no_id}->[0];
           $http->set_status (302);
           my $url = $session->{callback} // 'data:text/plain,no callback URL';
           $url .= $url =~ /\?/ ? '&' : '?';
@@ -126,20 +139,32 @@ sub oauth_server ($) {
                  $auth_params->{oauth_consumer_key} =~ /\A\Q$ClientID\E\.oauth1(\.\w+|)\z/) {
           delete $Sessions->{$auth_params->{oauth_token}};
           my $token = rand;
+          my $no_id = $session->{account_no_id};
           my $session = $Sessions->{$token} = {
             access_token => $token,
             access_token_secret => rand,
-            account_id => $AccountID,
-            account_name => $AccountName,
-            account_email => $AccountEmail,
+            account_id => $session->{account_id} // int rand 100000,
+            account_name => $session->{account_name} // $AccountName,
+            account_email => $session->{account_email} // $AccountEmail,
           };
-          $http->send_response_body_as_text
-              (sprintf q{oauth_token=%s&oauth_token_secret=%s&url_name=%s&display_name=%s&email_addr=%s},
-                   percent_encode_c $session->{access_token},
-                   percent_encode_c $session->{access_token_secret}.$1,
-                   percent_encode_c $session->{account_id},
-                   percent_encode_c $session->{account_name},
-                   percent_encode_c $session->{account_email});
+          if ($no_id) {
+            delete $session->{account_id};
+            delete $session->{account_key};
+            $http->send_response_body_as_text
+                (sprintf q{oauth_token=%s&oauth_token_secret=%s&display_name=%s&email_addr=%s},
+                     percent_encode_c $session->{access_token},
+                     percent_encode_c $session->{access_token_secret}.$1,
+                     percent_encode_c $session->{account_name},
+                     percent_encode_c $session->{account_email});
+          } else {
+            $http->send_response_body_as_text
+                (sprintf q{oauth_token=%s&oauth_token_secret=%s&url_name=%s&display_name=%s&email_addr=%s},
+                     percent_encode_c $session->{access_token},
+                     percent_encode_c $session->{access_token_secret}.$1,
+                     percent_encode_c $session->{account_id},
+                     percent_encode_c $session->{account_name},
+                     percent_encode_c $session->{account_email});
+          }
         } else {
           $http->send_response_body_as_text (Dumper {
             _ => 'Bad auth-params',
@@ -159,6 +184,10 @@ sub oauth_server ($) {
             callback => $callback,
             code => $code,
             state => $http->query_params->{state}->[0],
+            account_id => d $http->request_body_params->{account_id}->[0],
+            account_name => d $http->request_body_params->{account_name}->[0],
+            account_email => d $http->request_body_params->{account_email}->[0],
+            account_no_id => $http->request_body_params->{account_no_id}->[0],
           };
           $http->set_status (302);
           my $url = $callback // 'data:text/plain,no callback URL';
@@ -185,13 +214,18 @@ sub oauth_server ($) {
                  $params->{client_id}->[0] =~ /\A\Q$ClientID\E\.oauth2(\.\w+|)\z/ and
                  $params->{client_secret}->[0] =~ /\A\Q$ClientSecret\E\.oauth2(\Q$1\E)\z/) {
           my $token = rand;
+          my $no_id = $session->{account_no_id};
           my $session = $Sessions->{$token} = {
             access_token => $token,
             #access_token_secret => rand,
-            account_id => $AccountID,
-            account_name => $AccountName,
-            account_email => $AccountEmail,
+            account_id => $session->{account_id} // int rand 100000,
+            account_name => $session->{account_name} // $AccountName,
+            account_email => $session->{account_email} // $AccountEmail,
           };
+          if ($no_id) {
+            delete $session->{account_id};
+            delete $session->{account_key};
+          }
           $http->set_response_header ('Content-Type' => 'application/json');
           $http->send_response_body_as_text (perl2json_bytes +{
             access_token => $session->{access_token}.$1,
@@ -210,7 +244,7 @@ sub oauth_server ($) {
         my $session = $Sessions->{$1 // ''};
         if (defined $session) {
           $http->set_response_header ('Content-Type' => 'application/json');
-          $http->send_response_body_as_text (perl2json_bytes +{
+          $http->send_response_body_as_text (perl2json_chars +{
             id => $session->{account_id},
             name => $session->{account_name},
             email => $session->{account_email},
@@ -469,7 +503,7 @@ sub web_server_and_driver () {
       my $api_host = '127.0.0.1:' . $AccountServer->get_web_port;
       app_server ('0.0.0.0', $api_token, $api_host)->then (sub {
         $data->{host_for_browser} = $wd->get_docker_host_hostname_for_container . ':' . $AppServer->get_port;
-        $data->{oauth_server_account_id} = $OAuthServer->envs->{ACCOUNT_ID};
+        # XXX should be replaced with new style
         $data->{oauth_server_account_name} = $OAuthServer->envs->{ACCOUNT_NAME};
         $data->{oauth_server_account_email} = $OAuthServer->envs->{ACCOUNT_EMAIL};
         $cv->send ($data);
