@@ -68,13 +68,7 @@ sub oauth_server ($) {
     my $AccountID = $ENV{ACCOUNT_ID};
     my $AccountName = $ENV{ACCOUNT_NAME};
     my $AccountEmail = $ENV{ACCOUNT_EMAIL};
-    my $TempToken;
-    my $TempTokenSecret;
-    my $CallbackURL;
-    my $State;
-    my $Code;
-    my $AccessToken;
-    my $AccessTokenSecret;
+    my $Sessions = {};
     sub {
       my $env = shift;
       my $http = Wanage::HTTP->new_from_psgi_env ($env);
@@ -84,22 +78,34 @@ sub oauth_server ($) {
         $auth_params = {map { map { s/^"//; s/"$//; percent_decode_c $_ } split /=/, $_, 2 } split /\s*,\s*/, $1};
       }
       if ($path eq '/oauth1/temp') {
-        $TempToken = rand;
-        $TempTokenSecret = rand;
-        $CallbackURL = $auth_params->{oauth_callback};
-        if (defined $CallbackURL) {
-          $http->send_response_body_as_text (sprintf 'oauth_token=%s&oauth_token_secret=%s&oauth_callback_confirmed=true', percent_encode_c $TempToken, percent_encode_c $TempTokenSecret);
+        my $temp_token = rand;
+        my $session = $Sessions->{$temp_token} = {
+          temp_token => $temp_token,
+          temp_token_secret => rand,
+          callback => $auth_params->{oauth_callback},
+        };
+        if (defined $session->{callback}) {
+          $http->send_response_body_as_text
+              (sprintf 'oauth_token=%s&oauth_token_secret=%s&oauth_callback_confirmed=true',
+                   percent_encode_c $session->{temp_token},
+                   percent_encode_c $session->{temp_token_secret});
         } else {
           $http->set_status (400);
           $http->send_response_body_as_text ('Bad callback URL');
         }
       } elsif ($path eq '/oauth1/authorize') {
-        if ($http->request_method eq 'POST') {
+        my $session = $Sessions->{$auth_params->{oauth_token} //
+                                  $http->query_params->{oauth_token}->[0] //
+                                  $http->request_body_params->{oauth_token}->[0]};
+        if (not defined $session) {
+          $http->set_status (400);
+          $http->send_response_body_as_text ("Bad |oauth_token|");
+        } elsif ($http->request_method eq 'POST') {
+          $session->{code} = rand;
           $http->set_status (302);
-          my $url = $CallbackURL // 'data:text/plain,no callback URL';
+          my $url = $session->{callback} // 'data:text/plain,no callback URL';
           $url .= $url =~ /\?/ ? '&' : '?';
-          $Code = rand;
-          $url .= sprintf 'oauth_verifier=%s', percent_encode_c $Code;
+          $url .= sprintf 'oauth_verifier=%s', percent_encode_c $session->{code};
           $http->set_response_header ('Location' => $url);
         } else {
           $http->set_response_header ('Content-Type', 'text/html; charset=utf-8');
@@ -110,12 +116,30 @@ sub oauth_server ($) {
           });
         }
       } elsif ($path eq '/oauth1/token') {
-        if ($auth_params->{oauth_token} eq $TempToken and
-            $auth_params->{oauth_verifier} eq $Code and
-            $auth_params->{oauth_consumer_key} =~ /\A\Q$ClientID\E\.oauth1(\.\w+|)\z/) {
-          $AccessToken = rand;
-          $AccessTokenSecret = rand;
-          $http->send_response_body_as_text (sprintf q{oauth_token=%s&oauth_token_secret=%s&url_name=%s&display_name=%s&email_addr=%s}, percent_encode_c $AccessToken, percent_encode_c $AccessTokenSecret.$1, percent_encode_c $AccountID, percent_encode_c $AccountName, percent_encode_c $AccountEmail);
+        my $session = $Sessions->{$auth_params->{oauth_token} //
+                                  $http->query_params->{oauth_token}->[0] //
+                                  $http->request_body_params->{oauth_token}->[0]};
+        if (not defined $session) {
+          $http->set_status (400);
+          $http->send_response_body_as_text ("Bad |oauth_token|");
+        } elsif ($auth_params->{oauth_verifier} eq $session->{code} and
+                 $auth_params->{oauth_consumer_key} =~ /\A\Q$ClientID\E\.oauth1(\.\w+|)\z/) {
+          delete $Sessions->{$auth_params->{oauth_token}};
+          my $token = rand;
+          my $session = $Sessions->{$token} = {
+            access_token => $token,
+            access_token_secret => rand,
+            account_id => $AccountID,
+            account_name => $AccountName,
+            account_email => $AccountEmail,
+          };
+          $http->send_response_body_as_text
+              (sprintf q{oauth_token=%s&oauth_token_secret=%s&url_name=%s&display_name=%s&email_addr=%s},
+                   percent_encode_c $session->{access_token},
+                   percent_encode_c $session->{access_token_secret}.$1,
+                   percent_encode_c $session->{account_id},
+                   percent_encode_c $session->{account_name},
+                   percent_encode_c $session->{account_email});
         } else {
           $http->send_response_body_as_text (Dumper {
             _ => 'Bad auth-params',
@@ -125,55 +149,71 @@ sub oauth_server ($) {
       }
 
       if ($path eq '/oauth2/authorize') {
-        if ($http->request_method eq 'POST') {
+        my $callback = $http->query_params->{redirect_uri}->[0];
+        if (not defined $callback) {
+          $http->set_status (400);
+          $http->send_response_body_as_text ('Bad callback URL');
+        } elsif ($http->request_method eq 'POST') {
+          my $code = rand;
+          my $session = $Sessions->{$code} = {
+            callback => $callback,
+            code => $code,
+            state => $http->query_params->{state}->[0],
+          };
           $http->set_status (302);
-          $CallbackURL = $http->query_params->{redirect_uri}->[0] // $CallbackURL;
-          $State = $http->query_params->{state}->[0] // $State;
-          my $url = $CallbackURL // 'data:text/plain,no callback URL';
+          my $url = $callback // 'data:text/plain,no callback URL';
           $url .= $url =~ /\?/ ? '&' : '?';
-          $Code = rand;
-          $url .= sprintf 'code=%s&state=%s', percent_encode_c $Code, percent_encode_c $State;
+          $url .= sprintf 'code=%s&state=%s',
+              percent_encode_c $session->{code},
+              percent_encode_c $session->{state};
           $http->set_response_header ('Location' => $url);
         } else {
-          $CallbackURL = $http->query_params->{redirect_uri}->[0];
-          if (defined $CallbackURL) {
-            $State = $http->query_params->{state}->[0];
-            $http->set_response_header ('Content-Type', 'text/html; charset=utf-8');
-            $http->send_response_body_as_text (q{
-              <form method=post action>
-                <input type=submit>
-              </form>
-            });
-          } else {
-            $http->set_status (400);
-            $http->send_response_body_as_text ('Bad callback URL');
-          }
+          $http->set_response_header ('Content-Type', 'text/html; charset=utf-8');
+          $http->send_response_body_as_text (q{
+            <form method=post action>
+              <input type=submit>
+            </form>
+          });
         }
       } elsif ($path eq '/oauth2/token') {
         my $params = $http->request_body_params;
-        if ($params->{redirect_uri}->[0] eq $CallbackURL and
-            $params->{code}->[0] eq $Code and
-            $params->{client_id}->[0] =~ /\A\Q$ClientID\E\.oauth2(\.\w+|)\z/ and
-            $params->{client_secret}->[0] =~ /\A\Q$ClientSecret\E\.oauth2(\Q$1\E)\z/) {
-          $AccessToken = undef;
-          $AccessTokenSecret = rand;
+        my $session = $Sessions->{$params->{code}->[0]};
+        if (not defined $session) {
+          $http->set_status (400);
+          $http->send_response_body_as_text ("Bad |code|");
+        } elsif ($params->{redirect_uri}->[0] eq $session->{callback} and
+                 $params->{client_id}->[0] =~ /\A\Q$ClientID\E\.oauth2(\.\w+|)\z/ and
+                 $params->{client_secret}->[0] =~ /\A\Q$ClientSecret\E\.oauth2(\Q$1\E)\z/) {
+          my $token = rand;
+          my $session = $Sessions->{$token} = {
+            access_token => $token,
+            #access_token_secret => rand,
+            account_id => $AccountID,
+            account_name => $AccountName,
+            account_email => $AccountEmail,
+          };
           $http->set_response_header ('Content-Type' => 'application/json');
           $http->send_response_body_as_text (perl2json_bytes +{
-            access_token => $AccessTokenSecret.$1,
+            access_token => $session->{access_token}.$1,
           });
+          delete $Sessions->{$params->{code}->[0]};
         } else {
           $http->send_response_body_as_text (Dumper {
             _ => 'Bad params',
             params => $params,
           });
         }
-      } elsif ($path eq '/profile') {
-        if ($http->get_request_header ('Authorization') =~ /^token\s+(\Q$AccessTokenSecret\E(?:\.SK2|))$/) {
+      }
+
+      if ($path eq '/profile') {
+        $http->get_request_header ('Authorization') =~ /^token\s+(.+?)(?:\.SK2|)$/;
+        my $session = $Sessions->{$1 // ''};
+        if (defined $session) {
           $http->set_response_header ('Content-Type' => 'application/json');
           $http->send_response_body_as_text (perl2json_bytes +{
-            id => $AccountID,
-            name => $AccountName,
-            email => $AccountEmail,
+            id => $session->{account_id},
+            name => $session->{account_name},
+            email => $session->{account_email},
           });
         } else {
           $http->set_status (403);
