@@ -79,7 +79,7 @@ test {
     my $json = $_[0];
     my $sid = $json->{sessionId};
     return post ("$wd/session/$sid/url", {
-      url => qq<http://$host/start?copied_data_field=id:abcid&create_email_link=1&server=> . $server_type,
+      url => qq<http://$host/start?create_email_link=1&server=> . $server_type,
     })->then (sub {
       return post ("$wd/session/$sid/execute", {
         script => q{

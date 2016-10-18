@@ -106,8 +106,8 @@ test {
     })->then (sub {
       my $json = json_bytes2perl $_[0]->{value};
       test {
-        is $json->{data}->{abcid}, $c->received_data->{oauth_server_account_id};
-        is $json->{data}->{fuga}, $c->received_data->{oauth_server_account_name};
+        is $json->{data}->{abcid}, undef;
+        is $json->{data}->{fuga}, undef;
       } $c, name => '/info';
       return $json->{account_id};
     });
@@ -124,7 +124,7 @@ stop_web_server_and_driver;
 
 =head1 LICENSE
 
-Copyright 2015 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2016 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

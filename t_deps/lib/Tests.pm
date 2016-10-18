@@ -353,7 +353,6 @@ sub app_server ($$$) {
               sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
               server => $http->query_params->{server},
               callback_url => $cb_url,
-              copied_data_field => $http->query_params->{copied_data_field},
               create_email_link => $http->query_params->{create_email_link},
             },
             timeout => 60*10,
