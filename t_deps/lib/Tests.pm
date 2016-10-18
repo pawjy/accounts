@@ -75,7 +75,6 @@ sub oauth_server ($) {
 
     my $ClientID = $ENV{CLIENT_ID};
     my $ClientSecret = $ENV{CLIENT_SECRET};
-    my $AccountID = $ENV{ACCOUNT_ID};
     my $AccountName = $ENV{ACCOUNT_NAME};
     my $AccountEmail = $ENV{ACCOUNT_EMAIL};
     my $Sessions = {};
@@ -144,7 +143,7 @@ sub oauth_server ($) {
           my $session = $Sessions->{$token} = {
             access_token => $token,
             access_token_secret => rand,
-            account_id => $session->{account_id} // $AccountID,
+            account_id => $session->{account_id} // int rand 100000,
             account_name => $session->{account_name} // $AccountName,
             account_email => $session->{account_email} // $AccountEmail,
           };
@@ -219,7 +218,7 @@ sub oauth_server ($) {
           my $session = $Sessions->{$token} = {
             access_token => $token,
             #access_token_secret => rand,
-            account_id => $session->{account_id} // $AccountID,
+            account_id => $session->{account_id} // int rand 100000,
             account_name => $session->{account_name} // $AccountName,
             account_email => $session->{account_email} // $AccountEmail,
           };
@@ -504,7 +503,7 @@ sub web_server_and_driver () {
       my $api_host = '127.0.0.1:' . $AccountServer->get_web_port;
       app_server ('0.0.0.0', $api_token, $api_host)->then (sub {
         $data->{host_for_browser} = $wd->get_docker_host_hostname_for_container . ':' . $AppServer->get_port;
-        $data->{oauth_server_account_id} = $OAuthServer->envs->{ACCOUNT_ID};
+        # XXX should be replaced with new style
         $data->{oauth_server_account_name} = $OAuthServer->envs->{ACCOUNT_NAME};
         $data->{oauth_server_account_email} = $OAuthServer->envs->{ACCOUNT_EMAIL};
         $cv->send ($data);
