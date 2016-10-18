@@ -3,7 +3,6 @@ use warnings;
 use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
-use Web::UserAgent::Functions qw(http_post http_get);
 
 my $wait = web_server;
 
