@@ -144,12 +144,22 @@ sub main ($$) {
 
   if (@$path == 1 and $path->[0] eq 'login') {
     ## /login - Start OAuth flow to associate session with account
+    ##   |sk_context|, |sk|
+    ##   |server|       - The server name.  Required.
+    ##   |callback_url| - An absolute URL, used as the OAuth redirect URL.
+    ##                    Required.
+    ##
+    ##   The session must not be associated with any account.
+    ##   If associated, an error is returned.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0]
           // return $app->send_error_json ({reason => 'Bad session'});
       my $session_data = $session_row->get ('data');
+      if (defined $session_data->{account_id}) {
+        return $app->send_error_json ({reason => 'Account-associated session'});
+      }
 
       my $server = $app->config->get_oauth_server ($app->bare_param ('server'))
           or return $app->send_error_json ({reason => 'Bad |server|'});

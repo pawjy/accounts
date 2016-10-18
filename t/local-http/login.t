@@ -90,6 +90,24 @@ Test {
   });
 } wait => $wait, n => 2, name => '/login';
 
+Test {
+  my $current = shift;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['create'], {}, session => 1);
+  })->then (sub {
+    return $current->post (['login'], {
+      server => 'oauth2server',
+      callback_url => 'http://haoa/',
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 400;
+      is $result->{json}->{reason}, 'Account-associated session';
+    } $current->context;
+  });
+} wait => $wait, n => 2, name => '/login with logined account';
+
 run_tests;
 stop_web_server;
 
