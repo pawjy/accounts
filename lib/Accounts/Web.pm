@@ -117,8 +117,10 @@ sub main ($$) {
     ## /create - Create an account (without link)
     ##   |sk_context|, |sk|
     ##
-    ##   The session must not be associated with any account.
-    ##   If associated, an error is returned.
+    ##   Create an account and associate the session with it.
+    ##
+    ##   The session must not be associated with any account.  If
+    ##   associated, an error is returned.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
     return $class->resume_session ($app)->then (sub {
@@ -149,23 +151,48 @@ sub main ($$) {
     });
   } # /create
 
-  if (@$path == 1 and $path->[0] eq 'login') {
+  if (@$path == 1 and
+      ($path->[0] eq 'login' or $path->[0] eq 'link')) {
     ## /login - Start OAuth flow to associate session with account
+    ## /link - Start OAuth flow to associate session's account with account
     ##   |sk_context|, |sk|
     ##   |server|       - The server name.  Required.
     ##   |callback_url| - An absolute URL, used as the OAuth redirect URL.
     ##                    Required.
     ##
-    ##   The session must not be associated with any account.
-    ##   If associated, an error is returned.
+    ##   Initiate the OAuth flow.  Then:
+    ##
+    ##     /login - If it successfully returns an external account (in
+    ##     /cb), find accounts in our database associated with that
+    ##     external account.  If found, the session is associated with
+    ##     the account.  Otherwise, a new account is created and the
+    ##     session is associated with it.
+    ##
+    ##     /link - If it successfully returns an external account (in
+    ##     /cb), associate that external account with the session's
+    ##     account.  If any other external account with same |server|
+    ##     is associated with the session's account, that is replaced
+    ##     with the new one.
+    ##
+    ##   In /login, the session must not be associated with any
+    ##   account.  If associated, an error is returned.
+    ##
+    ##   In /link, the session must be associated with an account.
+    ##   Otherwise, an error is returned.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0]
           // return $app->send_error_json ({reason => 'Bad session'});
       my $session_data = $session_row->get ('data');
-      if (defined $session_data->{account_id}) {
-        return $app->send_error_json ({reason => 'Account-associated session'});
+      if ($path->[0] eq 'link') {
+        if (not defined $session_data->{account_id}) {
+          return $app->send_error_json ({reason => 'Not a login user'});
+        }
+      } else {
+        if (defined $session_data->{account_id}) {
+          return $app->send_error_json ({reason => 'Account-associated session'});
+        }
       }
 
       my $server = $app->config->get_oauth_server ($app->bare_param ('server'))
