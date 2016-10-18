@@ -117,6 +117,41 @@ Test {
   });
 } wait => $wait, n => 8, name => '/create with options';
 
+Test {
+  my $current = shift;
+  my $account_id;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['create'], {
+      name => "hoge",
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      ok $account_id = $result->{json}->{account_id};
+    } $current->context;
+    return $current->post (['create'], {
+      name => "\x{65000}",
+      user_status => 2,
+      admin_status => 6,
+      terms_version => 5244,
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 400;
+      is $result->{json}->{reason}, 'Account-associated session';
+    } $current->context;
+    return $current->post (['info'], {}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is $result->{json}->{account_id}, $account_id;
+      is $result->{json}->{name}, "hoge";
+    } $current->context;
+  });
+} wait => $wait, n => 6, name => '/create with associated session';
+
 run_tests;
 stop_web_server;
 

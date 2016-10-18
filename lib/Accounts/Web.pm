@@ -115,12 +115,20 @@ sub main ($$) {
 
   if (@$path == 1 and $path->[0] eq 'create') {
     ## /create - Create an account (without link)
+    ##   |sk_context|, |sk|
+    ##
+    ##   The session must not be associated with any account.
+    ##   If associated, an error is returned.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
-
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0]
           // return $app->send_error_json ({reason => 'Bad session'});
+      my $session_data = $session_row->get ('data');
+      if (defined $session_data->{account_id}) {
+        return $app->send_error_json ({reason => 'Account-associated session'});
+      }
+
       return $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master')->then (sub {
         my $account_id = format_id ($_[0]->first->{uuid});
         my $time = time;
@@ -132,7 +140,6 @@ sub main ($$) {
           admin_status => $app->bare_param ('admin_status') // 1,
           terms_version => $app->bare_param ('terms_version') // 0,
         }], source_name => 'master')->then (sub {
-          my $session_data = $session_row->get ('data');
           $session_data->{account_id} = $account_id;
           return $session_row->update ({data => $session_data}, source_name => 'master');
         })->then (sub {
