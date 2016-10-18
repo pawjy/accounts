@@ -214,10 +214,6 @@ sub main ($$) {
         callback_url => $cb,
         state => $state,
         app_data => $app->text_param ('app_data'),
-        copied_data_fields => [map {
-          my ($f, $t) = split /:/, $_, 2;
-          [$f, $t // $f];
-        } @{$app->text_param_list ('copied_data_field')}],
         create_email_link => $app->bare_param ('create_email_link'),
       };
 
@@ -894,7 +890,6 @@ sub create_account ($$%) {
   my $server = $args{server} or die;
   my $service = $server->{name};
   my $session_data = $args{session_data} or die;
-  my $copied_data_fields = delete $session_data->{action}->{copied_data_fields} || [];
 
   return $app->throw_error (400, reason_phrase => 'Non-loginable |service|')
       unless defined $server->{linked_id_field};
@@ -962,31 +957,6 @@ sub create_account ($$%) {
           }, source_name => 'master', table_name => 'account_link')->then (sub {
             my $account_link = {account_link_id => $uuids->{link_id}};
             return [$account, $account_link];
-          });
-        })->then (sub {
-          my $return = $_[0];
-          my @data;
-          my $time = time;
-          for (@$copied_data_fields) {
-            my ($from_name, $to_name) = @$_;
-            my $value;
-            if ($from_name eq 'name' or $from_name eq 'id' or
-                $from_name eq 'key' or $from_name eq 'email') {
-              $value = $link->{$from_name};
-            } else {
-              $value = $link->{data}->{$from_name};
-            }
-            push @data, {
-              account_id => Dongry::Type->serialize ('text', $account->{account_id}),
-              key => Dongry::Type->serialize ('text', $to_name),
-              value => Dongry::Type->serialize ('text', $value),
-              created => $time,
-              updated => $time,
-            } if defined $value;
-          }
-          return $return unless @data;
-          return $app->db->insert ('account_data', \@data)->then (sub {
-            return $return;
           });
         })->then (sub {
           my $return = $_[0];
