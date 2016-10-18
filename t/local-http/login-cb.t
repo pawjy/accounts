@@ -70,6 +70,7 @@ Test {
   my $current = shift;
   my $cb_url = 'http://haoa/' . rand;
   my $account_id;
+  my $x_account_id = int rand 1000000;
   return $current->create_session (1)->then (sub {
     return $current->post (['login'], {
       server => 'oauth2server',
@@ -82,7 +83,9 @@ Test {
     } $current->context;
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
     my $con = Web::Transport::ConnectionClient->new_from_url ($url);
-    return $con->request (url => $url, method => 'POST'); # user accepted!
+    return $con->request (url => $url, method => 'POST', params => {
+      account_id => $x_account_id,
+    }); # user accepted!
   })->then (sub {
     my $result = $_[0];
     return test {
@@ -118,7 +121,9 @@ Test {
     my $result = $_[0];
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
     my $con = Web::Transport::ConnectionClient->new_from_url ($url);
-    return $con->request (url => $url, method => 'POST'); # user accepted!
+    return $con->request (url => $url, method => 'POST', params => {
+      account_id => $x_account_id,
+    }); # user accepted!
   })->then (sub {
     my $result = $_[0];
     my $location = $result->header ('Location');
@@ -136,7 +141,8 @@ Test {
     test {
       is $result->{status}, 200;
       my $links = $result->{json}->{links};
-      ok grep { $_->{service_name} eq 'oauth2server' } values %$links;
+      my $ls = [grep { $_->{service_name} eq 'oauth2server' } values %$links];
+      is $ls->[0]->{id}, $x_account_id;
       is $result->{json}->{account_id}, $account_id, 'existing account';
     } $current->context;
   });
