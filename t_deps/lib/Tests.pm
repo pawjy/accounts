@@ -127,6 +127,8 @@ sub oauth_server ($) {
       if ($path eq '/oauth2/authorize') {
         if ($http->request_method eq 'POST') {
           $http->set_status (302);
+          $CallbackURL = $http->query_params->{redirect_uri}->[0] // $CallbackURL;
+          $State = $http->query_params->{state}->[0] // $State;
           my $url = $CallbackURL // 'data:text/plain,no callback URL';
           $url .= $url =~ /\?/ ? '&' : '?';
           $Code = rand;
@@ -640,7 +642,11 @@ sub post ($$$;%) {
   }
   return $self->client->request (
     method => 'POST',
-    path => $path,
+    (ref $path ?
+      (path => $path)
+    :
+      (url => Web::URL->parse_string ($path, Web::URL->parse_string ($self->client->origin->to_ascii)))
+    ),
     bearer => $self->context->received_data->{keys}->{'auth.bearer'},
     params => {%$p, %$params},
   )->then (sub {
@@ -649,6 +655,8 @@ sub post ($$$;%) {
       return {res => $res,
               status => $res->status,
               json => json_bytes2perl $res->body_bytes};
+    } elsif ($res->status == 302) {
+      return $res;
     }
     die $res;
   });
