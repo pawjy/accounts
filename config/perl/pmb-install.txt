@@ -1,6 +1,5 @@
 AnyEvent~7.13
 AnyEvent::HTTP~2.23
-AnyEvent::IO
 Canary::Stability~2012
 Carp~1.38
 Class::Accessor~0.34
@@ -23,8 +22,8 @@ HTML::Tagset~3.20
 HTTP::Cookies~6.01
 HTTP::Daemon~6.01
 HTTP::Date~6.02
+HTTP::Headers::Util~6.11
 HTTP::Negotiate~6.01
-HTTP::Request~6.11
 HTTP::Response~6.11
 IO::HTML~1.001
 IO::Handle~1.28
@@ -34,7 +33,7 @@ List::MoreUtils~0.416
 MIME::Base64~3.15
 Net::HTTP~6.09
 Net::SSLeay~1.78
-OAuth::Lite::Consumer
+OAuth::Lite::AuthMethod
 Path::Class~0.37
 Path::Tiny~0.098
 Pod::Usage~1.69
@@ -42,7 +41,7 @@ Proc::Wait3~0.05
 Scalar::Util~1.46
 Socket~2.024
 Term::ANSIColor~4.06
-Test::More~1.302062
+Test::Builder~1.302062
 Time::HiRes~1.9740
 Time::Local~1.25
 UNIVERSAL::require~0.18
