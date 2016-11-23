@@ -24,6 +24,7 @@ HTTP::Daemon~6.01
 HTTP::Date~6.02
 HTTP::Negotiate~6.01
 HTTP::Request~6.11
+HTTP::Request::Common~6.11
 IO::HTML~1.001
 IO::Handle~1.28
 LWP~6.15
@@ -40,7 +41,7 @@ Proc::Wait3~0.05
 Scalar::Util~1.46
 Socket~2.024
 Term::ANSIColor~4.06
-Test::More~1.302062
+Test::Builder~1.302067
 Time::HiRes~1.9741
 Time::Local~1.25
 UNIVERSAL::require~0.18
