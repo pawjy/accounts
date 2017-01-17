@@ -90,6 +90,97 @@ Test {
   });
 } wait => $wait, n => 2*3 + 13, name => '/group/members';
 
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {})->then (sub {
+    return $current->create_account (a2 => {});
+  })->then (sub {
+    return $current->create_account (a3 => {});
+  })->then (sub {
+    return $current->create_group (g1 => {members => ['a1', 'a2', 'a3']});
+  })->then (sub {
+    return $current->are_errors (
+      [['group', 'members'], {}],
+      [
+        {params => {
+          context_key => $current->o ('g1')->{context_key},
+          group_id => $current->o ('g1')->{group_id},
+          limit => 2000,
+        }, status => 400, reason => 'Bad |limit|'},
+        {params => {
+          context_key => $current->o ('g1')->{context_key},
+          group_id => $current->o ('g1')->{group_id},
+          ref => 'abcde',
+        }, status => 400, reason => 'Bad |ref|'},
+        {params => {
+          context_key => $current->o ('g1')->{context_key},
+          group_id => $current->o ('g1')->{group_id},
+          ref => '+532233.333,10000',
+        }, status => 400, reason => 'Bad |ref| offset'},
+      ],
+    );
+  })->then (sub {
+    return $current->post (['group', 'members'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      limit => 2,
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is 0+keys %{$result->{json}->{members}}, 2;
+      ok $result->{json}->{members}->{$current->o ('a3')->{account_id}};
+      ok $result->{json}->{members}->{$current->o ('a2')->{account_id}};
+      ok $result->{json}->{next_ref};
+      ok $result->{json}->{has_next};
+    } $current->context;
+    return $current->post (['group', 'members'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      ref => $result->{json}->{next_ref},
+      limit => 2,
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is 0+keys %{$result->{json}->{members}}, 1;
+      ok $result->{json}->{members}->{$current->o ('a1')->{account_id}};
+      ok $result->{json}->{next_ref};
+      ok ! $result->{json}->{has_next};
+    } $current->context;
+    return $current->post (['group', 'members'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      ref => $result->{json}->{next_ref},
+      limit => 2,
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is 0+keys %{$result->{json}->{members}}, 0;
+      ok $result->{json}->{next_ref};
+      ok ! $result->{json}->{has_next};
+    } $current->context;
+    return $current->post (['group', 'members'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      ref => $result->{json}->{next_ref},
+      limit => 2,
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is 0+keys %{$result->{json}->{members}}, 0;
+      ok $result->{json}->{next_ref};
+      ok ! $result->{json}->{has_next};
+    } $current->context;
+  });
+} wait => $wait, n => 22, name => '/group/members paging';
+
 run_tests;
 stop_web_server;
 

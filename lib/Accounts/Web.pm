@@ -1152,6 +1152,87 @@ sub load_data ($$$$$) {
   });
 } # load_data
 
+## If an end point supports paging, following parameters are
+## available:
+##   ref       A short string identifying the page
+##   limit     The maximum number of the returned items (i.e. page size)
+##
+## If the processing of the end point has succeeded, the result JSON
+## has following fields:
+##   has_next  Whether there is next page or not (at the time of the operation)
+##   next_ref  The |ref| parameter value for the next page
+
+sub this_page ($%) {
+  my ($app, %args) = @_;
+  my $page = {
+    order_direction => 'DESC',
+    limit => 0+($app->bare_param ('limit') // $args{limit} // 30),
+    offset => 0,
+    value => undef,
+  };
+  my $max_limit = $args{max_limit} // 100;
+  return $app->throw_error_json ({reason => "Bad |limit|"})
+      if $page->{limit} < 1 or $page->{limit} > $max_limit;
+  my $ref = $app->bare_param ('ref');
+  if (defined $ref) {
+    if ($ref =~ /\A([+-])([0-9.]+),([0-9]+)\z/) {
+      $page->{order_direction} = $1 eq '+' ? 'ASC' : 'DESC';
+      $page->{value} = {($page->{order_direction} eq 'ASC' ? '>=' : '<='), 0+$2};
+      $page->{offset} = 0+$3;
+      return $app->throw_error_json ({reason => "Bad |ref| offset"})
+          if $page->{offset} > 100;
+      $page->{ref} = $ref;
+    } else {
+      return $app->throw_error_json ({reason => "Bad |ref|"});
+    }
+  }
+  return $page;
+} # this_page
+
+sub next_page ($$$) {
+  my ($this_page, $items, $value_key) = @_;
+  my $next_page = {};
+  my $sign = $this_page->{order_direction} eq 'ASC' ? '+' : '-';
+  if (ref $items eq 'ARRAY') {
+    if (@$items) {
+      my $values = {};
+      my $last_value = $items->[0]->{$_->{$value_key}};
+      for (@$items) {
+        $values->{$_->{$value_key}}++;
+        if ($sign eq '+') {
+          $last_value = $_->{$value_key} if $last_value < $_->{$value_key};
+        } else {
+          $last_value = $_->{$value_key} if $last_value > $_->{$value_key};
+        }
+      }
+      $next_page->{next_ref} = $sign . $last_value . ',' . $values->{$last_value};
+      $next_page->{has_next} = @$items == $this_page->{limit};
+    } else {
+      $next_page->{next_ref} = $this_page->{ref};
+      $next_page->{has_next} = 0;
+    }
+  } else { # HASH
+    if (keys %$items) {
+      my $values = {};
+      my $last_value = $items->{each %$items}->{$value_key};
+      for (values %$items) {
+        $values->{$_->{$value_key}}++;
+        if ($sign eq '+') {
+          $last_value = $_->{$value_key} if $last_value < $_->{$value_key};
+        } else {
+          $last_value = $_->{$value_key} if $last_value > $_->{$value_key};
+        }
+      }
+      $next_page->{next_ref} = $sign . $last_value . ',' . $values->{$last_value};
+      $next_page->{has_next} = (keys %$items) == $this_page->{limit};
+    } else {
+      $next_page->{next_ref} = $this_page->{ref};
+      $next_page->{has_next} = 0;
+    }
+  }
+  return $next_page;
+} # next_page
+
 sub group ($$$) {
   my ($class, $app, $path) = @_;
 
@@ -1418,21 +1499,30 @@ sub group ($$$) {
     ## /group/members - List of group members
     ##
     ## With
-    ##   context_key    An opaque string identifying the application.  Required.
+    ##   context_ke    An opaque string identifying the application.  Required.
     ##   group_id      A group ID.  Required.
+    ##
+    ## Supports paging
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
-    # XXX paging
+    my $page = this_page ($app, limit => 100, max_limit => 100);
     return $app->db->select ('group_member', {
       context_key => $app->bare_param ('context_key'),
       group_id => $app->bare_param ('group_id'),
+      (defined $page->{value} ? (created => $page->{value}) : ()),
     }, fields => ['account_id', 'created', 'updated',
-                  'user_status', 'owner_status', 'member_type'], source_name => 'master')->then (sub {
-# XXX load_data
-      return $app->send_json ({members => {map {
+                  'user_status', 'owner_status', 'member_type'],
+      source_name => 'master',
+      offset => $page->{offset}, limit => $page->{limit},
+      order => ['created', $page->{order_direction}],
+    )->then (sub {
+      my $members = {map {
         $_->{account_id} .= '';
         ($_->{account_id} => $_);
-      } @{$_[0]->all}}});
+      } @{$_[0]->all}};
+      my $next_page = next_page $page, $members, 'created';
+# XXX load_data
+      return $app->send_json ({members => $members, %$next_page});
     });
   } # /group/members
 

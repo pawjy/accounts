@@ -771,6 +771,18 @@ sub are_errors ($$$) {
         } $self->context, name => $opt{name};
         $has_error = 1;
       }
+      if (defined $opt{reason}) {
+        my $json = json_bytes2perl $res->body_bytes;
+        unless (defined $json and
+                ref $json eq 'JSON' and
+                defined $json->{reason} and
+                $json->{reason} eq $opt{reason}) {
+          test {
+            is $json->{reason}, $opt{reason};
+          } $self->context, name => $opt{name};
+          $has_error = 1;
+        }
+      }
     });
   } $tests)->then (sub {
     unless ($has_error) {
@@ -804,10 +816,12 @@ sub create_account ($$$) {
 sub create_group ($$$) {
   my ($self, $name => $opts) = @_;
   $opts->{context_key} //= rand;
+  my $group_id;
   return $self->post (['group', 'create'], $opts)->then (sub {
     my $result = $_[0];
     die $result unless $result->{status} == 200;
     $self->{objects}->{$name} = $result->{json}; # {context_key, group_id}
+    $group_id = $result->{json}->{group_id};
     my $names = [];
     my $values = [];
     for (keys %{$opts->{data} or {}}) {
@@ -817,13 +831,26 @@ sub create_group ($$$) {
     return unless @$names;
     return $self->post (['group', 'data'], {
       context_key => $opts->{context_key},
-      group_id => $result->{json}->{group_id},
+      group_id => $group_id,
       name => $names,
       value => $values,
     })->then (sub {
       my $result = $_[0];
       die $result unless $result->{status} == 200;
     });
+  })->then (sub {
+    my $members = [map { $self->o ($_) } @{$opts->{members} or []}];
+    return promised_for {
+      my $account = $_[0];
+      return $self->post (['group', 'member', 'status'], {
+        context_key => $opts->{context_key},
+        group_id => $group_id,
+        account_id => $account->{account_id},
+        user_status => 1,
+        owner_status => 1,
+        member_type => 1,
+      });
+    } $members;
   });
 } # create_group
 
