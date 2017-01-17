@@ -3,6 +3,7 @@ use strict;
 use warnings;
 use Path::Tiny;
 use File::Temp;
+use Time::HiRes qw(time);
 use Promise;
 use Promised::File;
 use Promised::Command;
@@ -70,6 +71,10 @@ my $SessionTimeout = 60*60*24*10;
 sub main ($$) {
   my ($class, $app) = @_;
   my $path = $app->path_segments;
+
+  if ($path->[0] eq 'group') {
+    return $class->group ($app, $path);
+  }
 
   if (@$path == 1 and $path->[0] eq 'session') {
     ## /session - Ensure that there is a session
@@ -663,7 +668,7 @@ sub main ($$) {
       })->then (sub {
         return $class->load_linked ($app => [$_[0]]);
       })->then (sub {
-        return $class->load_data ($app => $_[0]);
+        return $class->load_data ($app, 'account_data', 'account_id', $_[0]);
       })->then (sub {
         return $app->send_json ($_[0]->[0]);
       });
@@ -698,7 +703,7 @@ sub main ($$) {
         };
       } @{$_[0]}]);
     })->then (sub {
-      return $class->load_data ($app => $_[0]);
+      return $class->load_data ($app, 'account_data', 'account_id', $_[0]);
     })->then (sub {
       return $app->send_json ({
         accounts => {map { $_->{account_id} => $_ } @{$_[0]}},
@@ -1121,25 +1126,25 @@ sub load_linked ($$$) {
   });
 } # load_linked
 
-sub load_data ($$$) {
-  my ($class, $app, $items) = @_;
+sub load_data ($$$$$) {
+  my ($class, $app, $table_name, $id_key, $items) = @_;
 
-  my $account_id_to_json = {};
-  my @account_id = map {
-    $account_id_to_json->{$_->{account_id}} = $_;
-    Dongry::Type->serialize ('text', $_->{account_id});
-  } grep { defined $_->{account_id} } @$items;
-  return $items unless @account_id;
+  my $id_to_json = {};
+  my @id = map {
+    $id_to_json->{$_->{$id_key}} = $_;
+    Dongry::Type->serialize ('text', $_->{$id_key});
+  } grep { defined $_->{$id_key} } @$items;
+  return $items unless @id;
 
   my @field = map { Dongry::Type->serialize ('text', $_) } $app->text_param_list ('with_data')->to_list;
   return $items unless @field;
 
-  return $app->db->select ('account_data', {
-    account_id => {-in => \@account_id},
+  return $app->db->select ($table_name, {
+    $id_key => {-in => \@id},
     key => {-in => \@field},
   }, source_name => 'master')->then (sub {
     for (@{$_[0]->all}) {
-      my $json = $account_id_to_json->{$_->{account_id}};
+      my $json = $id_to_json->{$_->{$id_key}};
       $json->{data}->{$_->{key}} = Dongry::Type->parse ('text', $_->{value})
           if defined $_->{value} and length $_->{value};
     }
@@ -1147,11 +1152,135 @@ sub load_data ($$$) {
   });
 } # load_data
 
+sub group ($$$) {
+  my ($class, $app, $path) = @_;
+
+  if (@$path == 2 and $path->[1] eq 'create') {
+    ## /group/create - create a group
+    ##
+    ## With
+    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   owner_status  A 7-bit positive integer of the group's |owner_status|.
+    ##                 Default is 1.
+    ##   admin_status  A 7-bit positive integer of the group's |admin_status|.
+    ##                 Default is 1.
+    ##
+    ## Returns
+    ##   sk_context    Same as |sk_context|, for convenience.
+    ##   group_id      A 64-bit non-negative integer identifying the group.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $sk_context = $app->bare_param ('sk_context')
+        // return $app->throw_error (400, reason_phrase => 'No |sk_context|');
+    return $app->db->execute ('select uuid_short() as uuid', undef, source_name => 'master')->then (sub {
+      my $group_id = $_[0]->first->{uuid};
+      my $time = time;
+      return $app->db->insert ('group', [{
+        sk_context => $sk_context,
+        group_id => $group_id,
+        created => $time,
+        updated => $time,
+        owner_status => $app->bare_param ('owner_status') // 1, # open
+        admin_status => $app->bare_param ('admin_status') // 1, # open
+      }])->then (sub {
+        return $app->send_json ({
+          sk_context => $sk_context,
+          group_id => ''.$group_id,
+        });
+      });
+    });
+  } # /group/create
+
+  if (@$path == 2 and $path->[1] eq 'data') {
+    ## /group/data - Write group data
+    ##
+    ## With
+    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   group_id    The group ID.  Required.
+    ##   name (0+)   The keys of data pairs.  A key is an ASCII string.
+    ##   value (0+)  The values of data pairs.  There must be same number
+    ##               of |value|s as |name|s.  A value is a Unicode string.
+    ##               An empty string is equivalent to missing.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $group_id = $app->bare_param ('group_id')
+        or return $app->throw_error (400, reason_phrase => 'Bad |group_id|');
+    return $app->db->select ('group', {
+      sk_context => $app->bare_param ('sk_context'),
+      group_id => $group_id,
+    }, fields => ['group_id'], source_name => 'master')->then (sub {
+      my $x = ($_[0]->first or {})->{group_id};
+      return $app->throw_error (404, reason_phrase => '|group_id| not found')
+          unless $x and $x eq $group_id;
+
+      my $time = time;
+      my $names = $app->text_param_list ('name');
+      my $values = $app->text_param_list ('value');
+      my @data;
+      for (0..$#$names) {
+        push @data, {
+          group_id => $group_id,
+          key => Dongry::Type->serialize ('text', $names->[$_]),
+          value => Dongry::Type->serialize ('text', $values->[$_]),
+          created => $time,
+          updated => $time,
+        } if defined $values->[$_];
+      }
+      if (@data) {
+        return $app->db->insert ('group_data', \@data, duplicate => {
+          value => $app->db->bare_sql_fragment ('VALUES(`value`)'),
+          updated => $app->db->bare_sql_fragment ('VALUES(`updated`)'),
+        });
+      }
+    })->then (sub {
+      return $app->send_json ({});
+    });
+  } # /group/data
+
+  if (@$path == 2 and $path->[1] eq 'profiles') {
+    ## /group/profiles - Get group data
+    ##
+    ## With
+    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   group_id (0..)      Group IDs
+    ##   owner_status (0..)  Filtering by |owner_status| values
+    ##   admin_status (0..)  Filtering by |admin_status| values
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    my $group_ids = $app->bare_param_list ('group_id');
+    my $os = $app->bare_param_list ('owner_status');
+    my $as = $app->bare_param_list ('admin_status');
+    return Promise->resolve->then (sub {
+      return [] unless @$group_ids;
+      return $app->db->select ('group', {
+        sk_context => $app->bare_param ('sk_context'),
+        group_id => {-in => $group_ids},
+        (@$os ? (owner_status => {-in => $os}) : ()),
+        (@$as ? (admin_status => {-in => $as}) : ()),
+      }, source_name => 'master', fields => ['group_id', 'created', 'updated', 'admin_status', 'owner_status'])->then (sub {
+        return $_[0]->all->to_a;
+      });
+    })->then (sub {
+      return $class->load_data ($app, 'group_data', 'group_id', $_[0]);
+    })->then (sub {
+      return $app->send_json ({
+        groups => {map {
+          $_->{group_id} .= '';
+          $_->{group_id} => $_;
+        } @{$_[0]}},
+      });
+    });
+  } # /group/profiles
+
+  return $app->throw_error (404);
+} # group
+
 1;
 
 =head1 LICENSE
 
-Copyright 2007-2015 Wakaba <wakaba@suikawiki.org>.
+Copyright 2007-2017 Wakaba <wakaba@suikawiki.org>.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
