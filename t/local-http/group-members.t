@@ -181,6 +181,51 @@ Test {
   });
 } wait => $wait, n => 22, name => '/group/members paging';
 
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {})->then (sub {
+    return $current->create_account (a2 => {});
+  })->then (sub {
+    return $current->create_group (g1 => {members => ['a1', 'a2']});
+  })->then (sub {
+    return $current->post (['group', 'member', 'data'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      account_id => $current->o ('a1')->{account_id},
+      name => ["x{5000}"],
+      value => ["\x{40000}"],
+    });
+  })->then (sub {
+    return $current->post (['group', 'member', 'data'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      account_id => $current->o ('a2')->{account_id},
+      name => ["abc"],
+      value => ["0"],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+    } $current->context;
+    return $current->post (['group', 'members'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      with_data => ["x{5000}", "abc"],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      my $g1 = $result->{json}->{members}->{$current->o ('a1')->{account_id}};
+      is $g1->{data}->{"x{5000}"}, "\x{40000}";
+      is $g1->{data}->{abc}, undef;
+      my $g2 = $result->{json}->{members}->{$current->o ('a2')->{account_id}};
+      is $g2->{data}->{"x{5000}"}, undef;
+      is $g2->{data}->{abc}, "0";
+    } $current->context;
+  });
+} wait => $wait, n => 5, name => '/group/members with data';
+
 run_tests;
 stop_web_server;
 

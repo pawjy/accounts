@@ -668,7 +668,7 @@ sub main ($$) {
       })->then (sub {
         return $class->load_linked ($app => [$_[0]]);
       })->then (sub {
-        return $class->load_data ($app, 'account_data', 'account_id', $_[0]);
+        return $class->load_data ($app, 'account_data', 'account_id', undef, undef, $_[0]);
       })->then (sub {
         return $app->send_json ($_[0]->[0]);
       });
@@ -703,7 +703,7 @@ sub main ($$) {
         };
       } @{$_[0]}]);
     })->then (sub {
-      return $class->load_data ($app, 'account_data', 'account_id', $_[0]);
+      return $class->load_data ($app, 'account_data', 'account_id', undef, undef, $_[0]);
     })->then (sub {
       return $app->send_json ({
         accounts => {map { $_->{account_id} => $_ } @{$_[0]}},
@@ -1126,8 +1126,8 @@ sub load_linked ($$$) {
   });
 } # load_linked
 
-sub load_data ($$$$$) {
-  my ($class, $app, $table_name, $id_key, $items) = @_;
+sub load_data ($$$$$$$) {
+  my ($class, $app, $table_name, $id_key, $id2_key, $id2_value, $items) = @_;
 
   my $id_to_json = {};
   my @id = map {
@@ -1141,6 +1141,7 @@ sub load_data ($$$$$) {
 
   return $app->db->select ($table_name, {
     $id_key => {-in => \@id},
+    (defined $id2_key ? ($id2_key => $id2_value) : ()),
     key => {-in => \@field},
   }, source_name => 'master')->then (sub {
     for (@{$_[0]->all}) {
@@ -1421,7 +1422,7 @@ sub group ($$$) {
         return $_[0]->all->to_a;
       });
     })->then (sub {
-      return $class->load_data ($app, 'group_data', 'group_id', $_[0]);
+      return $class->load_data ($app, 'group_data', 'group_id', undef, undef, $_[0]);
     })->then (sub {
       return $app->send_json ({
         groups => {map {
@@ -1433,27 +1434,7 @@ sub group ($$$) {
   } # /group/profiles
 
 
-  if (@$path == 3 and
-      $path->[1] eq 'member' and
-      $path->[2] eq 'status') {
-    ## /group/member/status - Set status fields of a group member
-    ##
-    ## With
-    ##   context_key    An opaque string identifying the application.  Required.
-    ##   group_id      A group ID.  Required.
-    ##   account_id    An account ID.  Required.
-    ##   member_type   New member type.  A 7-bit non-negative integer.
-    ##                 Default is "unchanged".
-    ##   owner_status  New owner status.  A 7-bit non-negative integer.
-    ##                 Default is "unchanged".
-    ##   user_status   New user status.  A 7-bit non-negative integer.
-    ##                 Default is "unchanged".
-    ##
-    ## If there is no group member record, a new record is created.
-    ## When a new record is created, the fields are set to |0| unless
-    ## otherwise specified.
-    $app->requires_request_method ({POST => 1});
-    $app->requires_api_key;
+  if (@$path >= 3 and $path->[1] eq 'member') {
     my $context = $app->bare_param ('context_key');
     my $group_id = $app->bare_param ('group_id');
     my $account_id = $app->bare_param ('account_id');
@@ -1471,44 +1452,107 @@ sub group ($$$) {
       return $app->throw_error (404, reason_phrase => 'Bad |account_id|')
           unless $_[0]->[1]->first;
 
-      my $mt = $app->bare_param ('member_type');
-      my $os = $app->bare_param ('owner_status');
-      my $us = $app->bare_param ('user_status');
-      my $time = time;
-      return $app->db->insert ('group_member', [{
-        context_key => $context,
-        group_id => $group_id,
-        account_id => $account_id,
-        created => $time,
-        updated => $time,
-        member_type => $mt // 0,
-        owner_status => $os // 0,
-        user_status => $us // 0,
-      }], duplicate => {
-        updated => $app->db->bare_sql_fragment ('values(`updated`)'),
-        (defined $mt ? (member_type => $app->db->bare_sql_fragment ('values(`member_type`)')) : ()),
-        (defined $os ? (owner_status => $app->db->bare_sql_fragment ('values(`owner_status`)')) : ()),
-        (defined $us ? (user_status => $app->db->bare_sql_fragment ('values(`user_status`)')) : ()),
-      });
-    })->then (sub {
-      return $app->send_json ({});
+      if (@$path == 3 and $path->[2] eq 'status') {
+        ## /group/member/status - Set status fields of a group member
+        ##
+        ## With
+        ##   context_key   An opaque string identifying the application.
+        ##                 Required.
+        ##   group_id      A group ID.  Required.
+        ##   account_id    An account ID.  Required.
+        ##   member_type   New member type.  A 7-bit non-negative integer.
+        ##                 Default is "unchanged".
+        ##   owner_status  New owner status.  A 7-bit non-negative integer.
+        ##                 Default is "unchanged".
+        ##   user_status   New user status.  A 7-bit non-negative integer.
+        ##                 Default is "unchanged".
+        ##
+        ## If there is no group member record, a new record is
+        ## created.  When a new record is created, the fields are set
+        ## to |0| unless otherwise specified.
+        $app->requires_request_method ({POST => 1});
+        $app->requires_api_key;
+
+        my $mt = $app->bare_param ('member_type');
+        my $os = $app->bare_param ('owner_status');
+        my $us = $app->bare_param ('user_status');
+        my $time = time;
+        return $app->db->insert ('group_member', [{
+          context_key => $context,
+          group_id => $group_id,
+          account_id => $account_id,
+          created => $time,
+          updated => $time,
+          member_type => $mt // 0,
+          owner_status => $os // 0,
+          user_status => $us // 0,
+        }], duplicate => {
+          updated => $app->db->bare_sql_fragment ('values(`updated`)'),
+          (defined $mt ? (member_type => $app->db->bare_sql_fragment ('values(`member_type`)')) : ()),
+          (defined $os ? (owner_status => $app->db->bare_sql_fragment ('values(`owner_status`)')) : ()),
+          (defined $us ? (user_status => $app->db->bare_sql_fragment ('values(`user_status`)')) : ()),
+        })->then (sub {
+          return $app->send_json ({});
+        });
+      } # /group/member/status
+
+      if (@$path == 3 and $path->[2] eq 'data') {
+        ## /group/member/data - Write group member data
+        ##
+        ## With
+        ##   context_key   An opaque string identifying the application.
+        ##                 Required.
+        ##   group_id      A group ID.  Required.
+        ##   account_id    An account ID.  Required.
+        ##   name (0+)   The keys of data pairs.  A key is an ASCII string.
+        ##   value (0+)  The values of data pairs.  There must be same number
+        ##               of |value|s as |name|s.  A value is a Unicode string.
+        ##               An empty string is equivalent to missing.
+        $app->requires_request_method ({POST => 1});
+        $app->requires_api_key;
+
+        my $time = time;
+        my $names = $app->text_param_list ('name');
+        my $values = $app->text_param_list ('value');
+        my @data;
+        for (0..$#$names) {
+          push @data, {
+            group_id => $group_id,
+            account_id => $account_id,
+            key => Dongry::Type->serialize ('text', $names->[$_]),
+            value => Dongry::Type->serialize ('text', $values->[$_]),
+            created => $time,
+            updated => $time,
+          } if defined $values->[$_];
+        }
+        return Promise->resolve->then (sub {
+          return unless @data;
+          return $app->db->insert ('group_member_data', \@data, duplicate => {
+            value => $app->db->bare_sql_fragment ('VALUES(`value`)'),
+            updated => $app->db->bare_sql_fragment ('VALUES(`updated`)'),
+          });
+        })->then (sub {
+          return $app->send_json ({});
+        });
+      } # /group/member/data
     });
-  } # /group/member/status
+  } # /group/member
 
   if (@$path == 2 and $path->[1] eq 'members') {
     ## /group/members - List of group members
     ##
     ## With
-    ##   context_ke    An opaque string identifying the application.  Required.
+    ##   context_key   An opaque string identifying the application.  Required.
     ##   group_id      A group ID.  Required.
     ##
     ## Supports paging
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
     my $page = this_page ($app, limit => 100, max_limit => 100);
+    my $group_id = $app->bare_param ('group_id');
     return $app->db->select ('group_member', {
       context_key => $app->bare_param ('context_key'),
-      group_id => $app->bare_param ('group_id'),
+      group_id => $group_id,
       (defined $page->{value} ? (created => $page->{value}) : ()),
     }, fields => ['account_id', 'created', 'updated',
                   'user_status', 'owner_status', 'member_type'],
@@ -1516,12 +1560,14 @@ sub group ($$$) {
       offset => $page->{offset}, limit => $page->{limit},
       order => ['created', $page->{order_direction}],
     )->then (sub {
+      my $members = $_[0]->all;
+      return $class->load_data ($app, 'group_member_data', 'account_id', 'group_id' => $group_id, $members);
+    })->then (sub {
       my $members = {map {
         $_->{account_id} .= '';
         ($_->{account_id} => $_);
-      } @{$_[0]->all}};
+      } @{$_[0]}};
       my $next_page = next_page $page, $members, 'created';
-# XXX load_data
       return $app->send_json ({members => $members, %$next_page});
     });
   } # /group/members
