@@ -1237,6 +1237,84 @@ sub group ($$$) {
     });
   } # /group/data
 
+  if (@$path == 2 and $path->[1] eq 'touch') {
+    ## /group/touch - Update the timestamp of a group
+    ##
+    ## With
+    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   group_id      The group ID.  Required.
+    ##
+    ## Returns
+    ##   changed       If a group is updated, |1|.  Otherwise, |0|.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $time = time;
+    return $app->db->update ('group', {
+      updated => $time,
+    }, where => {
+      sk_context => $app->bare_param ('sk_context'),
+      group_id => $app->bare_param ('group_id'),
+      updated => {'<', $time},
+    })->then (sub {
+      my $result = $_[0];
+      return $app->send_json ({changed => $result->row_count});
+    });
+  } # /group/touch
+
+  if (@$path == 2 and $path->[1] eq 'owner_status') {
+    ## /group/owner_status - Set the |owner_status| of the group
+    ##
+    ## With
+    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   group_id      The group ID.  Required.
+    ##   owner_status  The new |owner_status| value.  A 7-bit positive integer.
+    ##                 Required.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $time = time;
+    my $os = $app->bare_param ('owner_status')
+        or return $app->throw_error (400, reason_phrase => 'Bad |owner_status|');
+    return $app->db->update ('group', {
+      owner_status => $os,
+      updated => $time,
+    }, where => {
+      sk_context => $app->bare_param ('sk_context'),
+      group_id => $app->bare_param ('group_id'),
+    })->then (sub {
+      my $result = $_[0];
+      return $app->throw_error (404, reason_phrase => 'Group not found')
+          unless $result->row_count == 1;
+      return $app->send_json ({});
+    });
+  } # /group/owner_status
+
+  if (@$path == 2 and $path->[1] eq 'admin_status') {
+    ## /group/admin_status - Set the |admin_status| of the group
+    ##
+    ## With
+    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   group_id      The group ID.  Required.
+    ##   admin_status  The new |admin_status| value.  A 7-bit positive integer.
+    ##                 Required.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $time = time;
+    my $as = $app->bare_param ('admin_status')
+        or return $app->throw_error (400, reason_phrase => 'Bad |admin_status|');
+    return $app->db->update ('group', {
+      admin_status => $as,
+      updated => $time,
+    }, where => {
+      sk_context => $app->bare_param ('sk_context'),
+      group_id => $app->bare_param ('group_id'),
+    })->then (sub {
+      my $result = $_[0];
+      return $app->throw_error (404, reason_phrase => 'Group not found')
+          unless $result->row_count == 1;
+      return $app->send_json ({});
+    });
+  } # /group/admin_status
+
   if (@$path == 2 and $path->[1] eq 'profiles') {
     ## /group/profiles - Get group data
     ##
