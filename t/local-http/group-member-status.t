@@ -62,7 +62,7 @@ Test {
       })->then (sub {
         my $result = $_[0];
         test {
-          my $m1 = $result->{json}->{members}->{$current->o ('a1')->{account_id}};
+          my $m1 = $result->{json}->{memberships}->{$current->o ('a1')->{account_id}};
           is $m1->{account_id}, $current->o ('a1')->{account_id};
           like $result->{res}->content, qr{"account_id"\s*:\s*"};
           ok $m1->{created};

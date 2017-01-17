@@ -1194,9 +1194,11 @@ sub next_page ($$$) {
   my ($this_page, $items, $value_key) = @_;
   my $next_page = {};
   my $sign = $this_page->{order_direction} eq 'ASC' ? '+' : '-';
+  my $values = {};
+  $values->{$this_page->{value}} = $this_page->{offset}
+      if defined $this_page->{value};
   if (ref $items eq 'ARRAY') {
     if (@$items) {
-      my $values = {};
       my $last_value = $items->[0]->{$_->{$value_key}};
       for (@$items) {
         $values->{$_->{$value_key}}++;
@@ -1214,7 +1216,6 @@ sub next_page ($$$) {
     }
   } else { # HASH
     if (keys %$items) {
-      my $values = {};
       my $last_value = $items->{each %$items}->{$value_key};
       for (values %$items) {
         $values->{$_->{$value_key}}++;
@@ -1545,6 +1546,9 @@ sub group ($$$) {
     ##   context_key   An opaque string identifying the application.  Required.
     ##   group_id      A group ID.  Required.
     ##
+    ## Returns
+    ##   memberships   Object of (account_id, group member object)
+    ##
     ## Supports paging
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
@@ -1568,9 +1572,46 @@ sub group ($$$) {
         ($_->{account_id} => $_);
       } @{$_[0]}};
       my $next_page = next_page $page, $members, 'created';
-      return $app->send_json ({members => $members, %$next_page});
+      return $app->send_json ({memberships => $members, %$next_page});
     });
   } # /group/members
+
+  if (@$path == 2 and $path->[1] eq 'byaccount') {
+    ## /group/byaccount - List of groups by account
+    ##
+    ## With
+    ##   context_key   An opaque string identifying the application.  Required.
+    ##   account_id    An account ID.  Required.
+    ##
+    ## Returns
+    ##   memberships   Object of (group_id, group member object)
+    ##
+    ## Supports paging
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $page = this_page ($app, limit => 100, max_limit => 100);
+    my $account_id = $app->bare_param ('account_id');
+    return $app->db->select ('group_member', {
+      context_key => $app->bare_param ('context_key'),
+      account_id => $account_id,
+      (defined $page->{value} ? (updated => $page->{value}) : ()),
+    }, fields => ['group_id', 'created', 'updated',
+                  'user_status', 'owner_status', 'member_type'],
+      source_name => 'master',
+      offset => $page->{offset}, limit => $page->{limit},
+      order => ['updated', $page->{order_direction}],
+    )->then (sub {
+      my $groups = $_[0]->all;
+      return $class->load_data ($app, 'group_member_data', 'group_id', 'account_id' => $account_id, $groups);
+    })->then (sub {
+      my $groups = {map {
+        $_->{group_id} .= '';
+        ($_->{group_id} => $_);
+      } @{$_[0]}};
+      my $next_page = next_page $page, $groups, 'updated';
+      return $app->send_json ({memberships => $groups, %$next_page});
+    });
+  } # /group/byaccount
 
   return $app->throw_error (404);
 } # group

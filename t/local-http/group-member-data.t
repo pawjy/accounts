@@ -69,7 +69,7 @@ Test {
   })->then (sub {
     my $result = $_[0];
     test {
-      my $g = $result->{json}->{members}->{$current->o ('a1')->{account_id}};
+      my $g = $result->{json}->{memberships}->{$current->o ('a1')->{account_id}};
       is $g->{data}->{"x{5000}"}, "\x{40000}";
       is $g->{data}->{abc}, "0";
     } $current->context;
@@ -111,7 +111,7 @@ Test {
   })->then (sub {
     my $result = $_[0];
     test {
-      my $g = $result->{json}->{members}->{$current->o ('a1')->{account_id}};
+      my $g = $result->{json}->{memberships}->{$current->o ('a1')->{account_id}};
       is $g->{data}->{"x{5000}"}, "\x{40000}";
       is $g->{data}->{abc}, undef;
     } $current->context;
