@@ -1351,6 +1351,91 @@ sub group ($$$) {
     });
   } # /group/profiles
 
+
+  if (@$path == 3 and
+      $path->[1] eq 'member' and
+      $path->[2] eq 'status') {
+    ## /group/member/status - Set status fields of a group member
+    ##
+    ## With
+    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   group_id      A group ID.  Required.
+    ##   account_id    An account ID.  Required.
+    ##   member_type   New member type.  A 7-bit non-negative integer.
+    ##                 Default is "unchanged".
+    ##   owner_status  New owner status.  A 7-bit non-negative integer.
+    ##                 Default is "unchanged".
+    ##   user_status   New user status.  A 7-bit non-negative integer.
+    ##                 Default is "unchanged".
+    ##
+    ## If there is no group member record, a new record is created.
+    ## When a new record is created, the fields are set to |0| unless
+    ## otherwise specified.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $context = $app->bare_param ('sk_context');
+    my $group_id = $app->bare_param ('group_id');
+    my $account_id = $app->bare_param ('account_id');
+    return Promise->all ([
+      $app->db->select ('group', {
+        sk_context => $context,
+        group_id => $group_id,
+      }, fields => ['group_id'], source_name => 'master'),
+      $app->db->select ('account', {
+        account_id => $account_id,
+      }, fields => ['account_id'], source_name => 'master'),
+    ])->then (sub {
+      return $app->throw_error (404, reason_phrase => 'Bad |group_id|')
+          unless $_[0]->[0]->first;
+      return $app->throw_error (404, reason_phrase => 'Bad |account_id|')
+          unless $_[0]->[1]->first;
+
+      my $mt = $app->bare_param ('member_type');
+      my $os = $app->bare_param ('owner_status');
+      my $us = $app->bare_param ('user_status');
+      my $time = time;
+      return $app->db->insert ('group_member', [{
+        sk_context => $context,
+        group_id => $group_id,
+        account_id => $account_id,
+        created => $time,
+        updated => $time,
+        member_type => $mt // 0,
+        owner_status => $os // 0,
+        user_status => $us // 0,
+      }], duplicate => {
+        updated => $app->db->bare_sql_fragment ('values(`updated`)'),
+        (defined $mt ? (member_type => $app->db->bare_sql_fragment ('values(`member_type`)')) : ()),
+        (defined $os ? (owner_status => $app->db->bare_sql_fragment ('values(`owner_status`)')) : ()),
+        (defined $us ? (user_status => $app->db->bare_sql_fragment ('values(`user_status`)')) : ()),
+      });
+    })->then (sub {
+      return $app->send_json ({});
+    });
+  } # /group/member/status
+
+  if (@$path == 2 and $path->[1] eq 'members') {
+    ## /group/members - List of group members
+    ##
+    ## With
+    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   group_id      A group ID.  Required.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    # XXX paging
+    return $app->db->select ('group_member', {
+      sk_context => $app->bare_param ('sk_context'),
+      group_id => $app->bare_param ('group_id'),
+    }, fields => ['account_id', 'created', 'updated',
+                  'user_status', 'owner_status', 'member_type'], source_name => 'master')->then (sub {
+# XXX load_data
+      return $app->send_json ({members => {map {
+        $_->{account_id} .= '';
+        ($_->{account_id} => $_);
+      } @{$_[0]->all}}});
+    });
+  } # /group/members
+
   return $app->throw_error (404);
 } # group
 

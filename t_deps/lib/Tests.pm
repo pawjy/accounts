@@ -789,13 +789,25 @@ sub create_session ($$;%) {
   });
 } # create_session
 
+sub create_account ($$$) {
+  my ($self, $name, $opts) = @_;
+  return $self->post (['session'], {})->then (sub {
+    my $result = $_[0];
+    die $result->{res} unless $result->{status} == 200;
+    return $self->post (['create'], $result->{json});
+  })->then (sub {
+    my $result = $_[0];
+    $self->{objects}->{$name} = $result->{json}; # {account_id => }
+  });
+} # create_account
+
 sub create_group ($$$) {
   my ($self, $name => $opts) = @_;
   $opts->{sk_context} //= rand;
   return $self->post (['group', 'create'], $opts)->then (sub {
     my $result = $_[0];
     die $result unless $result->{status} == 200;
-    $self->{objects}->{$name} = $result->{json};
+    $self->{objects}->{$name} = $result->{json}; # {sk_context, group_id}
     my $names = [];
     my $values = [];
     for (keys %{$opts->{data} or {}}) {
