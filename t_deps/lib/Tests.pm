@@ -803,11 +803,11 @@ sub create_account ($$$) {
 
 sub create_group ($$$) {
   my ($self, $name => $opts) = @_;
-  $opts->{sk_context} //= rand;
+  $opts->{context_key} //= rand;
   return $self->post (['group', 'create'], $opts)->then (sub {
     my $result = $_[0];
     die $result unless $result->{status} == 200;
-    $self->{objects}->{$name} = $result->{json}; # {sk_context, group_id}
+    $self->{objects}->{$name} = $result->{json}; # {context_key, group_id}
     my $names = [];
     my $values = [];
     for (keys %{$opts->{data} or {}}) {
@@ -816,7 +816,7 @@ sub create_group ($$$) {
     }
     return unless @$names;
     return $self->post (['group', 'data'], {
-      sk_context => $opts->{sk_context},
+      context_key => $opts->{context_key},
       group_id => $result->{json}->{group_id},
       name => $names,
       value => $values,

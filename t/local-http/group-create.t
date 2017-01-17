@@ -11,7 +11,7 @@ Test {
   my $context = rand;
   my $group_id;
   return $current->are_errors (
-    [['group', 'create'], {sk_context => $context}],
+    [['group', 'create'], {context_key => $context}],
     [
       {bearer => undef, status => 401},
       {bearer => rand, status => 401},
@@ -20,7 +20,7 @@ Test {
     ],
   )->then (sub {
     return $current->post (['group', 'create'], {
-      sk_context => $context,
+      context_key => $context,
     });
   })->then (sub {
     my $result = $_[0];
@@ -28,11 +28,11 @@ Test {
       is $result->{status}, 200;
       ok $group_id = $result->{json}->{group_id};
       like $result->{res}->content, qr{"group_id"\s*:\s*"};
-      is $result->{json}->{sk_context}, $context;
+      is $result->{json}->{context_key}, $context;
     } $current->context;
     return $current->post (['group', 'profiles'], {
       group_id => $group_id,
-      sk_context => $context,
+      context_key => $context,
     });
   })->then (sub {
     my $result = $_[0];

@@ -13,7 +13,7 @@ Test {
   })->then (sub {
     return $current->are_errors (
       [['group', 'member', 'status'], {
-        sk_context => $current->o ('g1')->{sk_context},
+        context_key => $current->o ('g1')->{context_key},
         group_id => $current->o ('g1')->{group_id},
         account_id => $current->o ('a1')->{account_id},
       }],
@@ -22,11 +22,11 @@ Test {
         {bearer => rand, status => 401, name => 'bad bearer'},
         {method => 'GET', status => 405, name => 'bad method'},
         {params => {
-          sk_context => $current->o ('g1')->{sk_context},
+          context_key => $current->o ('g1')->{context_key},
           group_id => $current->o ('g1')->{group_id},
         }, status => 404},
         {params => {
-          sk_context => $current->o ('g1')->{sk_context},
+          context_key => $current->o ('g1')->{context_key},
           account_id => $current->o ('a1')->{account_id},
         }, status => 404},
         {params => {
@@ -34,7 +34,7 @@ Test {
           account_id => $current->o ('a1')->{account_id},
         }, status => 404},
         {params => {
-          sk_context => rand,
+          context_key => rand,
           group_id => $current->o ('g1')->{group_id},
           account_id => $current->o ('a1')->{account_id},
         }, status => 404},
@@ -44,7 +44,7 @@ Test {
     return promised_for {
       my ($params, $expected, $name) = @{$_[0]};
       return $current->post (['group', 'member', 'status'], {
-        sk_context => $current->o ('g1')->{sk_context},
+        context_key => $current->o ('g1')->{context_key},
         group_id => $current->o ('g1')->{group_id},
         account_id => $current->o ('a1')->{account_id},
         member_type => $params->[0],
@@ -56,7 +56,7 @@ Test {
           is $result->{status}, 200;
         } $current->context, name => $name;
         return $current->post (['group', 'members'], {
-          sk_context => $current->o ('g1')->{sk_context},
+          context_key => $current->o ('g1')->{context_key},
           group_id => $current->o ('g1')->{group_id},
         });
       })->then (sub {

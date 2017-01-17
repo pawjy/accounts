@@ -11,7 +11,7 @@ Test {
   return $current->create_group (g1 => {})->then (sub {
     return $current->are_errors (
       [['group', 'owner_status'], {
-        sk_context => $current->o ('g1')->{sk_context},
+        context_key => $current->o ('g1')->{context_key},
         group_id => $current->o ('g1')->{group_id},
         owner_status => 4,
       }],
@@ -21,11 +21,11 @@ Test {
         {method => 'GET', status => 405, name => 'bad method'},
         {params => {owner_status => 4}, status => 404},
         {params => {
-          sk_context => $current->o ('g1')->{sk_context},
+          context_key => $current->o ('g1')->{context_key},
           owner_status => 4,
         }, status => 404},
         {params => {
-          sk_context => $current->o ('g1')->{sk_context},
+          context_key => $current->o ('g1')->{context_key},
           group_id => int rand 100000000,
           owner_status => 4,
         }, status => 404},
@@ -34,16 +34,16 @@ Test {
           owner_status => 4,
         }, status => 404},
         {params => {
-          sk_context => rand,
+          context_key => rand,
           group_id => $current->o ('g1')->{group_id},
           owner_status => 4,
         }, status => 404},
         {params => {
-          sk_context => $current->o ('g1')->{sk_context},
+          context_key => $current->o ('g1')->{context_key},
           group_id => $current->o ('g1')->{group_id},
         }, status => 400},
         {params => {
-          sk_context => $current->o ('g1')->{sk_context},
+          context_key => $current->o ('g1')->{context_key},
           group_id => $current->o ('g1')->{group_id},
           owner_status => 0,
         }, status => 400},
@@ -51,7 +51,7 @@ Test {
     );
   })->then (sub {
     return $current->post (['group', 'owner_status'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
       owner_status => 6,
     });
@@ -61,7 +61,7 @@ Test {
       is $result->{status}, 200;
     } $current->context;
     return $current->post (['group', 'profiles'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
     });
   })->then (sub {
@@ -76,12 +76,12 @@ Test {
 Test {
   my $current = shift;
   return $current->post (['group', 'create'], {
-    sk_context => rand,
+    context_key => rand,
     owner_status => 7,
   })->then (sub {
     my $result = $_[0];
     return $current->post (['group', 'profiles'], {
-      sk_context => $result->{json}->{sk_context},
+      context_key => $result->{json}->{context_key},
       group_id => $result->{json}->{group_id},
     })->then (sub {
       my $result2 = $_[0];

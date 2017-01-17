@@ -11,7 +11,7 @@ Test {
   return $current->create_group (g1 => {})->then (sub {
     return $current->are_errors (
       [['group', 'touch'], {
-        sk_context => $current->o ('g1')->{sk_context},
+        context_key => $current->o ('g1')->{context_key},
         group_id => $current->o ('g1')->{group_id},
       }],
       [
@@ -33,23 +33,23 @@ Test {
     } [
       {},
       {
-        sk_context => $current->o ('g1')->{sk_context},
+        context_key => $current->o ('g1')->{context_key},
       },
       {
-        sk_context => $current->o ('g1')->{sk_context},
+        context_key => $current->o ('g1')->{context_key},
         group_id => int rand 100000000,
       },
       {
         group_id => $current->o ('g1')->{group_id},
       },
       {
-        sk_context => rand,
+        context_key => rand,
         group_id => $current->o ('g1')->{group_id},
       },
     ];
   })->then (sub {
     return $current->post (['group', 'touch'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
     });
   })->then (sub {
@@ -59,7 +59,7 @@ Test {
       is $result->{json}->{changed}, 1;
     } $current->context;
     return $current->post (['group', 'profiles'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
     });
   })->then (sub {
@@ -70,11 +70,11 @@ Test {
     } $current->context;
     my $t1 = $g1->{updated};
     return $current->post (['group', 'touch'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
     })->then (sub {
       return $current->post (['group', 'profiles'], {
-        sk_context => $current->o ('g1')->{sk_context},
+        context_key => $current->o ('g1')->{context_key},
         group_id => $current->o ('g1')->{group_id},
       });
     })->then (sub {

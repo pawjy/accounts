@@ -11,7 +11,7 @@ Test {
   return $current->create_group (g1 => {})->then (sub {
     return $current->are_errors (
       [['group', 'profiles'], {
-        sk_context => $current->o ('g1')->{sk_context},
+        context_key => $current->o ('g1')->{context_key},
         group_id => $current->o ('g1')->{group_id},
       }],
       [
@@ -33,17 +33,17 @@ Test {
     } [
       {},
       {
-        sk_context => $current->o ('g1')->{sk_context},
+        context_key => $current->o ('g1')->{context_key},
       },
       {
-        sk_context => $current->o ('g1')->{sk_context},
+        context_key => $current->o ('g1')->{context_key},
         group_id => int rand 100000000,
       },
       {
         group_id => $current->o ('g1')->{group_id},
       },
       {
-        sk_context => rand,
+        context_key => rand,
         group_id => $current->o ('g1')->{group_id},
       },
     ];
@@ -56,7 +56,7 @@ Test {
     return $current->create_group (g2 => {});
   })->then (sub {
     return $current->post (['group', 'profiles'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => [$current->o ('g1')->{group_id},
                    $current->o ('g2')->{group_id},
                    int rand 1000000],
@@ -82,11 +82,11 @@ Test {
   my $current = shift;
   return $current->create_group (g1 => {})->then (sub {
     return $current->create_group (g2 => {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
     });
   })->then (sub {
     return $current->post (['group', 'profiles'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => [$current->o ('g1')->{group_id},
                    $current->o ('g2')->{group_id},
                    int rand 1000000],
@@ -118,11 +118,11 @@ Test {
         foo => "abcde",
         bax => "5",
       },
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
     });
   })->then (sub {
     return $current->post (['group', 'profiles'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => [$current->o ('g1')->{group_id},
                    $current->o ('g2')->{group_id}],
       with_data => [qw(hoge foo bax abc)],

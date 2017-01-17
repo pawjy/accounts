@@ -11,7 +11,7 @@ Test {
   return $current->create_group (g1 => {})->then (sub {
     return $current->are_errors (
       [['group', 'data'], {
-        sk_context => $current->o ('g1')->{sk_context},
+        context_key => $current->o ('g1')->{context_key},
         group_id => $current->o ('g1')->{group_id},
         name => "x{5000}",
         value => "\x{50000}",
@@ -21,24 +21,24 @@ Test {
         {bearer => rand, status => 401},
         {method => 'GET', status => 405},
         {params => {
-          sk_context => $current->o ('g1')->{sk_context},
+          context_key => $current->o ('g1')->{context_key},
         }, status => 404},
         {params => {
-          sk_context => $current->o ('g1')->{sk_context},
+          context_key => $current->o ('g1')->{context_key},
           group_id => int rand 10000000,
         }, status => 404},
         {params => {
           group_id => $current->o ('g1')->{group_id},
         }, status => 404},
         {params => {
-          sk_context => rand,
+          context_key => rand,
           group_id => $current->o ('g1')->{group_id},
         }, status => 404},
       ],
     );
   })->then (sub {
     return $current->post (['group', 'data'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
       name => "x{5000}",
       value => "\x{40000}",
@@ -49,7 +49,7 @@ Test {
       is $result->{status}, 200;
     } $current->context;
     return $current->post (['group', 'profiles'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
       with_data => ["x{5000}"],
     });
@@ -60,7 +60,7 @@ Test {
       is $g->{data}->{"x{5000}"}, "\x{40000}";
     } $current->context;
     return $current->post (['group', 'data'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
       name => ["x{5000}", "hogefuga", ''],
       value => ["\x{30000}", 0, 'hoe'],
@@ -71,7 +71,7 @@ Test {
       is $result->{status}, 200;
     } $current->context;
     return $current->post (['group', 'data'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
     });
   })->then (sub {
@@ -80,7 +80,7 @@ Test {
       is $result->{status}, 200;
     } $current->context;
     return $current->post (['group', 'profiles'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
       with_data => ["x{5000}", "hogefuga", "", "abcde"],
     });
@@ -94,7 +94,7 @@ Test {
       is $g->{data}->{'abcde'}, undef;
     } $current->context;
     return $current->post (['group', 'data'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
       name => "hogefuga",
       value => "",
@@ -105,7 +105,7 @@ Test {
       is $result->{status}, 200;
     } $current->context;
     return $current->post (['group', 'profiles'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
       with_data => "hogefuga",
     });

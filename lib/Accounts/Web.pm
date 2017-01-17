@@ -1159,24 +1159,24 @@ sub group ($$$) {
     ## /group/create - create a group
     ##
     ## With
-    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   context_key    An opaque string identifying the application.  Required.
     ##   owner_status  A 7-bit positive integer of the group's |owner_status|.
     ##                 Default is 1.
     ##   admin_status  A 7-bit positive integer of the group's |admin_status|.
     ##                 Default is 1.
     ##
     ## Returns
-    ##   sk_context    Same as |sk_context|, for convenience.
+    ##   context_key    Same as |context_key|, for convenience.
     ##   group_id      A 64-bit non-negative integer identifying the group.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
-    my $sk_context = $app->bare_param ('sk_context')
-        // return $app->throw_error (400, reason_phrase => 'No |sk_context|');
+    my $context_key = $app->bare_param ('context_key')
+        // return $app->throw_error (400, reason_phrase => 'No |context_key|');
     return $app->db->execute ('select uuid_short() as uuid', undef, source_name => 'master')->then (sub {
       my $group_id = $_[0]->first->{uuid};
       my $time = time;
       return $app->db->insert ('group', [{
-        sk_context => $sk_context,
+        context_key => $context_key,
         group_id => $group_id,
         created => $time,
         updated => $time,
@@ -1184,7 +1184,7 @@ sub group ($$$) {
         admin_status => $app->bare_param ('admin_status') // 1, # open
       }])->then (sub {
         return $app->send_json ({
-          sk_context => $sk_context,
+          context_key => $context_key,
           group_id => ''.$group_id,
         });
       });
@@ -1195,7 +1195,7 @@ sub group ($$$) {
     ## /group/data - Write group data
     ##
     ## With
-    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   context_key    An opaque string identifying the application.  Required.
     ##   group_id    The group ID.  Required.
     ##   name (0+)   The keys of data pairs.  A key is an ASCII string.
     ##   value (0+)  The values of data pairs.  There must be same number
@@ -1206,7 +1206,7 @@ sub group ($$$) {
     my $group_id = $app->bare_param ('group_id')
         or return $app->throw_error (400, reason_phrase => 'Bad |group_id|');
     return $app->db->select ('group', {
-      sk_context => $app->bare_param ('sk_context'),
+      context_key => $app->bare_param ('context_key'),
       group_id => $group_id,
     }, fields => ['group_id'], source_name => 'master')->then (sub {
       my $x = ($_[0]->first or {})->{group_id};
@@ -1241,7 +1241,7 @@ sub group ($$$) {
     ## /group/touch - Update the timestamp of a group
     ##
     ## With
-    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   context_key    An opaque string identifying the application.  Required.
     ##   group_id      The group ID.  Required.
     ##
     ## Returns
@@ -1252,7 +1252,7 @@ sub group ($$$) {
     return $app->db->update ('group', {
       updated => $time,
     }, where => {
-      sk_context => $app->bare_param ('sk_context'),
+      context_key => $app->bare_param ('context_key'),
       group_id => $app->bare_param ('group_id'),
       updated => {'<', $time},
     })->then (sub {
@@ -1265,7 +1265,7 @@ sub group ($$$) {
     ## /group/owner_status - Set the |owner_status| of the group
     ##
     ## With
-    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   context_key    An opaque string identifying the application.  Required.
     ##   group_id      The group ID.  Required.
     ##   owner_status  The new |owner_status| value.  A 7-bit positive integer.
     ##                 Required.
@@ -1278,7 +1278,7 @@ sub group ($$$) {
       owner_status => $os,
       updated => $time,
     }, where => {
-      sk_context => $app->bare_param ('sk_context'),
+      context_key => $app->bare_param ('context_key'),
       group_id => $app->bare_param ('group_id'),
     })->then (sub {
       my $result = $_[0];
@@ -1292,7 +1292,7 @@ sub group ($$$) {
     ## /group/admin_status - Set the |admin_status| of the group
     ##
     ## With
-    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   context_key    An opaque string identifying the application.  Required.
     ##   group_id      The group ID.  Required.
     ##   admin_status  The new |admin_status| value.  A 7-bit positive integer.
     ##                 Required.
@@ -1305,7 +1305,7 @@ sub group ($$$) {
       admin_status => $as,
       updated => $time,
     }, where => {
-      sk_context => $app->bare_param ('sk_context'),
+      context_key => $app->bare_param ('context_key'),
       group_id => $app->bare_param ('group_id'),
     })->then (sub {
       my $result = $_[0];
@@ -1319,7 +1319,7 @@ sub group ($$$) {
     ## /group/profiles - Get group data
     ##
     ## With
-    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   context_key    An opaque string identifying the application.  Required.
     ##   group_id (0..)      Group IDs
     ##   owner_status (0..)  Filtering by |owner_status| values
     ##   admin_status (0..)  Filtering by |admin_status| values
@@ -1332,7 +1332,7 @@ sub group ($$$) {
     return Promise->resolve->then (sub {
       return [] unless @$group_ids;
       return $app->db->select ('group', {
-        sk_context => $app->bare_param ('sk_context'),
+        context_key => $app->bare_param ('context_key'),
         group_id => {-in => $group_ids},
         (@$os ? (owner_status => {-in => $os}) : ()),
         (@$as ? (admin_status => {-in => $as}) : ()),
@@ -1358,7 +1358,7 @@ sub group ($$$) {
     ## /group/member/status - Set status fields of a group member
     ##
     ## With
-    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   context_key    An opaque string identifying the application.  Required.
     ##   group_id      A group ID.  Required.
     ##   account_id    An account ID.  Required.
     ##   member_type   New member type.  A 7-bit non-negative integer.
@@ -1373,12 +1373,12 @@ sub group ($$$) {
     ## otherwise specified.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
-    my $context = $app->bare_param ('sk_context');
+    my $context = $app->bare_param ('context_key');
     my $group_id = $app->bare_param ('group_id');
     my $account_id = $app->bare_param ('account_id');
     return Promise->all ([
       $app->db->select ('group', {
-        sk_context => $context,
+        context_key => $context,
         group_id => $group_id,
       }, fields => ['group_id'], source_name => 'master'),
       $app->db->select ('account', {
@@ -1395,7 +1395,7 @@ sub group ($$$) {
       my $us = $app->bare_param ('user_status');
       my $time = time;
       return $app->db->insert ('group_member', [{
-        sk_context => $context,
+        context_key => $context,
         group_id => $group_id,
         account_id => $account_id,
         created => $time,
@@ -1418,13 +1418,13 @@ sub group ($$$) {
     ## /group/members - List of group members
     ##
     ## With
-    ##   sk_context    An opaque string identifying the application.  Required.
+    ##   context_key    An opaque string identifying the application.  Required.
     ##   group_id      A group ID.  Required.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
     # XXX paging
     return $app->db->select ('group_member', {
-      sk_context => $app->bare_param ('sk_context'),
+      context_key => $app->bare_param ('context_key'),
       group_id => $app->bare_param ('group_id'),
     }, fields => ['account_id', 'created', 'updated',
                   'user_status', 'owner_status', 'member_type'], source_name => 'master')->then (sub {

@@ -72,14 +72,14 @@ CREATE TABLE IF NOT EXISTS account_log (
 ) DEFAULT CHARSET=BINARY ENGINE=InnoDB;
 
 create table if not exists `group` (
-  `sk_context` VARBINARY(31),
+  `context_key` VARBINARY(31),
   `group_id` bigint unsigned not null,
   `created` double not null,
   `updated` double not null,
   `owner_status` TINYINT UNSIGNED NOT NULL,
   `admin_status` TINYINT UNSIGNED NOT NULL,
   primary key (`group_id`),
-  key (`sk_context`, `created`),
+  key (`context_key`, `created`),
   key (`created`),
   key (`updated`)
 ) default charset=binary engine=innodb;
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS `group_data` (
 ) DEFAULT CHARSET=BINARY ENGINE=InnoDB;
 
 create table if not exists `group_member` (
-  `sk_context` VARBINARY(31),
+  `context_key` VARBINARY(31),
   `group_id` bigint unsigned not null,
   `account_id` bigint unsigned not null,
   `created` double not null,

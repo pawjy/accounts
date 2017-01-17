@@ -14,7 +14,7 @@ Test {
     return $current->create_account (a2 => {});
   })->then (sub {
     return $current->post (['group', 'member', 'status'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
       account_id => $current->o ('a1')->{account_id},
       user_status => 5,
@@ -23,7 +23,7 @@ Test {
     });
   })->then (sub {
     return $current->post (['group', 'member', 'status'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
       account_id => $current->o ('a2')->{account_id},
       user_status => 4,
@@ -33,7 +33,7 @@ Test {
   })->then (sub {
     return $current->are_errors (
       [['group', 'members'], {
-        sk_context => $current->o ('g1')->{sk_context},
+        context_key => $current->o ('g1')->{context_key},
         group_id => $current->o ('g1')->{group_id},
       }],
       [
@@ -54,19 +54,19 @@ Test {
       });
     } [
       [{
-        sk_context => $current->o ('g1')->{sk_context},
-      }, "sk_context only"],
+        context_key => $current->o ('g1')->{context_key},
+      }, "context_key only"],
       [{
         group_id => $current->o ('g1')->{group_id},
       }, "group_id only"],
       [{
-        sk_context => rand,
+        context_key => rand,
         group_id => $current->o ('g1')->{group_id},
-      }, "bad sk_context"],
+      }, "bad context_key"],
     ];
   })->then (sub {
     return $current->post (['group', 'members'], {
-      sk_context => $current->o ('g1')->{sk_context},
+      context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
     });
   })->then (sub {
