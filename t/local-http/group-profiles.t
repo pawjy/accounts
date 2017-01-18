@@ -28,7 +28,7 @@ Test {
         test {
           is $result->{status}, 200;
           is 0+keys %{$result->{json}->{groups}}, 0;
-        } $current->context, name => 'Group not found';
+        } $current->c, name => 'Group not found';
       });
     } [
       {},
@@ -74,7 +74,7 @@ Test {
       is $g1->{owner_status}, 1;
       is $g1->{admin_status}, 1;
       is $g1->{data}, undef;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 9, name => '/group/profiles a group';
 
@@ -100,7 +100,7 @@ Test {
       is $g1->{group_id}, $current->o ('g1')->{group_id};
       my $g2 = $result->{json}->{groups}->{$current->o ('g2')->{group_id}};
       is $g2->{group_id}, $current->o ('g2')->{group_id};
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 4, name => '/group/profiles multiple groups';
 
@@ -140,7 +140,7 @@ Test {
       is $g2->{data}->{foo}, "abcde";
       is $g2->{data}->{bax}, "5";
       is $g2->{data}->{abc}, undef;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 8, name => '/group/profiles with data';
 

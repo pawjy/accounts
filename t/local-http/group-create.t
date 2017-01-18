@@ -29,7 +29,7 @@ Test {
       ok $group_id = $result->{json}->{group_id};
       like $result->{res}->content, qr{"group_id"\s*:\s*"};
       is $result->{json}->{context_key}, $context;
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'profiles'], {
       group_id => $group_id,
       context_key => $context,
@@ -45,7 +45,7 @@ Test {
       ok $g->{updated};
       is $g->{admin_status}, 1;
       is $g->{owner_status}, 1;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 11, name => '/group/create';
 

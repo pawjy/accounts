@@ -20,7 +20,7 @@ Test {
     test {
       is $result->{status}, 400;
       is $result->{json}->{reason}, 'Bad |state|';
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 2, name => '/login then /cb';
 
@@ -36,7 +36,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-    } $current->context;
+    } $current->c;
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
     my $con = Web::Transport::ConnectionClient->new_from_url ($url);
     return $con->request (url => $url, method => 'POST'); # user accepted!
@@ -48,13 +48,13 @@ Test {
       my ($base, $query) = split /\?/, $location, 2;
       is $base, $cb_url;
       return $current->post ("/cb?$query", {}, session => 1);
-    } $current->context;
+    } $current->c;
   })->then (sub {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
       is $result->{app_data}, undef;
-    } $current->context;
+    } $current->c;
     return $current->post (['info'], {with_linked => 'id'}, session => 1);
   })->then (sub {
     my $result = $_[0];
@@ -62,7 +62,7 @@ Test {
       is $result->{status}, 200;
       my $links = $result->{json}->{links};
       ok grep { $_->{service_name} eq 'oauth1server' } values %$links;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 7, name => '/login then auth then /cb - new account, oauth1';
 
@@ -80,7 +80,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-    } $current->context;
+    } $current->c;
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
     my $con = Web::Transport::ConnectionClient->new_from_url ($url);
     return $con->request (url => $url, method => 'POST', params => {
@@ -94,13 +94,13 @@ Test {
       my ($base, $query) = split /\?/, $location, 2;
       is $base, $cb_url;
       return $current->post ("/cb?$query", {}, session => 1);
-    } $current->context;
+    } $current->c;
   })->then (sub {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
       is $result->{app_data}, undef;
-    } $current->context;
+    } $current->c;
     return $current->post (['info'], {with_linked => 'id'}, session => 1);
   })->then (sub {
     my $result = $_[0];
@@ -109,7 +109,7 @@ Test {
       my $links = $result->{json}->{links};
       ok grep { $_->{service_name} eq 'oauth2server' } values %$links;
       ok $account_id = $result->{json}->{account_id}, 'new account';
-    } $current->context;
+    } $current->c;
   })->then (sub {
     return $current->create_session (2);
   })->then (sub {
@@ -134,7 +134,7 @@ Test {
     test {
       is $result->{status}, 200;
       is $result->{app_data}, undef;
-    } $current->context;
+    } $current->c;
     return $current->post (['info'], {with_linked => 'id'}, session => 2);
   })->then (sub {
     my $result = $_[0];
@@ -144,7 +144,7 @@ Test {
       my $ls = [grep { $_->{service_name} eq 'oauth2server' } values %$links];
       is $ls->[0]->{id}, $x_account_id;
       is $result->{json}->{account_id}, $account_id, 'existing account';
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 13, name => '/login then auth then /cb - oauth2';
 

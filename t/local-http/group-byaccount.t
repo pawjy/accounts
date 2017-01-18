@@ -52,7 +52,7 @@ Test {
         test {
           is $result->{status}, 200;
           is 0+keys %{$result->{json}->{members}}, 0;
-        } $current->context, name => $name;
+        } $current->c, name => $name;
       });
     } [
       [{
@@ -88,7 +88,7 @@ Test {
       is $m2->{member_type}, 9;
       is $m2->{owner_status}, 1;
       is $m2->{user_status}, 4;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 2*3 + 13, name => '/group/byaccount';
 
@@ -140,7 +140,7 @@ Test {
       ok $result->{json}->{memberships}->{$current->o ('g2')->{group_id}};
       ok $result->{json}->{next_ref};
       ok $result->{json}->{has_next};
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'byaccount'], {
       context_key => $current->o ('g1')->{context_key},
       account_id => $current->o ('a1')->{account_id},
@@ -155,7 +155,7 @@ Test {
       ok $result->{json}->{memberships}->{$current->o ('g1')->{group_id}};
       ok $result->{json}->{next_ref};
       ok ! $result->{json}->{has_next};
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'byaccount'], {
       context_key => $current->o ('g1')->{context_key},
       account_id => $current->o ('a1')->{account_id},
@@ -169,7 +169,7 @@ Test {
       is 0+keys %{$result->{json}->{memberships}}, 0;
       ok $result->{json}->{next_ref};
       ok ! $result->{json}->{has_next};
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'byaccount'], {
       context_key => $current->o ('g1')->{context_key},
       account_id => $current->o ('a1')->{account_id},
@@ -183,7 +183,7 @@ Test {
       is 0+keys %{$result->{json}->{memberships}}, 0;
       ok $result->{json}->{next_ref};
       ok ! $result->{json}->{has_next};
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 22, name => '/group/byaccount paging';
 
@@ -216,7 +216,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'byaccount'], {
       context_key => $current->o ('g1')->{context_key},
       account_id => $current->o ('a1')->{account_id},
@@ -231,7 +231,7 @@ Test {
       my $g2 = $result->{json}->{memberships}->{$current->o ('g2')->{group_id}};
       is $g2->{data}->{"x{5000}"}, undef;
       is $g2->{data}->{abc}, "0";
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 5, name => '/group/byaccount with data';
 

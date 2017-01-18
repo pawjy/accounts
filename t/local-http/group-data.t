@@ -47,7 +47,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'profiles'], {
       context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
@@ -58,7 +58,7 @@ Test {
     test {
       my $g = $result->{json}->{groups}->{$current->o ('g1')->{group_id}};
       is $g->{data}->{"x{5000}"}, "\x{40000}";
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'data'], {
       context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
@@ -69,7 +69,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'data'], {
       context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
@@ -78,7 +78,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'profiles'], {
       context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
@@ -92,7 +92,7 @@ Test {
       is $g->{data}->{hogefuga}, '0';
       is $g->{data}->{''}, 'hoe';
       is $g->{data}->{'abcde'}, undef;
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'data'], {
       context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
@@ -103,7 +103,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'profiles'], {
       context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
@@ -114,7 +114,7 @@ Test {
     test {
       my $g = $result->{json}->{groups}->{$current->o ('g1')->{group_id}};
       is $g->{data}->{hogefuga}, undef;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 10, name => '/group/data';
 

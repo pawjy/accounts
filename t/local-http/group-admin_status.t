@@ -59,7 +59,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'profiles'], {
       context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
@@ -69,7 +69,7 @@ Test {
     my $g1 = $result->{json}->{groups}->{$current->o ('g1')->{group_id}};
     test {
       is $g1->{admin_status}, 6;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 3, name => '/group/admin_status';
 
@@ -88,7 +88,7 @@ Test {
       my $g1 = $result2->{json}->{groups}->{$result->{json}->{group_id}};
       test {
         is $g1->{admin_status}, 7;
-      } $current->context;
+      } $current->c;
     });
   });
 } wait => $wait, n => 1, name => '/group/create with admin_status';

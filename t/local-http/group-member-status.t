@@ -54,7 +54,7 @@ Test {
         my $result = $_[0];
         test {
           is $result->{status}, 200;
-        } $current->context, name => $name;
+        } $current->c, name => $name;
         return $current->post (['group', 'members'], {
           context_key => $current->o ('g1')->{context_key},
           group_id => $current->o ('g1')->{group_id},
@@ -70,7 +70,7 @@ Test {
           is $m1->{member_type}, $expected->[0];
           is $m1->{owner_status}, $expected->[1];
           is $m1->{user_status}, $expected->[2];
-        } $current->context, name => $name;
+        } $current->c, name => $name;
       });
     } [
       [[undef, undef, 65] => [0, 0, 65], "initial, user only"],

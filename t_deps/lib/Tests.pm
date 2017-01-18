@@ -679,7 +679,7 @@ sub Test (&;%) {
       test {
         ok 0, 'No exception';
         is $error, undef, 'No exception';
-      } $current->context;
+      } $current->c;
     });
   }, @_);
 } # Test
@@ -689,11 +689,6 @@ use JSON::PS;
 use Test::More;
 use Test::X1;
 use Promised::Flow;
-
-# XXX deprecated
-sub context ($) {
-  return $_[0]->{context};
-} # context
 
 sub c ($) {
   return $_[0]->{context};
@@ -734,7 +729,7 @@ sub post ($$$;%) {
     :
       (url => Web::URL->parse_string ($path, Web::URL->parse_string ($self->client->origin->to_ascii)))
     ),
-    bearer => $self->context->received_data->{keys}->{'auth.bearer'},
+    bearer => $self->c->received_data->{keys}->{'auth.bearer'},
     params => {%$p, %$params},
   )->then (sub {
     my $res = $_[0];
@@ -761,7 +756,7 @@ sub are_errors ($$$) {
       method => 'POST',
       path => $base_path,
       params => $base_params,
-      bearer => $self->context->received_data->{keys}->{'auth.bearer'},
+      bearer => $self->c->received_data->{keys}->{'auth.bearer'},
       %base_args,
       %$test,
     );
@@ -773,7 +768,7 @@ sub are_errors ($$$) {
       unless ($opt{status} == $res->status) {
         test {
           is $res->status, $opt{status}, $res;
-        } $self->context, name => $opt{name};
+        } $self->c, name => $opt{name};
         $has_error = 1;
       }
       if (defined $opt{reason}) {
@@ -784,7 +779,7 @@ sub are_errors ($$$) {
                 $json->{reason} eq $opt{reason}) {
           test {
             is $json->{reason}, $opt{reason};
-          } $self->context, name => $opt{name};
+          } $self->c, name => $opt{name};
           $has_error = 1;
         }
       }
@@ -793,7 +788,7 @@ sub are_errors ($$$) {
     unless ($has_error) {
       test {
         ok 1, 'no error';
-      } $self->context;
+      } $self->c;
     }
   });
 } # are_errors

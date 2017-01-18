@@ -12,7 +12,7 @@ Test {
     my $res = $_[0];
     test {
       is $res->status, 405;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 1, name => '/cb GET';
 
@@ -22,7 +22,7 @@ Test {
     my $res = $_[0];
     test {
       is $res->status, 401;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 1, name => '/cb no auth';
 
@@ -33,7 +33,7 @@ Test {
     test {
       is $result->{status}, 400;
       is $result->{json}->{reason}, 'Bad session';
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 2, name => '/cb bad session';
 
@@ -46,7 +46,7 @@ Test {
     test {
       is $result->{status}, 400;
       is $result->{json}->{reason}, 'Bad callback call';
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 2, name => '/cb not in flow';
 
@@ -55,7 +55,7 @@ stop_web_server;
 
 =head1 LICENSE
 
-Copyright 2015-2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

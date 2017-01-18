@@ -60,7 +60,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'members'], {
       context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
@@ -72,7 +72,7 @@ Test {
       my $g = $result->{json}->{memberships}->{$current->o ('a1')->{account_id}};
       is $g->{data}->{"x{5000}"}, "\x{40000}";
       is $g->{data}->{abc}, "0";
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 4, name => '/group/member/data';
 
@@ -102,7 +102,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'members'], {
       context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
@@ -114,7 +114,7 @@ Test {
       my $g = $result->{json}->{memberships}->{$current->o ('a1')->{account_id}};
       is $g->{data}->{"x{5000}"}, "\x{40000}";
       is $g->{data}->{abc}, undef;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 3, name => '/group/member/data';
 

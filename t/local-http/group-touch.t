@@ -28,7 +28,7 @@ Test {
         test {
           is $result->{status}, 200;
           is $result->{json}->{changed}, 0;
-        } $current->context, name => 'Group not found';
+        } $current->c, name => 'Group not found';
       });
     } [
       {},
@@ -57,7 +57,7 @@ Test {
     test {
       is $result->{status}, 200;
       is $result->{json}->{changed}, 1;
-    } $current->context;
+    } $current->c;
     return $current->post (['group', 'profiles'], {
       context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
@@ -67,7 +67,7 @@ Test {
     my $g1 = $result->{json}->{groups}->{$current->o ('g1')->{group_id}};
     test {
       ok $g1->{updated} > $g1->{created};
-    } $current->context;
+    } $current->c;
     my $t1 = $g1->{updated};
     return $current->post (['group', 'touch'], {
       context_key => $current->o ('g1')->{context_key},
@@ -82,7 +82,7 @@ Test {
       my $g1 = $result->{json}->{groups}->{$current->o ('g1')->{group_id}};
       test {
         ok $g1->{updated} > $t1;
-      } $current->context;
+      } $current->c;
     });
   });
 } wait => $wait, n => 15, name => '/group/touch';

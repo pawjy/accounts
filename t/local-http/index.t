@@ -14,7 +14,7 @@ Test {
     my $res = $_[0];
     test {
       is $res->status, 404;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 1, name => '/index GET';
 
@@ -25,7 +25,7 @@ Test {
     test {
       is $res->code, 200;
       is $res->content, qq{User-agent: *\nDisallow: /};
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 2, name => '/robots.txt GET';
 
