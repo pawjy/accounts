@@ -876,6 +876,24 @@ sub create_group ($$$) {
         context_key => $opts->{context_key},
         group_id => $group_id,
         %$account,
+      })->then (sub {
+        my $names = [];
+        my $values = [];
+        for (keys %{$account->{data} or {}}) {
+          push @$names, $_;
+          push @$values, $account->{data}->{$_};
+        }
+        return unless @$names;
+        return $self->post (['group', 'member', 'data'], {
+          context_key => $opts->{context_key},
+          group_id => $group_id,
+          account_id => $account->{account_id},
+          name => $names,
+          value => $values,
+        })->then (sub {
+          my $result = $_[0];
+          die $result unless $result->{status} == 200;
+        });
       });
     } $members;
   });

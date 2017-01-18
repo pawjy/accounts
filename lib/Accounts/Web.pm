@@ -672,6 +672,9 @@ sub main ($$) {
     ##   group_id     The group ID.  If specified, properties of group and
     ##                group membership of the account of the session are
     ##                also returned.
+    ##   with_data
+    ##   with_group_data
+    ##   with_group_member_data
     ##
     ## Also, status filters |user_status|, |admin_status|,
     ## |terms_version| with empty prefix are available for account
@@ -722,10 +725,10 @@ sub main ($$) {
                 group_id => $group_id,
                 account_id => Dongry::Type->serialize ('text', $account_id),
                 (status_filter $app, 'group_membership_', 'user_status', 'owner_status', 'member_type'),
-              }, fields => ['user_status', 'owner_status', 'member_type'], source_name => 'master')->then (sub {
+              }, fields => ['group_id', 'user_status', 'owner_status', 'member_type'], source_name => 'master')->then (sub {
                 my $mem = $_[0]->first // return;
+                $mem->{group_id} .= '';
                 $json->{group_membership} = $mem;
-# XXX load_data
               });
             }
           });
@@ -740,14 +743,19 @@ sub main ($$) {
           my $g = $_[0]->first // return;
           $g->{group_id} .= '';
           $json->{group} = $g;
-# XXX load_data
         });
       })->then (sub {
         return $class->load_linked ($app => [$json]);
       })->then (sub {
-        return $class->load_data ($app, 'account_data', 'account_id', undef, undef, [$json]);
+        return $class->load_data ($app, '', 'account_data', 'account_id', undef, undef, [$json]);
+      })->then (sub {
+        return unless defined $json->{group};
+        return $class->load_data ($app, 'group_', 'group_data', 'group_id', undef, undef, [$json->{group}]);
       })->then (sub {
         delete $json->{group_membership} if not defined $json->{group};
+        return unless defined $json->{group_membership};
+        return $class->load_data ($app, 'group_member_', 'group_member_data', 'group_id', 'account_id', $json->{account_id}, [$json->{group_membership}]);
+      })->then (sub {
         return $app->send_json ($json);
       });
     });
@@ -778,7 +786,7 @@ sub main ($$) {
         };
       } @{$_[0]}]);
     })->then (sub {
-      return $class->load_data ($app, 'account_data', 'account_id', undef, undef, $_[0]);
+      return $class->load_data ($app, '', 'account_data', 'account_id', undef, undef, $_[0]);
     })->then (sub {
       return $app->send_json ({
         accounts => {map { $_->{account_id} => $_ } @{$_[0]}},
@@ -1201,8 +1209,8 @@ sub load_linked ($$$) {
   });
 } # load_linked
 
-sub load_data ($$$$$$$) {
-  my ($class, $app, $table_name, $id_key, $id2_key, $id2_value, $items) = @_;
+sub load_data ($$$$$$$$) {
+  my ($class, $app, $prefix, $table_name, $id_key, $id2_key, $id2_value, $items) = @_;
 
   my $id_to_json = {};
   my @id = map {
@@ -1211,12 +1219,12 @@ sub load_data ($$$$$$$) {
   } grep { defined $_->{$id_key} } @$items;
   return $items unless @id;
 
-  my @field = map { Dongry::Type->serialize ('text', $_) } $app->text_param_list ('with_data')->to_list;
+  my @field = map { Dongry::Type->serialize ('text', $_) } $app->text_param_list ('with_'.$prefix.'data')->to_list;
   return $items unless @field;
 
   return $app->db->select ($table_name, {
     $id_key => {-in => \@id},
-    (defined $id2_key ? ($id2_key => $id2_value) : ()),
+    (defined $id2_key ? ($id2_key => Dongry::Type->serialize ('text', $id2_value)) : ()),
     key => {-in => \@field},
   }, source_name => 'master')->then (sub {
     for (@{$_[0]->all}) {
@@ -1479,26 +1487,25 @@ sub group ($$$) {
     ## With
     ##   context_key    An opaque string identifying the application.  Required.
     ##   group_id (0..)      Group IDs
-    ##   owner_status (0..)  Filtering by |owner_status| values
-    ##   admin_status (0..)  Filtering by |admin_status| values
+    ##   with_data
+    ##
+    ## Also, status filters |owner_status| and |admin_status| with
+    ## empty prefix are available.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
     my $group_ids = $app->bare_param_list ('group_id');
-    my $os = $app->bare_param_list ('owner_status');
-    my $as = $app->bare_param_list ('admin_status');
     return Promise->resolve->then (sub {
       return [] unless @$group_ids;
       return $app->db->select ('group', {
         context_key => $app->bare_param ('context_key'),
         group_id => {-in => $group_ids},
-        (@$os ? (owner_status => {-in => $os}) : ()),
-        (@$as ? (admin_status => {-in => $as}) : ()),
+        (status_filter $app, '', 'owner_status', 'admin_status'),
       }, source_name => 'master', fields => ['group_id', 'created', 'updated', 'admin_status', 'owner_status'])->then (sub {
         return $_[0]->all->to_a;
       });
     })->then (sub {
-      return $class->load_data ($app, 'group_data', 'group_id', undef, undef, $_[0]);
+      return $class->load_data ($app, '', 'group_data', 'group_id', undef, undef, $_[0]);
     })->then (sub {
       return $app->send_json ({
         groups => {map {
@@ -1620,6 +1627,7 @@ sub group ($$$) {
     ## With
     ##   context_key   An opaque string identifying the application.  Required.
     ##   group_id      A group ID.  Required.
+    ##   with_data
     ##
     ## Returns
     ##   memberships   Object of (account_id, group member object)
@@ -1640,7 +1648,7 @@ sub group ($$$) {
       order => ['created', $page->{order_direction}],
     )->then (sub {
       my $members = $_[0]->all;
-      return $class->load_data ($app, 'group_member_data', 'account_id', 'group_id' => $group_id, $members);
+      return $class->load_data ($app, '', 'group_member_data', 'account_id', 'group_id' => $group_id, $members);
     })->then (sub {
       my $members = {map {
         $_->{account_id} .= '';
@@ -1657,6 +1665,7 @@ sub group ($$$) {
     ## With
     ##   context_key   An opaque string identifying the application.  Required.
     ##   account_id    An account ID.  Required.
+    ##   with_data
     ##
     ## Returns
     ##   memberships   Object of (group_id, group member object)
@@ -1677,7 +1686,7 @@ sub group ($$$) {
       order => ['updated', $page->{order_direction}],
     )->then (sub {
       my $groups = $_[0]->all;
-      return $class->load_data ($app, 'group_member_data', 'group_id', 'account_id' => $account_id, $groups);
+      return $class->load_data ($app, '', 'group_member_data', 'group_id', 'account_id' => $account_id, $groups);
     })->then (sub {
       my $groups = {map {
         $_->{group_id} .= '';
