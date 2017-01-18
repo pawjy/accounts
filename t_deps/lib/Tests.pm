@@ -824,7 +824,7 @@ sub create_account ($$$) {
     }
     return unless @$names;
     return $self->post (['data'], {
-      account_id => $result->{json}->{account_id},
+      sk => $session->{sk},
       name => $names,
       value => $values,
     })->then (sub {

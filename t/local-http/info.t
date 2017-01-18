@@ -47,7 +47,7 @@ Test {
       is $result->{json}->{name}, undef;
     } $current->c;
   });
-} wait => $wait, n => 2, name => '/info no session';
+} wait => $wait, n => 3, name => '/info no session';
 
 Test {
   my $current = shift;
@@ -111,12 +111,13 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
+      is $result->{json}->{account_id}, $current->o ('a1')->{account_id};
       is $result->{json}->{data}->{name}, $v1;
       is $result->{json}->{data}->{hoge}, $v2;
       is $result->{json}->{data}->{foo}, undef;
     } $current->c;
   });
-} wait => $wait, n => 4, name => '/info with data';
+} wait => $wait, n => 5, name => '/info with data';
 
 Test {
   my $current = shift;
@@ -174,6 +175,119 @@ Test {
     } $current->c;
   });
 } wait => $wait, n => 11, name => '/info with sk, group_id';
+
+for (
+  [[[1], [1], [0]] => 1, "matched 1"],
+  [[[1,2], [1], [0]] => 1, "matched 2"],
+  [[[1,2], [1], [1]] => 0, "bad version"],
+  [[[2], [1], [0]] => 0, "bad user status"],
+  [[[1], [4], [0]] => 0, "bad admin status"],
+) {
+  my ($input, $expected, $name) = @$_;
+  Test {
+    my $current = shift;
+    return $current->create_account (a1 => {})->then (sub {
+      return $current->post (['info'], {
+        sk => $current->o ('a1')->{session}->{sk},
+        user_status => $input->[0],
+        admin_status => $input->[1],
+        terms_version => $input->[2],
+      });
+    })->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->{status}, 200;
+        if ($expected) {
+          is $result->{json}->{account_id}, $current->o ('a1')->{account_id};
+        } else {
+          is $result->{json}->{account_id}, undef;
+        }
+      } $current->c;
+    });
+  } wait => $wait, n => 2, name => ['/info account status filter', $name];
+}
+
+for (
+  [[[6], [7]] => 1, "matched 1"],
+  [[[6,2], [7]] => 1, "matched 2"],
+  [[[6,2], [1]] => 0, "bad version"],
+  [[[2], [7]] => 0, "bad user status"],
+) {
+  my ($input, $expected, $name) = @$_;
+  Test {
+    my $current = shift;
+    return $current->create_account (a1 => {})->then (sub {
+      return $current->create_group (g1 => {
+        members => ['a1'],
+        admin_status => 6,
+        owner_status => 7,
+      });
+    })->then (sub {
+      return $current->post (['info'], {
+        sk => $current->o ('a1')->{session}->{sk},
+        context_key => $current->o ('g1')->{context_key},
+        group_id => $current->o ('g1')->{group_id},
+        group_admin_status => $input->[0],
+        group_owner_status => $input->[1],
+      });
+    })->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->{status}, 200;
+        if ($expected) {
+          is $result->{json}->{group}->{group_id}, $current->o ('g1')->{group_id};
+          ok $result->{json}->{group_membership};
+        } else {
+          is $result->{json}->{group}, undef;
+          is $result->{json}->{group_membership}, undef;
+        }
+      } $current->c;
+    });
+  } wait => $wait, n => 3, name => ['/info group status filter', $name];
+}
+
+for (
+  [[[6], [7], [9]] => 1, "matched 1"],
+  [[[6,2], [7], [9]] => 1, "matched 2"],
+  [[[6,2], [1], [9]] => 0, "bad version"],
+  [[[2], [7], [9]] => 0, "bad user status"],
+  [[[6], [7], [4]] => 0, "bad member type"],
+) {
+  my ($input, $expected, $name) = @$_;
+  Test {
+    my $current = shift;
+    return $current->create_account (a1 => {})->then (sub {
+      return $current->create_group (g1 => {
+        members => [{
+          account_id => $current->o ('a1')->{account_id},
+          user_status => 6,
+          owner_status => 7,
+          member_type => 9,
+        }],
+      });
+    })->then (sub {
+      return $current->post (['info'], {
+        sk => $current->o ('a1')->{session}->{sk},
+        context_key => $current->o ('g1')->{context_key},
+        group_id => $current->o ('g1')->{group_id},
+        group_membership_user_status => $input->[0],
+        group_membership_owner_status => $input->[1],
+        group_membership_member_type => $input->[2],
+      });
+    })->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->{status}, 200;
+        is $result->{json}->{group}->{group_id}, $current->o ('g1')->{group_id};
+        if ($expected) {
+          ok $result->{json}->{group_membership};
+        } else {
+          is $result->{json}->{group_membership}, undef;
+        }
+      } $current->c;
+    });
+  } wait => $wait, n => 3, name => ['/info group member status filter', $name];
+}
 
 run_tests;
 stop_web_server;

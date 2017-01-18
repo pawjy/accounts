@@ -22,6 +22,29 @@ sub format_id ($) {
   return sprintf '%llu', $_[0];
 } # format_id
 
+## Some end points accept "status filter" parameters.  If an end point
+## accepts status filter for field /f/ with prefix /p/, the end points
+## can receive parameters whose name is /p//f/.  If one or more
+## parameter values with that name are specified, only items whose
+## field /f/'s value is one of those parameter values are returned.
+## Otherwise, any available item is returned.
+##
+## For example, /info accepts |group_owner_status| parameter for field
+## |owner_status| with prefix |group_|.  If
+## |group_owner_status=1&group_owner_status=2| is specified, only
+## items whose |owner_status| is |1| or |2| are returned.  If no
+## |group_owner_status| parameter is specified, all items are
+## returned.
+sub status_filter ($$@) {
+  my ($app, $prefix, @name) = @_;
+  my $result = {};
+  for my $name (@name) {
+    my $values = $app->bare_param_list ($prefix . $name);
+    $result->{$name} = {-in => $values} if @$values;
+  }
+  return %$result;
+} # status_filter
+
 sub psgi_app ($$) {
   my ($class, $config) = @_;
   return sub {
@@ -650,6 +673,17 @@ sub main ($$) {
     ##                group membership of the account of the session are
     ##                also returned.
     ##
+    ## Also, status filters |user_status|, |admin_status|,
+    ## |terms_version| with empty prefix are available for account
+    ## data.
+    ##
+    ## Status filters |owner_status| and |admin_status| with prefix
+    ## |group_| are available for group object.
+    ##
+    ## Status filters |user_status|, |owner_status|, |member_type|
+    ## with prefix |group_membership_| are available for group
+    ## membership object.
+    ##
     ## Returns
     ##   account_id   The account ID, if there is an account.
     ##   name         The name of the account, if there is an account.
@@ -673,8 +707,9 @@ sub main ($$) {
         if (defined $account_id) {
           return $app->db->select ('account', {
             account_id => Dongry::Type->serialize ('text', $account_id),
+            (status_filter $app, '', 'user_status', 'admin_status', 'terms_version'),
           }, source_name => 'master', fields => ['name', 'user_status', 'admin_status', 'terms_version'])->then (sub {
-            my $r = $_[0]->first_as_row // die "Account |$account_id| has no data";
+            my $r = $_[0]->first_as_row // return;
             $json->{account_id} = format_id $account_id;
             $json->{name} = $r->get ('name');
             $json->{user_status} = $r->get ('user_status');
@@ -686,6 +721,7 @@ sub main ($$) {
                 context_key => $context_key,
                 group_id => $group_id,
                 account_id => Dongry::Type->serialize ('text', $account_id),
+                (status_filter $app, 'group_membership_', 'user_status', 'owner_status', 'member_type'),
               }, fields => ['user_status', 'owner_status', 'member_type'], source_name => 'master')->then (sub {
                 my $mem = $_[0]->first // return;
                 $json->{group_membership} = $mem;
@@ -699,18 +735,19 @@ sub main ($$) {
         return $app->db->select ('group', {
           context_key => $context_key,
           group_id => $group_id,
+          (status_filter $app, 'group_', 'admin_status', 'owner_status'),
         }, fields => ['group_id', 'created', 'updated', 'owner_status', 'admin_status'], source_name => 'master')->then (sub {
           my $g = $_[0]->first // return;
           $g->{group_id} .= '';
           $json->{group} = $g;
 # XXX load_data
         });
-# XXX select specifying status field values
       })->then (sub {
         return $class->load_linked ($app => [$json]);
       })->then (sub {
         return $class->load_data ($app, 'account_data', 'account_id', undef, undef, [$json]);
       })->then (sub {
+        delete $json->{group_membership} if not defined $json->{group};
         return $app->send_json ($json);
       });
     });
@@ -718,22 +755,19 @@ sub main ($$) {
 
   if (@$path == 1 and $path->[0] eq 'profiles') {
     ## /profiles - Account data
+    ##
+    ## Parameters
     ##   account_id (0..)   Account IDs
-    ##   user_status (0..)  Filtering by user_status values
-    ##   admin_status (0..) Filtering by admin_status values
-    ##   terms_version (0..) Filtering by terms_version values
+    ##
+    ## Also, status filters |user_status|, |admin_status|,
+    ## |terms_version| with empty prefix are available.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
     my $account_ids = $app->bare_param_list ('account_id');
-    my $us = $app->bare_param_list ('user_status');
-    my $as = $app->bare_param_list ('admin_status');
-    my $ts = $app->bare_param_list ('terms_version');
     return ((@$account_ids ? $app->db->select ('account', {
       account_id => {-in => $account_ids},
-      (@$us ? (user_status => {-in => $us}) : ()),
-      (@$as ? (admin_status => {-in => $as}) : ()),
-      (@$ts ? (terms_version => {-in => $ts}) : ()),
+      (status_filter $app, '', 'user_status', 'admin_status', 'terms_version'),
     }, source_name => 'master', fields => ['account_id', 'name'])->then (sub {
       return $_[0]->all_as_rows->to_a;
     }) : Promise->resolve ([]))->then (sub {

@@ -22,7 +22,7 @@ Test {
         {method => 'GET', status => 405},
         {params => {
           context_key => $current->o ('g1')->{context_key},
-        }, status => 404},
+        }, status => 400},
         {params => {
           context_key => $current->o ('g1')->{context_key},
           group_id => int rand 10000000,
@@ -116,7 +116,7 @@ Test {
       is $g->{data}->{hogefuga}, undef;
     } $current->c;
   });
-} wait => $wait, n => 10, name => '/group/data';
+} wait => $wait, n => 11, name => '/group/data';
 
 run_tests;
 stop_web_server;

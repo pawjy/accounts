@@ -47,7 +47,7 @@ Test {
       is $g->{owner_status}, 1;
     } $current->c;
   });
-} wait => $wait, n => 11, name => '/group/create';
+} wait => $wait, n => 12, name => '/group/create';
 
 run_tests;
 stop_web_server;
