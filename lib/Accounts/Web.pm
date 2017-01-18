@@ -3,6 +3,7 @@ use strict;
 use warnings;
 use Path::Tiny;
 use File::Temp;
+use Time::HiRes qw(time);
 use Promise;
 use Promised::File;
 use Promised::Command;
@@ -20,6 +21,29 @@ use Web::UserAgent::Functions::OAuth;
 sub format_id ($) {
   return sprintf '%llu', $_[0];
 } # format_id
+
+## Some end points accept "status filter" parameters.  If an end point
+## accepts status filter for field /f/ with prefix /p/, the end points
+## can receive parameters whose name is /p//f/.  If one or more
+## parameter values with that name are specified, only items whose
+## field /f/'s value is one of those parameter values are returned.
+## Otherwise, any available item is returned.
+##
+## For example, /info accepts |group_owner_status| parameter for field
+## |owner_status| with prefix |group_|.  If
+## |group_owner_status=1&group_owner_status=2| is specified, only
+## items whose |owner_status| is |1| or |2| are returned.  If no
+## |group_owner_status| parameter is specified, all items are
+## returned.
+sub status_filter ($$@) {
+  my ($app, $prefix, @name) = @_;
+  my $result = {};
+  for my $name (@name) {
+    my $values = $app->bare_param_list ($prefix . $name);
+    $result->{$name} = {-in => $values} if @$values;
+  }
+  return %$result;
+} # status_filter
 
 sub psgi_app ($$) {
   my ($class, $config) = @_;
@@ -70,6 +94,10 @@ my $SessionTimeout = 60*60*24*10;
 sub main ($$) {
   my ($class, $app) = @_;
   my $path = $app->path_segments;
+
+  if ($path->[0] eq 'group') {
+    return $class->group ($app, $path);
+  }
 
   if (@$path == 1 and $path->[0] eq 'session') {
     ## /session - Ensure that there is a session
@@ -635,59 +663,111 @@ sub main ($$) {
   } # /keygen
 
   if (@$path == 1 and $path->[0] eq 'info') {
-    ## /info - Current account data
+    ## /info - Get the current account of the session
+    ##
+    ## Parameters
+    ##   sk           The |sk| value of the sesion, if available
+    ##   context_key  An opaque string identifying the application.
+    ##                Required when |group_id| is specified.
+    ##   group_id     The group ID.  If specified, properties of group and
+    ##                group membership of the account of the session are
+    ##                also returned.
+    ##
+    ## Also, status filters |user_status|, |admin_status|,
+    ## |terms_version| with empty prefix are available for account
+    ## data.
+    ##
+    ## Status filters |owner_status| and |admin_status| with prefix
+    ## |group_| are available for group object.
+    ##
+    ## Status filters |user_status|, |owner_status|, |member_type|
+    ## with prefix |group_membership_| are available for group
+    ## membership object.
+    ##
+    ## Returns
+    ##   account_id   The account ID, if there is an account.
+    ##   name         The name of the account, if there is an account.
+    ##   user_status  The user status of the account, if there is.
+    ##   admin_status The admin status of the account, if there is.
+    ##   terms_version The terms version of the account, if there is.
+    ##   group        The group object, if available.
+    ##   group_membership The group membership object, if available.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0];
+      my $context_key = $app->bare_param ('context_key');
+      my $group_id = $app->bare_param ('group_id');
+      my $json = {};
       return Promise->resolve->then (sub {
-        if (defined $session_row) {
-          my $id = $session_row->get ('data')->{account_id};
-          if (defined $id) {
-            return $app->db->select ('account', {
-              account_id => Dongry::Type->serialize ('text', $id),
-            }, source_name => 'master', fields => ['name', 'user_status', 'admin_status', 'terms_version'])->then (sub {
-              my $r = $_[0]->first_as_row // die "Account |$id| has no data";
-              my $json = {};
-              $json->{account_id} = format_id $id;
-              $json->{name} = $r->get ('name');
-              $json->{user_status} = $r->get ('user_status');
-              $json->{admin_status} = $r->get ('admin_status');
-              $json->{terms_version} = $r->get ('terms_version');
-              return $json;
-            });
-          }
-        }
-        return {};
+        my $account_id;
+        $account_id = $session_row->get ('data')->{account_id}
+            if defined $session_row;
+        if (defined $account_id) {
+          return $app->db->select ('account', {
+            account_id => Dongry::Type->serialize ('text', $account_id),
+            (status_filter $app, '', 'user_status', 'admin_status', 'terms_version'),
+          }, source_name => 'master', fields => ['name', 'user_status', 'admin_status', 'terms_version'])->then (sub {
+            my $r = $_[0]->first_as_row // return;
+            $json->{account_id} = format_id $account_id;
+            $json->{name} = $r->get ('name');
+            $json->{user_status} = $r->get ('user_status');
+            $json->{admin_status} = $r->get ('admin_status');
+            $json->{terms_version} = $r->get ('terms_version');
+            
+            if (defined $context_key or defined $group_id) {
+              return $app->db->select ('group_member', {
+                context_key => $context_key,
+                group_id => $group_id,
+                account_id => Dongry::Type->serialize ('text', $account_id),
+                (status_filter $app, 'group_membership_', 'user_status', 'owner_status', 'member_type'),
+              }, fields => ['user_status', 'owner_status', 'member_type'], source_name => 'master')->then (sub {
+                my $mem = $_[0]->first // return;
+                $json->{group_membership} = $mem;
+# XXX load_data
+              });
+            }
+          });
+        } # $account_id
       })->then (sub {
-        return $class->load_linked ($app => [$_[0]]);
+        return unless defined $group_id;
+        return $app->db->select ('group', {
+          context_key => $context_key,
+          group_id => $group_id,
+          (status_filter $app, 'group_', 'admin_status', 'owner_status'),
+        }, fields => ['group_id', 'created', 'updated', 'owner_status', 'admin_status'], source_name => 'master')->then (sub {
+          my $g = $_[0]->first // return;
+          $g->{group_id} .= '';
+          $json->{group} = $g;
+# XXX load_data
+        });
       })->then (sub {
-        return $class->load_data ($app => $_[0]);
+        return $class->load_linked ($app => [$json]);
       })->then (sub {
-        return $app->send_json ($_[0]->[0]);
+        return $class->load_data ($app, 'account_data', 'account_id', undef, undef, [$json]);
+      })->then (sub {
+        delete $json->{group_membership} if not defined $json->{group};
+        return $app->send_json ($json);
       });
     });
   } # /info
 
   if (@$path == 1 and $path->[0] eq 'profiles') {
     ## /profiles - Account data
+    ##
+    ## Parameters
     ##   account_id (0..)   Account IDs
-    ##   user_status (0..)  Filtering by user_status values
-    ##   admin_status (0..) Filtering by admin_status values
-    ##   terms_version (0..) Filtering by terms_version values
+    ##
+    ## Also, status filters |user_status|, |admin_status|,
+    ## |terms_version| with empty prefix are available.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
     my $account_ids = $app->bare_param_list ('account_id');
-    my $us = $app->bare_param_list ('user_status');
-    my $as = $app->bare_param_list ('admin_status');
-    my $ts = $app->bare_param_list ('terms_version');
     return ((@$account_ids ? $app->db->select ('account', {
       account_id => {-in => $account_ids},
-      (@$us ? (user_status => {-in => $us}) : ()),
-      (@$as ? (admin_status => {-in => $as}) : ()),
-      (@$ts ? (terms_version => {-in => $ts}) : ()),
+      (status_filter $app, '', 'user_status', 'admin_status', 'terms_version'),
     }, source_name => 'master', fields => ['account_id', 'name'])->then (sub {
       return $_[0]->all_as_rows->to_a;
     }) : Promise->resolve ([]))->then (sub {
@@ -698,7 +778,7 @@ sub main ($$) {
         };
       } @{$_[0]}]);
     })->then (sub {
-      return $class->load_data ($app => $_[0]);
+      return $class->load_data ($app, 'account_data', 'account_id', undef, undef, $_[0]);
     })->then (sub {
       return $app->send_json ({
         accounts => {map { $_->{account_id} => $_ } @{$_[0]}},
@@ -1121,25 +1201,26 @@ sub load_linked ($$$) {
   });
 } # load_linked
 
-sub load_data ($$$) {
-  my ($class, $app, $items) = @_;
+sub load_data ($$$$$$$) {
+  my ($class, $app, $table_name, $id_key, $id2_key, $id2_value, $items) = @_;
 
-  my $account_id_to_json = {};
-  my @account_id = map {
-    $account_id_to_json->{$_->{account_id}} = $_;
-    Dongry::Type->serialize ('text', $_->{account_id});
-  } grep { defined $_->{account_id} } @$items;
-  return $items unless @account_id;
+  my $id_to_json = {};
+  my @id = map {
+    $id_to_json->{$_->{$id_key}} = $_;
+    Dongry::Type->serialize ('text', $_->{$id_key});
+  } grep { defined $_->{$id_key} } @$items;
+  return $items unless @id;
 
   my @field = map { Dongry::Type->serialize ('text', $_) } $app->text_param_list ('with_data')->to_list;
   return $items unless @field;
 
-  return $app->db->select ('account_data', {
-    account_id => {-in => \@account_id},
+  return $app->db->select ($table_name, {
+    $id_key => {-in => \@id},
+    (defined $id2_key ? ($id2_key => $id2_value) : ()),
     key => {-in => \@field},
   }, source_name => 'master')->then (sub {
     for (@{$_[0]->all}) {
-      my $json = $account_id_to_json->{$_->{account_id}};
+      my $json = $id_to_json->{$_->{$id_key}};
       $json->{data}->{$_->{key}} = Dongry::Type->parse ('text', $_->{value})
           if defined $_->{value} and length $_->{value};
     }
@@ -1147,11 +1228,474 @@ sub load_data ($$$) {
   });
 } # load_data
 
+## If an end point supports paging, following parameters are
+## available:
+##   ref       A short string identifying the page
+##   limit     The maximum number of the returned items (i.e. page size)
+##
+## If the processing of the end point has succeeded, the result JSON
+## has following fields:
+##   has_next  Whether there is next page or not (at the time of the operation)
+##   next_ref  The |ref| parameter value for the next page
+
+sub this_page ($%) {
+  my ($app, %args) = @_;
+  my $page = {
+    order_direction => 'DESC',
+    limit => 0+($app->bare_param ('limit') // $args{limit} // 30),
+    offset => 0,
+    value => undef,
+  };
+  my $max_limit = $args{max_limit} // 100;
+  return $app->throw_error_json ({reason => "Bad |limit|"})
+      if $page->{limit} < 1 or $page->{limit} > $max_limit;
+  my $ref = $app->bare_param ('ref');
+  if (defined $ref) {
+    if ($ref =~ /\A([+-])([0-9.]+),([0-9]+)\z/) {
+      $page->{order_direction} = $1 eq '+' ? 'ASC' : 'DESC';
+      $page->{value} = {($page->{order_direction} eq 'ASC' ? '>=' : '<='), 0+$2};
+      $page->{offset} = 0+$3;
+      return $app->throw_error_json ({reason => "Bad |ref| offset"})
+          if $page->{offset} > 100;
+      $page->{ref} = $ref;
+    } else {
+      return $app->throw_error_json ({reason => "Bad |ref|"});
+    }
+  }
+  return $page;
+} # this_page
+
+sub next_page ($$$) {
+  my ($this_page, $items, $value_key) = @_;
+  my $next_page = {};
+  my $sign = $this_page->{order_direction} eq 'ASC' ? '+' : '-';
+  my $values = {};
+  $values->{$this_page->{value}} = $this_page->{offset}
+      if defined $this_page->{value};
+  if (ref $items eq 'ARRAY') {
+    if (@$items) {
+      my $last_value = $items->[0]->{$_->{$value_key}};
+      for (@$items) {
+        $values->{$_->{$value_key}}++;
+        if ($sign eq '+') {
+          $last_value = $_->{$value_key} if $last_value < $_->{$value_key};
+        } else {
+          $last_value = $_->{$value_key} if $last_value > $_->{$value_key};
+        }
+      }
+      $next_page->{next_ref} = $sign . $last_value . ',' . $values->{$last_value};
+      $next_page->{has_next} = @$items == $this_page->{limit};
+    } else {
+      $next_page->{next_ref} = $this_page->{ref};
+      $next_page->{has_next} = 0;
+    }
+  } else { # HASH
+    if (keys %$items) {
+      my $last_value = $items->{each %$items}->{$value_key};
+      for (values %$items) {
+        $values->{$_->{$value_key}}++;
+        if ($sign eq '+') {
+          $last_value = $_->{$value_key} if $last_value < $_->{$value_key};
+        } else {
+          $last_value = $_->{$value_key} if $last_value > $_->{$value_key};
+        }
+      }
+      $next_page->{next_ref} = $sign . $last_value . ',' . $values->{$last_value};
+      $next_page->{has_next} = (keys %$items) == $this_page->{limit};
+    } else {
+      $next_page->{next_ref} = $this_page->{ref};
+      $next_page->{has_next} = 0;
+    }
+  }
+  return $next_page;
+} # next_page
+
+sub group ($$$) {
+  my ($class, $app, $path) = @_;
+
+  if (@$path == 2 and $path->[1] eq 'create') {
+    ## /group/create - create a group
+    ##
+    ## With
+    ##   context_key    An opaque string identifying the application.  Required.
+    ##   owner_status  A 7-bit positive integer of the group's |owner_status|.
+    ##                 Default is 1.
+    ##   admin_status  A 7-bit positive integer of the group's |admin_status|.
+    ##                 Default is 1.
+    ##
+    ## Returns
+    ##   context_key    Same as |context_key|, for convenience.
+    ##   group_id      A 64-bit non-negative integer identifying the group.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $context_key = $app->bare_param ('context_key')
+        // return $app->throw_error (400, reason_phrase => 'No |context_key|');
+    return $app->db->execute ('select uuid_short() as uuid', undef, source_name => 'master')->then (sub {
+      my $group_id = $_[0]->first->{uuid};
+      my $time = time;
+      return $app->db->insert ('group', [{
+        context_key => $context_key,
+        group_id => $group_id,
+        created => $time,
+        updated => $time,
+        owner_status => $app->bare_param ('owner_status') // 1, # open
+        admin_status => $app->bare_param ('admin_status') // 1, # open
+      }])->then (sub {
+        return $app->send_json ({
+          context_key => $context_key,
+          group_id => ''.$group_id,
+        });
+      });
+    });
+  } # /group/create
+
+  if (@$path == 2 and $path->[1] eq 'data') {
+    ## /group/data - Write group data
+    ##
+    ## With
+    ##   context_key    An opaque string identifying the application.  Required.
+    ##   group_id    The group ID.  Required.
+    ##   name (0+)   The keys of data pairs.  A key is an ASCII string.
+    ##   value (0+)  The values of data pairs.  There must be same number
+    ##               of |value|s as |name|s.  A value is a Unicode string.
+    ##               An empty string is equivalent to missing.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $group_id = $app->bare_param ('group_id')
+        or return $app->throw_error (400, reason_phrase => 'Bad |group_id|');
+    return $app->db->select ('group', {
+      context_key => $app->bare_param ('context_key'),
+      group_id => $group_id,
+    }, fields => ['group_id'], source_name => 'master')->then (sub {
+      my $x = ($_[0]->first or {})->{group_id};
+      return $app->throw_error (404, reason_phrase => '|group_id| not found')
+          unless $x and $x eq $group_id;
+
+      my $time = time;
+      my $names = $app->text_param_list ('name');
+      my $values = $app->text_param_list ('value');
+      my @data;
+      for (0..$#$names) {
+        push @data, {
+          group_id => $group_id,
+          key => Dongry::Type->serialize ('text', $names->[$_]),
+          value => Dongry::Type->serialize ('text', $values->[$_]),
+          created => $time,
+          updated => $time,
+        } if defined $values->[$_];
+      }
+      if (@data) {
+        return $app->db->insert ('group_data', \@data, duplicate => {
+          value => $app->db->bare_sql_fragment ('VALUES(`value`)'),
+          updated => $app->db->bare_sql_fragment ('VALUES(`updated`)'),
+        });
+      }
+    })->then (sub {
+      return $app->send_json ({});
+    });
+  } # /group/data
+
+  if (@$path == 2 and $path->[1] eq 'touch') {
+    ## /group/touch - Update the timestamp of a group
+    ##
+    ## With
+    ##   context_key    An opaque string identifying the application.  Required.
+    ##   group_id      The group ID.  Required.
+    ##
+    ## Returns
+    ##   changed       If a group is updated, |1|.  Otherwise, |0|.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $time = time;
+    return $app->db->update ('group', {
+      updated => $time,
+    }, where => {
+      context_key => $app->bare_param ('context_key'),
+      group_id => $app->bare_param ('group_id'),
+      updated => {'<', $time},
+    })->then (sub {
+      my $result = $_[0];
+      return $app->send_json ({changed => $result->row_count});
+    });
+  } # /group/touch
+
+  if (@$path == 2 and $path->[1] eq 'owner_status') {
+    ## /group/owner_status - Set the |owner_status| of the group
+    ##
+    ## With
+    ##   context_key    An opaque string identifying the application.  Required.
+    ##   group_id      The group ID.  Required.
+    ##   owner_status  The new |owner_status| value.  A 7-bit positive integer.
+    ##                 Required.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $time = time;
+    my $os = $app->bare_param ('owner_status')
+        or return $app->throw_error (400, reason_phrase => 'Bad |owner_status|');
+    return $app->db->update ('group', {
+      owner_status => $os,
+      updated => $time,
+    }, where => {
+      context_key => $app->bare_param ('context_key'),
+      group_id => $app->bare_param ('group_id'),
+    })->then (sub {
+      my $result = $_[0];
+      return $app->throw_error (404, reason_phrase => 'Group not found')
+          unless $result->row_count == 1;
+      return $app->send_json ({});
+    });
+  } # /group/owner_status
+
+  if (@$path == 2 and $path->[1] eq 'admin_status') {
+    ## /group/admin_status - Set the |admin_status| of the group
+    ##
+    ## With
+    ##   context_key    An opaque string identifying the application.  Required.
+    ##   group_id      The group ID.  Required.
+    ##   admin_status  The new |admin_status| value.  A 7-bit positive integer.
+    ##                 Required.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $time = time;
+    my $as = $app->bare_param ('admin_status')
+        or return $app->throw_error (400, reason_phrase => 'Bad |admin_status|');
+    return $app->db->update ('group', {
+      admin_status => $as,
+      updated => $time,
+    }, where => {
+      context_key => $app->bare_param ('context_key'),
+      group_id => $app->bare_param ('group_id'),
+    })->then (sub {
+      my $result = $_[0];
+      return $app->throw_error (404, reason_phrase => 'Group not found')
+          unless $result->row_count == 1;
+      return $app->send_json ({});
+    });
+  } # /group/admin_status
+
+  if (@$path == 2 and $path->[1] eq 'profiles') {
+    ## /group/profiles - Get group data
+    ##
+    ## With
+    ##   context_key    An opaque string identifying the application.  Required.
+    ##   group_id (0..)      Group IDs
+    ##   owner_status (0..)  Filtering by |owner_status| values
+    ##   admin_status (0..)  Filtering by |admin_status| values
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    my $group_ids = $app->bare_param_list ('group_id');
+    my $os = $app->bare_param_list ('owner_status');
+    my $as = $app->bare_param_list ('admin_status');
+    return Promise->resolve->then (sub {
+      return [] unless @$group_ids;
+      return $app->db->select ('group', {
+        context_key => $app->bare_param ('context_key'),
+        group_id => {-in => $group_ids},
+        (@$os ? (owner_status => {-in => $os}) : ()),
+        (@$as ? (admin_status => {-in => $as}) : ()),
+      }, source_name => 'master', fields => ['group_id', 'created', 'updated', 'admin_status', 'owner_status'])->then (sub {
+        return $_[0]->all->to_a;
+      });
+    })->then (sub {
+      return $class->load_data ($app, 'group_data', 'group_id', undef, undef, $_[0]);
+    })->then (sub {
+      return $app->send_json ({
+        groups => {map {
+          $_->{group_id} .= '';
+          $_->{group_id} => $_;
+        } @{$_[0]}},
+      });
+    });
+  } # /group/profiles
+
+
+  if (@$path >= 3 and $path->[1] eq 'member') {
+    my $context = $app->bare_param ('context_key');
+    my $group_id = $app->bare_param ('group_id');
+    my $account_id = $app->bare_param ('account_id');
+    return Promise->all ([
+      $app->db->select ('group', {
+        context_key => $context,
+        group_id => $group_id,
+      }, fields => ['group_id'], source_name => 'master'),
+      $app->db->select ('account', {
+        account_id => $account_id,
+      }, fields => ['account_id'], source_name => 'master'),
+    ])->then (sub {
+      return $app->throw_error (404, reason_phrase => 'Bad |group_id|')
+          unless $_[0]->[0]->first;
+      return $app->throw_error (404, reason_phrase => 'Bad |account_id|')
+          unless $_[0]->[1]->first;
+
+      if (@$path == 3 and $path->[2] eq 'status') {
+        ## /group/member/status - Set status fields of a group member
+        ##
+        ## With
+        ##   context_key   An opaque string identifying the application.
+        ##                 Required.
+        ##   group_id      A group ID.  Required.
+        ##   account_id    An account ID.  Required.
+        ##   member_type   New member type.  A 7-bit non-negative integer.
+        ##                 Default is "unchanged".
+        ##   owner_status  New owner status.  A 7-bit non-negative integer.
+        ##                 Default is "unchanged".
+        ##   user_status   New user status.  A 7-bit non-negative integer.
+        ##                 Default is "unchanged".
+        ##
+        ## If there is no group member record, a new record is
+        ## created.  When a new record is created, the fields are set
+        ## to |0| unless otherwise specified.
+        $app->requires_request_method ({POST => 1});
+        $app->requires_api_key;
+
+        my $mt = $app->bare_param ('member_type');
+        my $os = $app->bare_param ('owner_status');
+        my $us = $app->bare_param ('user_status');
+        my $time = time;
+        return $app->db->insert ('group_member', [{
+          context_key => $context,
+          group_id => $group_id,
+          account_id => $account_id,
+          created => $time,
+          updated => $time,
+          member_type => $mt // 0,
+          owner_status => $os // 0,
+          user_status => $us // 0,
+        }], duplicate => {
+          updated => $app->db->bare_sql_fragment ('values(`updated`)'),
+          (defined $mt ? (member_type => $app->db->bare_sql_fragment ('values(`member_type`)')) : ()),
+          (defined $os ? (owner_status => $app->db->bare_sql_fragment ('values(`owner_status`)')) : ()),
+          (defined $us ? (user_status => $app->db->bare_sql_fragment ('values(`user_status`)')) : ()),
+        })->then (sub {
+          return $app->send_json ({});
+        });
+      } # /group/member/status
+
+      if (@$path == 3 and $path->[2] eq 'data') {
+        ## /group/member/data - Write group member data
+        ##
+        ## With
+        ##   context_key   An opaque string identifying the application.
+        ##                 Required.
+        ##   group_id      A group ID.  Required.
+        ##   account_id    An account ID.  Required.
+        ##   name (0+)   The keys of data pairs.  A key is an ASCII string.
+        ##   value (0+)  The values of data pairs.  There must be same number
+        ##               of |value|s as |name|s.  A value is a Unicode string.
+        ##               An empty string is equivalent to missing.
+        $app->requires_request_method ({POST => 1});
+        $app->requires_api_key;
+
+        my $time = time;
+        my $names = $app->text_param_list ('name');
+        my $values = $app->text_param_list ('value');
+        my @data;
+        for (0..$#$names) {
+          push @data, {
+            group_id => $group_id,
+            account_id => $account_id,
+            key => Dongry::Type->serialize ('text', $names->[$_]),
+            value => Dongry::Type->serialize ('text', $values->[$_]),
+            created => $time,
+            updated => $time,
+          } if defined $values->[$_];
+        }
+        return Promise->resolve->then (sub {
+          return unless @data;
+          return $app->db->insert ('group_member_data', \@data, duplicate => {
+            value => $app->db->bare_sql_fragment ('VALUES(`value`)'),
+            updated => $app->db->bare_sql_fragment ('VALUES(`updated`)'),
+          });
+        })->then (sub {
+          return $app->send_json ({});
+        });
+      } # /group/member/data
+    });
+  } # /group/member
+
+  if (@$path == 2 and $path->[1] eq 'members') {
+    ## /group/members - List of group members
+    ##
+    ## With
+    ##   context_key   An opaque string identifying the application.  Required.
+    ##   group_id      A group ID.  Required.
+    ##
+    ## Returns
+    ##   memberships   Object of (account_id, group member object)
+    ##
+    ## Supports paging
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $page = this_page ($app, limit => 100, max_limit => 100);
+    my $group_id = $app->bare_param ('group_id');
+    return $app->db->select ('group_member', {
+      context_key => $app->bare_param ('context_key'),
+      group_id => $group_id,
+      (defined $page->{value} ? (created => $page->{value}) : ()),
+    }, fields => ['account_id', 'created', 'updated',
+                  'user_status', 'owner_status', 'member_type'],
+      source_name => 'master',
+      offset => $page->{offset}, limit => $page->{limit},
+      order => ['created', $page->{order_direction}],
+    )->then (sub {
+      my $members = $_[0]->all;
+      return $class->load_data ($app, 'group_member_data', 'account_id', 'group_id' => $group_id, $members);
+    })->then (sub {
+      my $members = {map {
+        $_->{account_id} .= '';
+        ($_->{account_id} => $_);
+      } @{$_[0]}};
+      my $next_page = next_page $page, $members, 'created';
+      return $app->send_json ({memberships => $members, %$next_page});
+    });
+  } # /group/members
+
+  if (@$path == 2 and $path->[1] eq 'byaccount') {
+    ## /group/byaccount - List of groups by account
+    ##
+    ## With
+    ##   context_key   An opaque string identifying the application.  Required.
+    ##   account_id    An account ID.  Required.
+    ##
+    ## Returns
+    ##   memberships   Object of (group_id, group member object)
+    ##
+    ## Supports paging
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $page = this_page ($app, limit => 100, max_limit => 100);
+    my $account_id = $app->bare_param ('account_id');
+    return $app->db->select ('group_member', {
+      context_key => $app->bare_param ('context_key'),
+      account_id => $account_id,
+      (defined $page->{value} ? (updated => $page->{value}) : ()),
+    }, fields => ['group_id', 'created', 'updated',
+                  'user_status', 'owner_status', 'member_type'],
+      source_name => 'master',
+      offset => $page->{offset}, limit => $page->{limit},
+      order => ['updated', $page->{order_direction}],
+    )->then (sub {
+      my $groups = $_[0]->all;
+      return $class->load_data ($app, 'group_member_data', 'group_id', 'account_id' => $account_id, $groups);
+    })->then (sub {
+      my $groups = {map {
+        $_->{group_id} .= '';
+        ($_->{group_id} => $_);
+      } @{$_[0]}};
+      my $next_page = next_page $page, $groups, 'updated';
+      return $app->send_json ({memberships => $groups, %$next_page});
+    });
+  } # /group/byaccount
+
+  return $app->throw_error (404);
+} # group
+
 1;
 
 =head1 LICENSE
 
-Copyright 2007-2015 Wakaba <wakaba@suikawiki.org>.
+Copyright 2007-2017 Wakaba <wakaba@suikawiki.org>.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as

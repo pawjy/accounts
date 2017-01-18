@@ -679,17 +679,20 @@ sub Test (&;%) {
       test {
         ok 0, 'No exception';
         is $error, undef, 'No exception';
-      } $current->context;
+      } $current->c;
     });
   }, @_);
 } # Test
 
 package Tests::Current;
 use JSON::PS;
+use Test::More;
+use Test::X1;
+use Promised::Flow;
 
-sub context ($) {
+sub c ($) {
   return $_[0]->{context};
-} # context
+} # c
 
 sub client ($) {
   my $self = $_[0];
@@ -701,10 +704,16 @@ sub client ($) {
   };
 } # client
 
+#XXX
 sub object ($$$) {
   my ($self, $type, $name) = @_;
-  return $self->{objects}->{$type}->{$name} || die "Object ($type, $name) not found";
+  return $self->{objects}->{$name} || die "Object ($type, $name) not found";
 } # object
+
+sub o ($$$) {
+  my ($self, $name) = @_;
+  return $self->{objects}->{$name} || die "Object |$name| not found";
+} # o
 
 sub post ($$$;%) {
   my ($self, $path, $params, %args) = @_;
@@ -720,7 +729,7 @@ sub post ($$$;%) {
     :
       (url => Web::URL->parse_string ($path, Web::URL->parse_string ($self->client->origin->to_ascii)))
     ),
-    bearer => $self->context->received_data->{keys}->{'auth.bearer'},
+    bearer => $self->c->received_data->{keys}->{'auth.bearer'},
     params => {%$p, %$params},
   )->then (sub {
     my $res = $_[0];
@@ -735,13 +744,142 @@ sub post ($$$;%) {
   });
 } # post
 
-sub create_session ($$;%) {
-  my ($self, $name, %args) = @_;
+sub are_errors ($$$) {
+  my ($self, $base, $tests) = @_;
+  my ($base_path, $base_params, %base_args) = @$base;
+
+  my $has_error = 0;
+
+  return (promised_for {
+    my $test = shift;
+    my %opt = (
+      method => 'POST',
+      path => $base_path,
+      params => $base_params,
+      bearer => $self->c->received_data->{keys}->{'auth.bearer'},
+      %base_args,
+      %$test,
+    );
+    return $self->client->request (
+      method => $opt{method}, path => $opt{path}, params => $opt{params},
+      bearer => $opt{bearer},
+    )->then (sub {
+      my $res = $_[0];
+      unless ($opt{status} == $res->status) {
+        test {
+          is $res->status, $opt{status}, $res;
+        } $self->c, name => $opt{name};
+        $has_error = 1;
+      }
+      if (defined $opt{reason}) {
+        my $json = json_bytes2perl $res->body_bytes;
+        unless (defined $json and
+                ref $json eq 'JSON' and
+                defined $json->{reason} and
+                $json->{reason} eq $opt{reason}) {
+          test {
+            is $json->{reason}, $opt{reason};
+          } $self->c, name => $opt{name};
+          $has_error = 1;
+        }
+      }
+    });
+  } $tests)->then (sub {
+    unless ($has_error) {
+      test {
+        ok 1, 'no error';
+      } $self->c;
+    }
+  });
+} # are_errors
+
+sub create_session ($$$) {
+  my ($self, $name, $opts) = @_;
   return $self->post (['session'], {})->then (sub {
     die $_[0]->{res} unless $_[0]->{status} == 200;
-    $self->{objects}->{session}->{$name} = $_[0]->{json};
+    $self->{objects}->{$name} = $_[0]->{json};
   });
 } # create_session
+
+sub create_account ($$$) {
+  my ($self, $name, $opts) = @_;
+  my $session;
+  return $self->post (['session'], {})->then (sub {
+    my $result = $_[0];
+    die $result->{res} unless $result->{status} == 200;
+    $session = $result->{json};
+    return $self->post (['create'], {
+      sk => $session->{sk},
+      name => $opts->{name},
+    });
+  })->then (sub {
+    my $result = $_[0];
+    $result->{json}->{session} = $session;
+    $self->{objects}->{$name} = $result->{json}; # {account_id => }
+    my $names = [];
+    my $values = [];
+    for (keys %{$opts->{data} or {}}) {
+      push @$names, $_;
+      push @$values, $opts->{data}->{$_};
+    }
+    return unless @$names;
+    return $self->post (['data'], {
+      sk => $session->{sk},
+      name => $names,
+      value => $values,
+    })->then (sub {
+      my $result = $_[0];
+      die $result unless $result->{status} == 200;
+    });
+  });
+} # create_account
+
+sub create_group ($$$) {
+  my ($self, $name => $opts) = @_;
+  $opts->{context_key} //= rand;
+  my $group_id;
+  return $self->post (['group', 'create'], $opts)->then (sub {
+    my $result = $_[0];
+    die $result unless $result->{status} == 200;
+    $self->{objects}->{$name} = $result->{json}; # {context_key, group_id}
+    $group_id = $result->{json}->{group_id};
+    my $names = [];
+    my $values = [];
+    for (keys %{$opts->{data} or {}}) {
+      push @$names, $_;
+      push @$values, $opts->{data}->{$_};
+    }
+    return unless @$names;
+    return $self->post (['group', 'data'], {
+      context_key => $opts->{context_key},
+      group_id => $group_id,
+      name => $names,
+      value => $values,
+    })->then (sub {
+      my $result = $_[0];
+      die $result unless $result->{status} == 200;
+    });
+  })->then (sub {
+    my $members = [map {
+      if (ref $_) {
+        $_;
+      } else {
+        +{account_id => $self->o ($_)->{account_id},
+          user_status => 1,
+          owner_status => 1,
+          member_type => 1};
+      }
+    } @{$opts->{members} or []}];
+    return promised_for {
+      my $account = $_[0];
+      return $self->post (['group', 'member', 'status'], {
+        context_key => $opts->{context_key},
+        group_id => $group_id,
+        %$account,
+      });
+    } $members;
+  });
+} # create_group
 
 sub done ($) {
   my $self = $_[0];

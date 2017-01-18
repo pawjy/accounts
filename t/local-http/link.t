@@ -12,7 +12,7 @@ Test {
     my $res = $_[0];
     test {
       is $res->status, 405;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 1, name => '/link GET';
 
@@ -22,7 +22,7 @@ Test {
     my $res = $_[0];
     test {
       is $res->status, 401;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 1, name => '/link no auth';
 
@@ -33,7 +33,7 @@ Test {
     test {
       is $result->{status}, 400;
       is $result->{json}->{reason}, 'Bad session';
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 2, name => '/link bad session';
 
@@ -52,7 +52,7 @@ Test {
       test {
         is $result->{status}, 400;
         is $result->{json}->{reason}, 'Bad session';
-      } $current->context;
+      } $current->c;
     });
   });
 } wait => $wait, n => 2, name => '/link bad sk_context';
@@ -70,7 +70,7 @@ Test {
       test {
         is $result->{status}, 400;
         is $result->{json}->{reason}, 'Bad |server|';
-      } $current->context;
+      } $current->c;
     });
   });
 } wait => $wait, n => 2, name => '/link bad server';
@@ -88,9 +88,9 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      my $auth = $current->context->received_data->{oauth1_auth_url};
+      my $auth = $current->c->received_data->{oauth1_auth_url};
       like $result->{json}->{authorization_url}, qr{^\Q$auth\E\?oauth_token=.+$};
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 2, name => '/link';
 
@@ -106,7 +106,7 @@ Test {
     test {
       is $result->{status}, 400;
       is $result->{json}->{reason}, 'Not a login user';
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 2, name => '/link without account';
 

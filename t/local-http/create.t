@@ -12,7 +12,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 405;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 1, name => '/create GET';
 
@@ -22,7 +22,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 401;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 1, name => '/create no auth';
 
@@ -34,7 +34,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 400;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 1, name => '/create no session';
 
@@ -44,7 +44,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 400;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 1, name => '/create no session';
 
@@ -58,7 +58,7 @@ Test {
     test {
       is $result->{status}, 200;
       ok $account_id = $result->{json}->{account_id};
-    } $current->context;
+    } $current->c;
     return $current->post (['info'], {}, session => 1);
   })->then (sub {
     my $result = $_[0];
@@ -69,7 +69,7 @@ Test {
       is $result->{json}->{user_status}, 1;
       is $result->{json}->{admin_status}, 1;
       is $result->{json}->{terms_version}, 0;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 8, name => '/create has anon session';
 
@@ -83,7 +83,7 @@ Test {
     test {
       is $result->{status}, 400;
       is $result->{json}->{reason}, 'Bad session';
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 2, name => '/create bad session';
 
@@ -102,7 +102,7 @@ Test {
     test {
       is $result->{status}, 200;
       ok $account_id = $result->{json}->{account_id};
-    } $current->context;
+    } $current->c;
     return $current->post (['info'], {}, session => 1);
   })->then (sub {
     my $result = $_[0];
@@ -113,7 +113,7 @@ Test {
       is $result->{json}->{user_status}, 2;
       is $result->{json}->{admin_status}, 6;
       is $result->{json}->{terms_version}, 255;
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 8, name => '/create with options';
 
@@ -128,7 +128,7 @@ Test {
     my $result = $_[0];
     test {
       ok $account_id = $result->{json}->{account_id};
-    } $current->context;
+    } $current->c;
     return $current->post (['create'], {
       name => "\x{65000}",
       user_status => 2,
@@ -140,7 +140,7 @@ Test {
     test {
       is $result->{status}, 400;
       is $result->{json}->{reason}, 'Account-associated session';
-    } $current->context;
+    } $current->c;
     return $current->post (['info'], {}, session => 1);
   })->then (sub {
     my $result = $_[0];
@@ -148,7 +148,7 @@ Test {
       is $result->{status}, 200;
       is $result->{json}->{account_id}, $account_id;
       is $result->{json}->{name}, "hoge";
-    } $current->context;
+    } $current->c;
   });
 } wait => $wait, n => 6, name => '/create with associated session';
 
