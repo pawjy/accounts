@@ -640,37 +640,78 @@ sub main ($$) {
   } # /keygen
 
   if (@$path == 1 and $path->[0] eq 'info') {
-    ## /info - Current account data
+    ## /info - Get the current account of the session
+    ##
+    ## Parameters
+    ##   sk           The |sk| value of the sesion, if available
+    ##   context_key  An opaque string identifying the application.
+    ##                Required when |group_id| is specified.
+    ##   group_id     The group ID.  If specified, properties of group and
+    ##                group membership of the account of the session are
+    ##                also returned.
+    ##
+    ## Returns
+    ##   account_id   The account ID, if there is an account.
+    ##   name         The name of the account, if there is an account.
+    ##   user_status  The user status of the account, if there is.
+    ##   admin_status The admin status of the account, if there is.
+    ##   terms_version The terms version of the account, if there is.
+    ##   group        The group object, if available.
+    ##   group_membership The group membership object, if available.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0];
+      my $context_key = $app->bare_param ('context_key');
+      my $group_id = $app->bare_param ('group_id');
+      my $json = {};
       return Promise->resolve->then (sub {
-        if (defined $session_row) {
-          my $id = $session_row->get ('data')->{account_id};
-          if (defined $id) {
-            return $app->db->select ('account', {
-              account_id => Dongry::Type->serialize ('text', $id),
-            }, source_name => 'master', fields => ['name', 'user_status', 'admin_status', 'terms_version'])->then (sub {
-              my $r = $_[0]->first_as_row // die "Account |$id| has no data";
-              my $json = {};
-              $json->{account_id} = format_id $id;
-              $json->{name} = $r->get ('name');
-              $json->{user_status} = $r->get ('user_status');
-              $json->{admin_status} = $r->get ('admin_status');
-              $json->{terms_version} = $r->get ('terms_version');
-              return $json;
-            });
-          }
-        }
-        return {};
+        my $account_id;
+        $account_id = $session_row->get ('data')->{account_id}
+            if defined $session_row;
+        if (defined $account_id) {
+          return $app->db->select ('account', {
+            account_id => Dongry::Type->serialize ('text', $account_id),
+          }, source_name => 'master', fields => ['name', 'user_status', 'admin_status', 'terms_version'])->then (sub {
+            my $r = $_[0]->first_as_row // die "Account |$account_id| has no data";
+            $json->{account_id} = format_id $account_id;
+            $json->{name} = $r->get ('name');
+            $json->{user_status} = $r->get ('user_status');
+            $json->{admin_status} = $r->get ('admin_status');
+            $json->{terms_version} = $r->get ('terms_version');
+            
+            if (defined $context_key or defined $group_id) {
+              return $app->db->select ('group_member', {
+                context_key => $context_key,
+                group_id => $group_id,
+                account_id => Dongry::Type->serialize ('text', $account_id),
+              }, fields => ['user_status', 'owner_status', 'member_type'], source_name => 'master')->then (sub {
+                my $mem = $_[0]->first // return;
+                $json->{group_membership} = $mem;
+# XXX load_data
+              });
+            }
+          });
+        } # $account_id
       })->then (sub {
-        return $class->load_linked ($app => [$_[0]]);
+        return unless defined $group_id;
+        return $app->db->select ('group', {
+          context_key => $context_key,
+          group_id => $group_id,
+        }, fields => ['group_id', 'created', 'updated', 'owner_status', 'admin_status'], source_name => 'master')->then (sub {
+          my $g = $_[0]->first // return;
+          $g->{group_id} .= '';
+          $json->{group} = $g;
+# XXX load_data
+        });
+# XXX select specifying status field values
       })->then (sub {
-        return $class->load_data ($app, 'account_data', 'account_id', undef, undef, $_[0]);
+        return $class->load_linked ($app => [$json]);
       })->then (sub {
-        return $app->send_json ($_[0]->[0]);
+        return $class->load_data ($app, 'account_data', 'account_id', undef, undef, [$json]);
+      })->then (sub {
+        return $app->send_json ($json);
       });
     });
   } # /info

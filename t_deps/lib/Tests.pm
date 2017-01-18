@@ -865,16 +865,22 @@ sub create_group ($$$) {
       die $result unless $result->{status} == 200;
     });
   })->then (sub {
-    my $members = [map { $self->o ($_) } @{$opts->{members} or []}];
+    my $members = [map {
+      if (ref $_) {
+        $_;
+      } else {
+        +{account_id => $self->o ($_)->{account_id},
+          user_status => 1,
+          owner_status => 1,
+          member_type => 1};
+      }
+    } @{$opts->{members} or []}];
     return promised_for {
       my $account = $_[0];
       return $self->post (['group', 'member', 'status'], {
         context_key => $opts->{context_key},
         group_id => $group_id,
-        account_id => $account->{account_id},
-        user_status => 1,
-        owner_status => 1,
-        member_type => 1,
+        %$account,
       });
     } $members;
   });

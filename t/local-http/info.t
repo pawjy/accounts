@@ -118,6 +118,63 @@ Test {
   });
 } wait => $wait, n => 4, name => '/info with data';
 
+Test {
+  my $current = shift;
+  return $current->create_group (g1 => {})->then (sub {
+    return $current->post (['info'], {
+      sk => undef,
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is $result->{json}->{account_id}, undef;
+      is $result->{json}->{group_membership}, undef;
+      is $result->{json}->{group}->{group_id}, $current->o ('g1')->{group_id};
+      like $result->{res}->body_bytes, qr{"group_id"\s*:\s*"};
+      is $result->{json}->{group}->{owner_status}, 1;
+      is $result->{json}->{group}->{admin_status}, 1;
+      ok $result->{json}->{group}->{created};
+      ok $result->{json}->{group}->{updated};
+    } $current->c;
+  });
+} wait => $wait, n => 9, name => '/info no sk, group_id';
+
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {})->then (sub {
+    return $current->create_group (g1 => {members => [{
+      account_id => $current->o ('a1')->{account_id},
+      user_status => 3,
+      owner_status => 6,
+      member_type => 9,
+    }]});
+  })->then (sub {
+    return $current->post (['info'], {
+      sk => $current->o ('a1')->{session}->{sk},
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is $result->{json}->{account_id}, $current->o ('a1')->{account_id};
+      is $result->{json}->{group_membership}->{user_status}, 3;
+      is $result->{json}->{group_membership}->{owner_status}, 6;
+      is $result->{json}->{group_membership}->{member_type}, 9;
+      is $result->{json}->{group}->{group_id}, $current->o ('g1')->{group_id};
+      like $result->{res}->body_bytes, qr{"group_id"\s*:\s*"};
+      is $result->{json}->{group}->{owner_status}, 1;
+      is $result->{json}->{group}->{admin_status}, 1;
+      ok $result->{json}->{group}->{created};
+      ok $result->{json}->{group}->{updated};
+    } $current->c;
+  });
+} wait => $wait, n => 11, name => '/info with sk, group_id';
+
 run_tests;
 stop_web_server;
 
