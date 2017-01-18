@@ -289,6 +289,72 @@ for (
   } wait => $wait, n => 3, name => ['/info group member status filter', $name];
 }
 
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {data => {
+    hoge => "\x{5000}",
+    fuga => 0,
+  }})->then (sub {
+    return $current->create_group (g1 => {
+      data => {
+        hoge => 1344,
+      },
+      members => [{
+        account_id => $current->o ('a1')->{account_id},
+        data => {fuga => 21},
+      }],
+    });
+  })->then (sub {
+    return $current->post (['info'], {
+      sk => $current->o ('a1')->{session}->{sk},
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      with_data => ['hoge', 'fuga', 'abc'],
+    })->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->{json}->{data}->{hoge}, "\x{5000}";
+        is $result->{json}->{data}->{fuga}, 0;
+        is $result->{json}->{data}->{abc}, undef;
+        is $result->{json}->{group}->{data}, undef;
+        is $result->{json}->{group_membership}->{data}, undef;
+      } $current->c;
+    });
+  })->then (sub {
+    return $current->post (['info'], {
+      sk => $current->o ('a1')->{session}->{sk},
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      with_group_data => ['hoge', 'fuga', 'abc'],
+    })->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->{json}->{data}, undef;
+        is $result->{json}->{group}->{data}->{hoge}, "1344";
+        is $result->{json}->{group}->{data}->{fuga}, undef;
+        is $result->{json}->{group}->{data}->{abc}, undef;
+        is $result->{json}->{group_membership}->{data}, undef;
+      } $current->c;
+    });
+  })->then (sub {
+    return $current->post (['info'], {
+      sk => $current->o ('a1')->{session}->{sk},
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      with_group_member_data => ['hoge', 'fuga', 'abc'],
+    })->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->{json}->{data}, undef;
+        is $result->{json}->{group}->{data}, undef;
+        is $result->{json}->{group_membership}->{data}->{hoge}, undef;
+        is $result->{json}->{group_membership}->{data}->{fuga}, "21";
+        is $result->{json}->{group_membership}->{data}->{abc}, undef;
+      } $current->c;
+    });
+  });
+} wait => $wait, n => 15, name => ['/info with group data'];
+
 run_tests;
 stop_web_server;
 
