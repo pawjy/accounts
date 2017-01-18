@@ -3,203 +3,127 @@ use warnings;
 use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
-use Test::More;
-use Test::X1;
-use Promise;
-use Web::UserAgent::Functions qw(http_post http_get);
-use JSON::PS;
 
 my $wait = web_server;
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  return Promise->new (sub {
-    my ($ok, $ng) = @_;
-    http_get
-        url => qq<http://$host/info>,
-        header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-        anyevent => 1,
-        max_redirect => 0,
-        cb => sub {
-          my $res = $_[1];
-          if ($res->code == 200) {
-            $ok->(json_bytes2perl $res->content);
-          } else {
-            $ng->($res->code);
-          }
-        };
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $status = $_[0];
-    test {
-      is $status, 405;
-    } $c;
-    done $c;
-    undef $c;
-  });
-} wait => $wait, n => 1, name => '/info GET';
-
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  return Promise->new (sub {
-    my ($ok, $ng) = @_;
-    http_post
-        url => qq<http://$host/info>,
-        anyevent => 1,
-        max_redirect => 0,
-        cb => sub {
-          my $res = $_[1];
-          if ($res->code == 200) {
-            $ok->(json_bytes2perl $res->content);
-          } else {
-            $ng->($res->code);
-          }
-        };
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $status = $_[0];
-    test {
-      is $status, 401;
-    } $c;
-    done $c;
-    undef $c;
-  });
-} wait => $wait, n => 1, name => '/info no auth';
-
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  return Promise->new (sub {
-    my ($ok, $ng) = @_;
-    http_post
-        url => qq<http://$host/info>,
-        header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-        anyevent => 1,
-        max_redirect => 0,
-        cb => sub {
-          my $res = $_[1];
-          if ($res->code == 200) {
-            $ok->(json_bytes2perl $res->content);
-          } else {
-            $ng->($res->code);
-          }
-        };
+Test {
+  my $current = shift;
+  my $name = "\x{53533}" . rand;
+  return $current->create_account (a1 => {name => $name})->then (sub {
+    return $current->are_errors (
+      [['info'], {
+        sk => $current->o ('a1')->{session}->{sk},
+      }],
+      [
+        {method => 'GET', status => 405, name => 'Bad method'},
+        {bearer => undef, status => 401, name => 'No bearer'},
+        {bearer => rand, status => 401, name => 'Bad bearer'},
+      ],
+    );
   })->then (sub {
-    my $json = $_[0];
+    return $current->post (['info'], {
+      sk => $current->o ('a1')->{session}->{sk},
+    });
+  })->then (sub {
+    my $result = $_[0];
     test {
-      is $json->{account_id}, undef;
-      is $json->{name}, undef;
-    } $c;
-    done $c;
-    undef $c;
+      is $result->{status}, 200;
+      is $result->{json}->{account_id}, $current->o ('a1')->{account_id};
+      like $result->{res}->body_bytes, qr{"account_id"\s*:\s*"};
+      is $result->{json}->{name}, $name;
+    } $current->c;
+  });
+} wait => $wait, n => 5, name => '/info with accounted session';
+
+Test {
+  my $current = shift;
+  return $current->create_session (s1 => {})->then (sub {
+    return $current->post (['info'], {});
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is $result->{json}->{account_id}, undef;
+      is $result->{json}->{name}, undef;
+    } $current->c;
   });
 } wait => $wait, n => 2, name => '/info no session';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  session ($c)->then (sub {
-    my $session = $_[0];
-    return Promise->new (sub {
-      my ($ok, $ng) = @_;
-      http_post
-          url => qq<http://$host/info>,
-          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {sk => $session->{sk}},
-          anyevent => 1,
-          max_redirect => 0,
-          cb => sub {
-            my $res = $_[1];
-            if ($res->code == 200) {
-              $ok->(json_bytes2perl $res->content);
-            } else {
-              $ng->($res->code);
-            }
-          };
+Test {
+  my $current = shift;
+  return $current->create_session (s1 => {})->then (sub {
+    return $current->post (['info'], {
+      sk => $current->o ('s1')->{sk},
     });
   })->then (sub {
-    my $json = $_[0];
+    my $result = $_[0];
     test {
-      is $json->{account_id}, undef;
-      is $json->{name}, undef;
-    } $c;
-    done $c;
-    undef $c;
+      is $result->{status}, 200;
+      is $result->{json}->{account_id}, undef;
+      is $result->{json}->{name}, undef;
+    } $current->c;
   });
-} wait => $wait, n => 2, name => '/info has anon session';
+} wait => $wait, n => 3, name => '/info has anon session';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  session ($c)->then (sub {
-    my $session = $_[0];
-    return Promise->new (sub {
-      my ($ok, $ng) = @_;
-      http_post
-          url => qq<http://$host/info>,
-          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {sk => $session->{sk}, with_linked => ['id', 'realname', 'icon_url']},
-          anyevent => 1,
-          max_redirect => 0,
-          cb => sub {
-            my $res = $_[1];
-            if ($res->code == 200) {
-              $ok->(json_bytes2perl $res->content);
-            } else {
-              $ng->($res->code);
-            }
-          };
+Test {
+  my $current = shift;
+  return $current->create_session (s1 => {})->then (sub {
+    return $current->post (['info'], {
+      sk => $current->o ('s1')->{sk},
+      with_linked => ['id', 'realname', 'icon_url'],
     });
   })->then (sub {
-    my $json = $_[0];
+    my $result = $_[0];
     test {
-      is $json->{account_id}, undef;
-      is $json->{name}, undef;
-    } $c;
-    done $c;
-    undef $c;
+      is $result->{status}, 200;
+      is $result->{json}->{account_id}, undef;
+      is $result->{json}->{name}, undef;
+      is $result->{linked}, undef;
+    } $current->c;
   });
-} wait => $wait, n => 2, name => '/info with linked (no match)';
+} wait => $wait, n => 4, name => '/info with linked (no match)';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  Promise->resolve->then (sub {
-    my $session = $_[0];
-    return Promise->new (sub {
-      my ($ok, $ng) = @_;
-      http_post
-          url => qq<http://$host/info>,
-          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {sk => 'gfaeaaaaa'},
-          anyevent => 1,
-          max_redirect => 0,
-          cb => sub {
-            my $res = $_[1];
-            if ($res->code == 200) {
-              $ok->(json_bytes2perl $res->content);
-            } else {
-              $ng->($res->code);
-            }
-          };
+Test {
+  my $current = shift;
+  return $current->post (['info'], {sk => 'gfaeaaaaa'})->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is $result->{json}->{account_id}, undef;
+      is $result->{json}->{name}, undef;
+    } $current->c;
+  });
+} wait => $wait, n => 3, name => '/info bad session';
+
+Test {
+  my $current = shift;
+  my $v1 = "\x{53533}" . rand;
+  my $v2 = rand;
+  return $current->create_account (a1 => {data => {
+    name => $v1,
+    hoge => $v2,
+  }})->then (sub {
+    return $current->post (['info'], {
+      sk => $current->o ('a1')->{session}->{sk},
+      with_data => ['name', 'hoge', 'foo'],
     });
   })->then (sub {
-    my $json = $_[0];
+    my $result = $_[0];
     test {
-      is $json->{account_id}, undef;
-      is $json->{name}, undef;
-    } $c;
-    done $c;
-    undef $c;
+      is $result->{status}, 200;
+      is $result->{json}->{data}->{name}, $v1;
+      is $result->{json}->{data}->{hoge}, $v2;
+      is $result->{json}->{data}->{foo}, undef;
+    } $current->c;
   });
-} wait => $wait, n => 2, name => '/info bad session';
+} wait => $wait, n => 4, name => '/info with data';
 
 run_tests;
 stop_web_server;
 
 =head1 LICENSE
 
-Copyright 2015 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

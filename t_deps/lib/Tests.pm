@@ -690,9 +690,14 @@ use Test::More;
 use Test::X1;
 use Promised::Flow;
 
+# XXX deprecated
 sub context ($) {
   return $_[0]->{context};
 } # context
+
+sub c ($) {
+  return $_[0]->{context};
+} # c
 
 sub client ($) {
   my $self = $_[0];
@@ -793,8 +798,8 @@ sub are_errors ($$$) {
   });
 } # are_errors
 
-sub create_session ($$;%) {
-  my ($self, $name, %args) = @_;
+sub create_session ($$$) {
+  my ($self, $name, $opts) = @_;
   return $self->post (['session'], {})->then (sub {
     die $_[0]->{res} unless $_[0]->{status} == 200;
     $self->{objects}->{$name} = $_[0]->{json};
@@ -803,13 +808,34 @@ sub create_session ($$;%) {
 
 sub create_account ($$$) {
   my ($self, $name, $opts) = @_;
+  my $session;
   return $self->post (['session'], {})->then (sub {
     my $result = $_[0];
     die $result->{res} unless $result->{status} == 200;
-    return $self->post (['create'], $result->{json});
+    $session = $result->{json};
+    return $self->post (['create'], {
+      sk => $session->{sk},
+      name => $opts->{name},
+    });
   })->then (sub {
     my $result = $_[0];
+    $result->{json}->{session} = $session;
     $self->{objects}->{$name} = $result->{json}; # {account_id => }
+    my $names = [];
+    my $values = [];
+    for (keys %{$opts->{data} or {}}) {
+      push @$names, $_;
+      push @$values, $opts->{data}->{$_};
+    }
+    return unless @$names;
+    return $self->post (['data'], {
+      account_id => $result->{json}->{account_id},
+      name => $names,
+      value => $values,
+    })->then (sub {
+      my $result = $_[0];
+      die $result unless $result->{status} == 200;
+    });
   });
 } # create_account
 
