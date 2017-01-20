@@ -122,3 +122,25 @@ CREATE TABLE IF NOT EXISTS `group_member_data` (
   KEY (`created`),
   KEY (`updated`)
 ) DEFAULT CHARSET=BINARY ENGINE=InnoDB;
+
+create table if not exists `invitation` (
+  `context_key` VARBINARY(31),
+  `invitation_context_key` varbinary(511),
+  `invitation_key` binary(30),
+  `author_account_id` bigint unsigned not null,
+  `invitation_data` mediumblob not null,
+  `target_account_id` bigint unsigned not null default 0,
+  `created` double not null,
+  `expires` double not null,
+  `user_account_id` bigint unsigned not null default 0,
+  `used_data` mediumblob not null,
+  `used` double not null,
+  primary key (`context_key`, `invitation_context_key`, `invitation_key`),
+  key (`invitation_context_key`, `invitation_key`),
+  key (`invitation_context_key`, `author_account_id`, `created`),
+  key (`invitation_context_key`, `target_account_id`, `created`),
+  key (`invitation_context_key`, `user_account_id`, `used`),
+  key (`created`),
+  key (`expires`),
+  key (`used`)
+) default charset=binary engine=innodb;

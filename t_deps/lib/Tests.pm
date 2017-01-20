@@ -899,6 +899,21 @@ sub create_group ($$$) {
   });
 } # create_group
 
+sub create_invitation ($$$) {
+  my ($self, $name, $opts) = @_;
+  return $self->post (['invite', 'create'], {
+    context_key => $opts->{context_key} // rand,
+    invitation_context_key => $opts->{invitation_context_key} // rand,
+    account_id => $opts->{account_id} // int rand 1000000,
+    target_account_id => $opts->{target_account_id}, # or undef
+    data => (perl2json_chars $opts->{data}), # or undef
+  })->then (sub {
+    my $result = $_[0];
+    die $result unless $result->{status} == 200;
+    $self->{objects}->{$name} = $result->{json};
+  });
+} # create_invitation
+
 sub done ($) {
   my $self = $_[0];
   (delete $self->{context})->done;
