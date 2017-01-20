@@ -99,6 +99,10 @@ sub main ($$) {
     return $class->group ($app, $path);
   }
 
+  if ($path->[0] eq 'invite') {
+    return $class->invite ($app, $path);
+  }
+
   if (@$path == 1 and $path->[0] eq 'session') {
     ## /session - Ensure that there is a session
     $app->requires_request_method ({POST => 1});
@@ -1282,7 +1286,7 @@ sub next_page ($$$) {
       if defined $this_page->{value};
   if (ref $items eq 'ARRAY') {
     if (@$items) {
-      my $last_value = $items->[0]->{$_->{$value_key}};
+      my $last_value = $items->[0]->{$value_key};
       for (@$items) {
         $values->{$_->{$value_key}}++;
         if ($sign eq '+') {
@@ -1699,6 +1703,222 @@ sub group ($$$) {
 
   return $app->throw_error (404);
 } # group
+
+sub invite ($$$) {
+  my ($class, $app, $path) = @_;
+
+  if (@$path == 2 and $path->[1] eq 'create') {
+    ## /invite/create - Create an invitation
+    ##
+    ## Parameters
+    ##   context_key   An opaque string identifying the application.  Required.
+    ##   invitation_context_key An opaque string identifying the kind
+    ##                 or target of the invitation.  Required.
+    ##   account_id    The ID of the account who creates the invitation.
+    ##                 Required.  This must be a valid account ID (not
+    ##                 verified by the end point).
+    ##   data          A JSON data packed within the invitation.  Default
+    ##                 is |null|.
+    ##   expires       The expiration date of the invitation, in Unix time
+    ##                 number.  Default is now + 24 hours.
+    ##   target_account_id The ID of the account who can use the invitation.
+    ##                 Default is |0|, which indicates the invitation can
+    ##                 be used by anyone.  Otherwise, this must be a valid
+    ##                 account ID (not verified by the end point).
+    ##
+    ## Returns
+    ##   context_key   Same as parameter, echoed just for convenience.
+    ##   invitation_context_key Same as parameter, echoed just for convenience.
+    ##   invitation_key An opaque string identifying the invitation.
+    ##   expires       The expiration date of the invitation, in Unix time
+    ##                 number.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $context_key = $app->bare_param ('context_key')
+        // return $app->throw_error (400, reason_phrase => 'No |context_key|');
+    my $inv_context_key = $app->bare_param ('invitation_context_key')
+        // return $app->throw_error (400, reason_phrase => 'No |invitation_context_key|');
+    my $author_account_id = $app->bare_param ('account_id')
+        or return $app->throw_error (400, reason_phrase => 'No |account_id|');
+    my $data = Dongry::Type->parse ('json', $app->bare_param ('data'));
+    my $invitation_key = id 30;
+    my $time = time;
+    my $expires = $app->bare_param ('expires');
+    $expires = $time + 24*60*60 unless defined $expires;
+    return $app->db->insert ('invitation', [{
+      context_key => $context_key,
+      invitation_context_key => $inv_context_key,
+      invitation_key => $invitation_key,
+      author_account_id => $author_account_id,
+      invitation_data => Dongry::Type->serialize ('json', $data) // 'null',
+      target_account_id => $app->bare_param ('target_account_id') || 0,
+      created => $time,
+      expires => $expires,
+      user_account_id => 0,
+      used_data => 'null',
+      used => 0,
+    }])->then (sub {
+      return $app->send_json ({
+        context_key => $context_key,
+        invitation_context_key => $inv_context_key,
+        invitation_key => $invitation_key,
+        expires => $expires,
+      });
+    });
+  } # /invite/create
+
+  if (@$path == 2 and $path->[1] eq 'use') {
+    ## /invite/use - Use an invitation
+    ##
+    ## Parameters
+    ##   context_key   An opaque string identifying the application.  Required.
+    ##   invitation_context_key An opaque string identifying the kind
+    ##                 or target of the invitation.  Required.
+    ##   invitation_key An opaque string identifying the invitation.  Required.
+    ##   account_id    The ID of the account who uses the invitation.
+    ##                 Required unless |ignore_target| is true.
+    ##                 This must be a valid account ID (not verified by the
+    ##                 end point).
+    ##   ignore_target If true, target account of the invitation is ignored.
+    ##                 This parameter can be used to disable the invitation
+    ##                 (e.g. by the owner of the target resource).
+    ##   data          A JSON data saved with the invitation.  Default
+    ##                 is |null|.
+    ##
+    ## Returns
+    ##   invitation_data The JSON data saved when the invitation was created.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $context_key = $app->bare_param ('context_key')
+        // return $app->throw_error (400, reason_phrase => 'Bad |context_key|');
+    my $inv_context_key = $app->bare_param ('invitation_context_key')
+        // return $app->throw_error (400, reason_phrase => 'Bad |invitation_context_key|');
+    my $invitation_key = $app->bare_param ('invitation_key')
+        // return $app->throw_error_json ({reason => 'Bad |invitation_key|'});
+    my $ignore_target = $app->bare_param ('ignore_target');
+    my $user_account_id = $app->bare_param ('account_id')
+        or $ignore_target
+        or return $app->throw_error (400, reason_phrase => 'No |account_id|');
+    my $data = Dongry::Type->parse ('json', $app->bare_param ('data'));
+    my $time = time;
+    return $app->db->update ('invitation', {
+      user_account_id => $user_account_id,
+      used_data => Dongry::Type->serialize ('json', $data) // 'null',
+      used => $time,
+    }, where => {
+      context_key => $context_key,
+      invitation_context_key => $inv_context_key,
+      invitation_key => $invitation_key,
+      ($ignore_target ? () : (target_account_id => {-in => [0, $user_account_id]})),
+      expires => {'>=', $time},
+      used => 0,
+    })->then (sub {
+      unless ($_[0]->row_count == 1) {
+        ## Either:
+        ##   - Invitation key is invalid
+        ##   - context_key or invitation_context_key is wrong
+        ##   - The account is not the target of the invitation
+        ##   - The invitation has expired
+        ##   - The invitation has been used
+        return $app->throw_error_json ({reason => 'Bad invitation'});
+      }
+      return $app->db->select ('invitation', {
+        context_key => $context_key,
+        invitation_context_key => $inv_context_key,
+        invitation_key => $invitation_key,
+      }, fields => ['invitation_data'], source_name => 'master');
+    })->then (sub {
+      my $d = $_[0]->first // die "Invitation not found";
+      return $app->send_json ({
+        invitation_data => Dongry::Type->parse ('json', $d->{invitation_data}),
+      });
+    });
+  } # /invite/use
+
+  if (@$path == 2 and $path->[1] eq 'open') {
+    ## /invite/open - Get an invitation for recipient
+    ##
+    ## Parameters
+    ##   context_key   An opaque string identifying the application.  Required.
+    ##   invitation_context_key An opaque string identifying the kind
+    ##                 or target of the invitation.  Required.
+    ##   invitation_key An opaque string identifying the invitation.  Required.
+    ##   account_id    The ID of the account who reads the invitation.
+    ##                 Can be |0| for "anyone".  Required.  This must be
+    ##                 a valid account ID (not verified by the end point).
+    ##
+    ## Returns
+    ##   author_account_id
+    ##   invitation_data The JSON data saved when the invitation was created.
+    ##   target_account_id
+    ##   created
+    ##   expires
+    ##   used
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $context_key = $app->bare_param ('context_key');
+    my $inv_context_key = $app->bare_param ('invitation_context_key');
+    my $invitation_key = $app->bare_param ('invitation_key');
+    my $user_account_id = $app->bare_param ('account_id') || 0;
+    return $app->db->select ('invitation', {
+      context_key => $context_key,
+      invitation_context_key => $inv_context_key,
+      invitation_key => $invitation_key,
+      target_account_id => {-in => [0, $user_account_id]},
+    }, fields => ['author_account_id', 'invitation_data',
+                   'target_account_id', 'created', 'expires',
+                   'used'], source_name => 'master')->then (sub {
+      my $d = $_[0]->first
+          // return $app->throw_error_json ({reason => 'Bad invitation'});
+      $d->{invitation_key} = $invitation_key;
+      $d->{invitation_data} = Dongry::Type->parse ('json', $d->{invitation_data});
+      return $app->send_json ($d);
+    });
+  } # /invite/open
+
+  if (@$path == 2 and $path->[1] eq 'list') {
+    ## /invite/list - Get invitations for owners
+    ##
+    ## Parameters
+    ##   context_key   An opaque string identifying the application.  Required.
+    ##   invitation_context_key An opaque string identifying the kind
+    ##                 or target of the invitation.  Required.
+    ##
+    ## Returns
+    ##   invitations   Object of (invitation_key, inivitation object)
+    ##
+    ## Supports paging.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $page = this_page ($app, limit => 50, max_limit => 100);
+    my $context_key = $app->bare_param ('context_key');
+    my $inv_context_key = $app->bare_param ('invitation_context_key');
+    return $app->db->select ('invitation', {
+      context_key => $context_key,
+      invitation_context_key => $inv_context_key,
+      (defined $page->{value} ? (created => $page->{value}) : ()),
+    }, fields => ['invitation_key', 'author_account_id', 'invitation_data',
+                   'target_account_id', 'created', 'expires',
+                   'used', 'used_data', 'user_account_id'],
+      source_name => 'master',
+      offset => $page->{offset}, limit => $page->{limit},
+      order => ['created', $page->{order_direction}],
+    )->then (sub {
+      my $items = $_[0]->all->to_a;
+      for (@$items) {
+        $_->{invitation_data} = Dongry::Type->parse ('json', $_->{invitation_data});
+        $_->{used_data} = Dongry::Type->parse ('json', $_->{used_data});
+        $_->{author_account_id} .= '';
+        $_->{target_account_id} .= '';
+        $_->{user_account_id} .= '';
+      }
+      my $next_page = next_page $page, $items, 'created';
+      return $app->send_json ({invitations => {map { $_->{invitation_key} => $_ } @$items}, %$next_page});
+    });
+  } # /invite/list
+
+  return $app->throw_error (404);
+} # invite
 
 1;
 
