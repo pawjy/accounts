@@ -1701,6 +1701,46 @@ sub group ($$$) {
     });
   } # /group/byaccount
 
+  if (@$path == 2 and $path->[1] eq 'list') {
+    ## /group/list - List of groups
+    ##
+    ## With
+    ##   context_key   An opaque string identifying the application.  Required.
+    ##   with_data
+    ##
+    ## Returns
+    ##   groups        Object of (group_id, group object)
+    ##
+    ## Supports paging
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $page = this_page ($app, limit => 100, max_limit => 100);
+    my $account_id = $app->bare_param ('account_id');
+    return $app->db->select ('group', {
+      context_key => $app->bare_param ('context_key'),
+      (defined $page->{value} ? (updated => $page->{value}) : ()),
+      (status_filter $app, '', 'owner_status', 'admin_status'),
+    }, source_name => 'master',
+      fields => ['group_id', 'created', 'updated', 'admin_status', 'owner_status'],
+      offset => $page->{offset}, limit => $page->{limit},
+      order => ['updated', $page->{order_direction}],
+    )->then (sub {
+      return $_[0]->all->to_a;
+    })->then (sub {
+      return $class->load_data ($app, '', 'group_data', 'group_id', undef, undef, $_[0]);
+    })->then (sub {
+      my $groups = {map {
+        $_->{group_id} .= '';
+        ($_->{group_id} => $_);
+      } @{$_[0]}};
+      my $next_page = next_page $page, $groups, 'updated';
+      return $app->send_json ({
+        groups => $groups,
+        %$next_page,
+      });
+    });
+  } # /group/list
+
   return $app->throw_error (404);
 } # group
 
