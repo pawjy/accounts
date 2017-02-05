@@ -1,6 +1,5 @@
 AnyEvent~7.13
 AnyEvent::HTTP~2.23
-AnyEvent::IO
 Canary::Stability~2012
 Carp~1.38
 Class::Accessor~0.34
@@ -22,11 +21,11 @@ HTML::Tagset~3.20
 HTTP::Cookies~6.01
 HTTP::Daemon~6.01
 HTTP::Date~6.02
+HTTP::Headers::Util~6.11
 HTTP::Negotiate~6.01
-HTTP::Response~6.11
 IO::HTML~1.001
 IO::Handle~1.28
-LWP~6.17
+LWP~6.18
 LWP::MediaTypes~6.02
 List::MoreUtils~0.416
 MIME::Base64~3.15
