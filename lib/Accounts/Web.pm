@@ -1265,7 +1265,8 @@ sub this_page ($%) {
   if (defined $ref) {
     if ($ref =~ /\A([+-])([0-9.]+),([0-9]+)\z/) {
       $page->{order_direction} = $1 eq '+' ? 'ASC' : 'DESC';
-      $page->{value} = {($page->{order_direction} eq 'ASC' ? '>=' : '<='), 0+$2};
+      $page->{exact_value} = 0+$2;
+      $page->{value} = {($page->{order_direction} eq 'ASC' ? '>=' : '<='), $page->{exact_value}};
       $page->{offset} = 0+$3;
       return $app->throw_error_json ({reason => "Bad |ref| offset"})
           if $page->{offset} > 100;
@@ -1282,8 +1283,8 @@ sub next_page ($$$) {
   my $next_page = {};
   my $sign = $this_page->{order_direction} eq 'ASC' ? '+' : '-';
   my $values = {};
-  $values->{$this_page->{value}} = $this_page->{offset}
-      if defined $this_page->{value};
+  $values->{$this_page->{exact_value}} = $this_page->{offset}
+      if defined $this_page->{exact_value};
   if (ref $items eq 'ARRAY') {
     if (@$items) {
       my $last_value = $items->[0]->{$value_key};
