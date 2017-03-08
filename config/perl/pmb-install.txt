@@ -1,8 +1,8 @@
 AnyEvent~7.13
 AnyEvent::HTTP~2.23
-AnyEvent::Handle
+AnyEvent::Socket
 Canary::Stability~2012
-Carp~1.38
+Carp::Heavy~1.38
 Class::Accessor~0.34
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
@@ -23,10 +23,10 @@ HTTP::Cookies~6.01
 HTTP::Daemon~6.01
 HTTP::Date~6.02
 HTTP::Negotiate~6.01
-HTTP::Request::Common~6.11
+HTTP::Request~6.11
 IO::HTML~1.001
 IO::Handle~1.28
-LWP~6.22
+LWP~6.23
 LWP::MediaTypes~6.02
 List::MoreUtils~0.416
 MIME::Base64~3.15
