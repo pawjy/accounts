@@ -1,7 +1,8 @@
 AnyEvent~7.14
 AnyEvent::HTTP~2.23
+AnyEvent::IO
 Canary::Stability~2012
-Carp::Heavy~1.38
+Carp~1.38
 Class::Accessor~0.34
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
@@ -31,7 +32,7 @@ List::MoreUtils~0.419
 MIME::Base64~3.15
 Net::HTTP~6.16
 Net::SSLeay~1.81
-OAuth::Lite::AuthMethod
+OAuth::Lite::Consumer
 Path::Class~0.37
 Path::Tiny~0.104
 Pod::Usage~1.69
