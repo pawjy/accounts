@@ -23,7 +23,6 @@ HTTP::Daemon~6.01
 HTTP::Date~6.02
 HTTP::Negotiate~6.01
 HTTP::Request~6.13
-HTTP::Response~6.13
 IO::HTML~1.001
 IO::Handle~1.28
 LWP~6.26
