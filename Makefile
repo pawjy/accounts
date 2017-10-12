@@ -40,6 +40,7 @@ pmbp-install: pmbp-upgrade
 PROVE = ./prove
 
 test-deps: deps
+	perl local/bin/pmbp.pl $(PMBP_OPTIONS) --install-mysqld
 
 test-local-http-circle:
 	$(PROVE) t/local-http/*.t
