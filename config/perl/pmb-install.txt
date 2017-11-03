@@ -1,8 +1,8 @@
 AnyEvent~7.14
 AnyEvent::HTTP~2.23
-AnyEvent::Handle
+AnyEvent::IO
 Canary::Stability~2012
-Carp~1.38
+Carp::Heavy~1.38
 Class::Accessor~0.51
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
