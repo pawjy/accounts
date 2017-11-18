@@ -16,7 +16,7 @@ Exporter::Tiny~1.000000
 File::Listing~6.04
 File::Path~2.15
 File::Temp~0.2304
-HTML::HeadParser~3.71
+HTML::Entities~3.69
 HTML::Tagset~3.20
 HTTP::Cookies~6.04
 HTTP::Daemon~6.01
@@ -41,7 +41,7 @@ Proc::Wait3~0.05
 Scalar::Util~1.49
 Socket~2.024
 Term::ANSIColor~4.06
-Test::Builder~1.302106
+Test::Builder~1.302111
 Time::HiRes~1.9746
 Time::Local~1.25
 Try::Tiny~0.28
