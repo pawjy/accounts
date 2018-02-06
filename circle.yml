@@ -7,7 +7,7 @@ dependencies:
     - "deps/pmtar"
   override:
     - docker info
-    - docker pull quay.io/wakaba/chromedriver:stable :
+    - docker pull quay.io/wakaba/chromedriver:stable && docker pull quay.io/wakaba/docker-perl-app-base:
         background: true
         timeout: 3600
     

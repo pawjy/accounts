@@ -1,4 +1,4 @@
-FROM wakaba/docker-perl-app-base
+FROM quay.io/wakaba/docker-perl-app-base
 
 RUN apt-get update && \
     DEBIAN_FRONTEND="noninteractive" apt-get -y install mysql-server libmysqlclient-dev && \
