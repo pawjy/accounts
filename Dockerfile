@@ -1,14 +1,18 @@
 FROM quay.io/wakaba/docker-perl-app-base
 
-RUN apt-get update && \
-    DEBIAN_FRONTEND="noninteractive" apt-get -y install mysql-server libmysqlclient-dev && \
-    rm -rf /var/lib/apt/lists/*
+ADD rev /app/
+ADD Makefile /app/
+ADD LICENSE /app/
+ADD config/ /app/config/
+ADD db/ /app/db/
+ADD bin/ /app/bin/
+ADD lib/ /app/lib/
+ADD modules/ /app/modules/
+ADD t_deps/bin/setup-db-for-test.pl /app/t_deps/bin/setup-db-for-test.pl
 
-RUN mv /app /app.orig && \
-    git clone https://github.com/wakaba/accounts /app && \
-    cd /app && git rev-parse HEAD > rev && \
-    mv /app.orig/* /app/ && \
-    cd /app && make deps PMBP_OPTIONS=--execute-system-package-installer && \
+RUN cd /app && \
+    make deps-docker PMBP_OPTIONS="--execute-system-package-installer --dump-info-file-before-die" && \
+    apt-get install -y mysql-client && \ # XXX
     echo '#!/bin/bash' > /server && \
     echo 'cd /app && ./plackup bin/server.psgi -p 8080 -s Twiggy::Prefork --max-workers 5' >> /server && \
     chmod u+x /server && \
@@ -19,6 +23,8 @@ RUN mv /app /app.orig && \
     echo '#!/bin/bash' > /showrev && \
     echo 'cat /app/rev' >> /showrev && \
     chmod u+x /showrev && \
-    rm -fr /app/deps /app.orig
+    rm -rf /var/lib/apt/lists/* /app/local/pmbp/tmp
+
+CMD ["/server"]
 
 ## License: Public Domain.

@@ -13,13 +13,18 @@ dependencies:
     
     - git config --global user.email "temp@circleci.test"
     - git config --global user.name "CircleCI"
+    - git rev-parse HEAD > rev
 
-    - docker build -t quay.io/wakaba/accounts
+    - docker build -t quay.io/wakaba/accounts .
     
     - make deps test-deps:
         timeout: 600
 test:
   override:
+    - docker run quay.io/wakaba/accounts which /server
+    - docker run quay.io/wakaba/accounts which /setup-db-for-test
+    - docker run quay.io/wakaba/accounts /showrev
+
     - make test-local-http-circle :
         timeout: 600
     - WEBUA_DEBUG=1 TEST_WEBDRIVER_BROWSERS="chrome" make test-local-web-circle:
@@ -33,12 +38,11 @@ deployment:
     branch: staging
     commands:
       - git fetch --unshallow
-      - git rev-parse HEAD > head.txt
       - git clone $KEYS_REPO_URL local/keys
       - make heroku-save-current-release HEROKU_APP_NAME=$HEROKU_APP_NAME
       - make create-commit-for-heroku
-      - git push git@heroku.com:$HEROKU_APP_NAME.git +`git rev-parse HEAD`:master  :
+      - git push git@heroku.com:$HEROKU_APP_NAME.git +`cat rev`:master  :
          timeout: 600
       - XTEST_ORIGIN=https://$HEROKU_APP_NAME.herokuapp.com make test-external-http-or-rollback HEROKU_APP_NAME=$HEROKU_APP_NAME
-      - curl -f -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"master\",\"head\":\"`cat head.txt`\",\"commit_message\":\"auto-merge staging into master\"}" "https://api.github.com/repos/wakaba/accounts/merges"
+      - curl -f -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"master\",\"head\":\"`cat rev`\",\"commit_message\":\"auto-merge staging into master\"}" "https://api.github.com/repos/wakaba/accounts/merges"
 
