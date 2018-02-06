@@ -263,8 +263,7 @@ sub oauth_server ($) {
   return $OAuthServer->start;
 } # oauth_server
 
-push @EXPORT, qw(web_server);
-sub web_server (;$$$) {
+sub start_web_server (;$$$) {
   my $web_host = $_[0];
   my $oauth_host = $_[1] || $web_host;
   my $oauth_hostname_for_docker = $_[2];
@@ -328,11 +327,12 @@ sub web_server (;$$$) {
     });
   });
 
-  my $cv = AE::cv;
-  $AccountServer->start->then (sub {
-    $cv->send ($_[0]);
-  });
-  return $cv;
+  return $AccountServer->start;
+} # start_web_server
+
+push @EXPORT, qw(web_server);
+sub web_server (;$$$) {
+  return start_web_server (@_)->to_cv;
 } # web_server
 
 sub app_server ($$$) {
@@ -668,6 +668,7 @@ sub session ($;%) {
   return $p;
 } # session
 
+my $TestWait = AE::cv;
 push @EXPORT, qw(Test);
 sub Test (&;%) {
   my $code = shift;
@@ -682,14 +683,22 @@ sub Test (&;%) {
         is $error, undef, 'No exception';
       } $current->c;
     });
-  }, @_);
+  }, wait => $TestWait, @_);
 } # Test
+
+push @EXPORT, qw(RUN);
+sub RUN () {
+  $TestWait->send (start_web_server->to_cv->recv); # XXX or throw
+  run_tests;
+  undef $TestWait;
+  stop_web_server;
+} # RUN
 
 1;
 
 =head1 LICENSE
 
-Copyright 2015-2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2018 Wakaba <wakaba@suikawiki.org>.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as

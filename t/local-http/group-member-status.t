@@ -4,8 +4,6 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
 
-my $wait = web_server;
-
 Test {
   my $current = shift;
   return $current->create_account (a1 => {})->then (sub {
@@ -80,14 +78,13 @@ Test {
       [[undef, undef, undef] => [3, 0, 0], undef],
     ];
   });
-} wait => $wait, n => 1 + 8 * 5, name => '/group/member/status';
+} n => 1 + 8 * 5, name => '/group/member/status';
 
-run_tests;
-stop_web_server;
+RUN;
 
 =head1 LICENSE
 
-Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

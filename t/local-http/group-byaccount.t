@@ -4,8 +4,6 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
 
-my $wait = web_server;
-
 Test {
   my $current = shift;
   return $current->create_group (g1 => {})->then (sub {
@@ -90,7 +88,7 @@ Test {
       is $m2->{user_status}, 4;
     } $current->c;
   });
-} wait => $wait, n => 2*3 + 13, name => '/group/byaccount';
+} n => 2*3 + 13, name => '/group/byaccount';
 
 Test {
   my $current = shift;
@@ -185,7 +183,7 @@ Test {
       ok ! $result->{json}->{has_next};
     } $current->c;
   });
-} wait => $wait, n => 22, name => '/group/byaccount paging';
+} n => 22, name => '/group/byaccount paging';
 
 Test {
   my $current = shift;
@@ -233,14 +231,13 @@ Test {
       is $g2->{data}->{abc}, "0";
     } $current->c;
   });
-} wait => $wait, n => 5, name => '/group/byaccount with data';
+} n => 5, name => '/group/byaccount with data';
 
-run_tests;
-stop_web_server;
+RUN;
 
 =head1 LICENSE
 
-Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
