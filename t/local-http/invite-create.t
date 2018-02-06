@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 use Path::Tiny;
-use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib')
+use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
 
 Test {
