@@ -6,7 +6,35 @@ use JSON::PS;
 use Promise;
 use Promised::Flow;
 use Promised::File;
+use Promised::Command;
 use Promised::Plackup;
+
+## Use of this module from outside of this repository is DEPRECATED.
+
+{
+  use Socket;
+  sub _can_listen ($) {
+    my $port = $_[0] or return 0;
+    my $proto = getprotobyname ('tcp');
+    socket (my $server, PF_INET, SOCK_STREAM, $proto) or die "socket: $!";
+    setsockopt ($server, SOL_SOCKET, SO_REUSEADDR, pack ("l", 1))
+        or die "setsockopt: $!";
+    bind ($server, sockaddr_in($port, INADDR_ANY)) or return 0;
+    listen ($server, SOMAXCONN) or return 0;
+    close ($server);
+    return 1;
+  } # _can_listen
+  sub _find_port () {
+    my $used = {};
+    for (1..10000) {
+      my $port = int rand (5000 - 1024); # ephemeral ports
+      next if $used->{$port};
+      return $port if _can_listen $port;
+      $used->{$port}++;
+    }
+    die "Listenable port not found";
+  } # _find_port
+}
 
 my $RootPath = path (__FILE__)->parent->parent->parent->parent->absolute;
 
@@ -48,6 +76,137 @@ sub _write_json ($$$) {
   my $self = $_[0];
   return $self->_write_file ($_[1], perl2json_bytes $_[2]);
 } # _write_json
+
+sub _docker ($%) {
+  my ($self, %args) = @_;
+  my $stack_name = $args{stack_name} // 'accounts-test-accountserver';
+  my $storage_data = {};
+  return Promise->all ([
+    Promised::File->new_from_path ($self->_path ('minio_config'))->mkpath,
+    Promised::File->new_from_path ($self->_path ('minio_data'))->mkpath,
+  ])->then (sub {
+    my $storage_port = _find_port;
+    $storage_data->{aws4} = [undef, undef, undef, 's3'];
+    $storage_data->{url_for_test} = Web::URL->parse_string
+        ("http://0:$storage_port");
+    $storage_data->{url_for_app} = Web::URL->parse_string
+        ("http://0:$storage_port");
+    $storage_data->{url_for_browser} = Web::URL->parse_string
+        ("http://0:$storage_port");
+    my $yml = qq{version: "3.3"
+services:
+  minio:
+    image: minio/minio
+    volumes:
+      - @{[$self->_path ('minio_config')->absolute]}:/config
+      - @{[$self->_path ('minio_data')->absolute]}:/data
+    user: "$<:$>"
+    command: [
+      'server',
+      '--address', '0.0.0.0:8000',
+      '--config-dir', '/config',
+      '/data'
+    ]
+    ports:
+      - "$storage_port:8000"
+    }; # $yml
+    return $self->_write_file ('docker_servers.yml', $yml);
+  })->then (sub {
+    my $out;
+    my $start = sub {
+      $out = '';
+      my $start_cmd = Promised::Command->new ([
+        'docker', 'stack', 'deploy',
+        '--compose-file', $self->_path ('docker_servers.yml'),
+        $stack_name,
+      ]);
+      my $stderr = '';
+      $start_cmd->stdout (sub {
+        return unless defined $_[0];
+        my $v = $_[0];
+        $v =~ s/^/docker: start: /gm;
+        $v .= "\x0A" unless $v =~ /\x0A\z/;
+        $out .= $v;
+      });
+      $start_cmd->stderr (sub {
+        return unless defined $_[0];
+        $stderr .= $_[0];
+        my $v = $_[0];
+        $v =~ s/^/docker: start: /gm;
+        $v .= "\x0A" unless $v =~ /\x0A\z/;
+        $out .= $v;
+      });
+      $start_cmd->signal_before_destruction ('TERM');
+      return $start_cmd->run->then (sub {
+        return $start_cmd->wait;
+      })->then (sub {
+        my $result = $_[0];
+        if ($result->exit_code == 1 and
+            $stderr =~ /^this node is not a swarm manager./) {
+          return $result;
+        }
+        die $result unless $result->exit_code == 0;
+        return undef;
+      });
+    }; # $start
+    my $stop = sub {
+      my $stop_cmd = Promised::Command->new ([
+        'docker', 'stack', 'rm', $stack_name,
+      ]);
+      return $stop_cmd->run->then (sub {
+        return $stop_cmd->wait;
+      })->then (sub {
+        my $result = $_[0];
+        die $result unless $result->exit_code == 0;
+      })->catch (sub {
+        my $error = $_[0];
+        warn "Failed to stop the docker containers: $error\n";
+      });
+    }; # $stop
+
+    $self->{servers}->{docker} = {stop => $stop};
+    return $start->()->catch (sub {
+      warn $out;
+      die $_[0];
+    })->then (sub {
+      my $error = $_[0];
+      if (defined $error) {
+        my $init_cmd = Promised::Command->new ([
+          'docker', 'swarm', 'init',
+          '--advertise-addr', '127.0.0.1',
+        ]);
+        return $init_cmd->run->then (sub {
+          return $init_cmd->wait;
+        })->then (sub {
+          my $result = $_[0];
+          die $result unless $result->exit_code == 0;
+          return $start->()->catch (sub {
+            warn $out;
+            die $_[0];
+          })->then (sub {
+            my $error = $_[0];
+            die $error if defined $error;
+          });
+        });
+      } # $error
+    });
+  })->then (sub {
+    my $config_path = $self->_path ('minio_config')->child ('config.json');
+    return promised_wait_until {
+      return Promised::File->new_from_path ($config_path)->read_byte_string->then (sub {
+        my $config = json_bytes2perl $_[0];
+        $storage_data->{aws4}->[0] = $config->{credential}->{accessKey};
+        $storage_data->{aws4}->[1] = $config->{credential}->{secretKey};
+        $storage_data->{aws4}->[2] = $config->{region};
+        return defined $storage_data->{aws4}->[0] &&
+               defined $storage_data->{aws4}->[1] &&
+               defined $storage_data->{aws4}->[2];
+      })->catch (sub { return 0 });
+    } timeout => 60*3;
+  })->then (sub {
+    $args{send_storage_data}->($storage_data);
+  });
+} # _docker
 
 sub _mysqld ($%) {
   my ($self, %args) = @_;
@@ -121,12 +280,17 @@ sub start ($) {
   return Promise->resolve->then (sub {
     my ($r_mysqld_data, $s_mysqld_data) = promised_cv;
     my ($r_app_data, $s_app_data) = promised_cv;
+    my ($r_storage_data, $s_storage_data) = promised_cv;
     return Promise->all ([
       $self->_mysqld (
         send_data => $s_mysqld_data,
       ),
+      $self->_docker (
+        send_storage_data => $s_storage_data,
+      ),
       $self->_app (
         receive_mysqld_data => $r_mysqld_data,
+        receive_storage_data => $r_storage_data,
         send_data => $s_app_data,
       ),
     ])->then (sub {
