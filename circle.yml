@@ -13,8 +13,8 @@ dependencies:
     
     - git config --global user.email "temp@circleci.test"
     - git config --global user.name "CircleCI"
-    - git rev-parse HEAD > rev
 
+    - make deps-before-docker rev
     - docker build -t quay.io/wakaba/accounts .
     
     - make deps test-deps:
