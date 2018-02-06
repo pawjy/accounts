@@ -6,12 +6,18 @@ dependencies:
     - "local/perlbrew/perls"
     - "deps/pmtar"
   override:
-    - make deps test-deps:
-        timeout: 600
     - docker info
-    - docker pull quay.io/wakaba/chromedriver:stable
+    - docker pull quay.io/wakaba/chromedriver:stable :
+        background: true
+        timeout: 3600
+    
     - git config --global user.email "temp@circleci.test"
     - git config --global user.name "CircleCI"
+
+    - docker build -t quay.io/wakaba/accounts
+    
+    - make deps test-deps:
+        timeout: 600
 test:
   override:
     - make test-local-http-circle :
