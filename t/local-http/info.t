@@ -4,8 +4,6 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
 
-my $wait = web_server;
-
 Test {
   my $current = shift;
   my $name = "\x{53533}" . rand;
@@ -33,7 +31,7 @@ Test {
       is $result->{json}->{name}, $name;
     } $current->c;
   });
-} wait => $wait, n => 5, name => '/info with accounted session';
+} n => 5, name => '/info with accounted session';
 
 Test {
   my $current = shift;
@@ -47,7 +45,7 @@ Test {
       is $result->{json}->{name}, undef;
     } $current->c;
   });
-} wait => $wait, n => 3, name => '/info no session';
+} n => 3, name => '/info no session';
 
 Test {
   my $current = shift;
@@ -63,7 +61,7 @@ Test {
       is $result->{json}->{name}, undef;
     } $current->c;
   });
-} wait => $wait, n => 3, name => '/info has anon session';
+} n => 3, name => '/info has anon session';
 
 Test {
   my $current = shift;
@@ -81,7 +79,7 @@ Test {
       is $result->{linked}, undef;
     } $current->c;
   });
-} wait => $wait, n => 4, name => '/info with linked (no match)';
+} n => 4, name => '/info with linked (no match)';
 
 Test {
   my $current = shift;
@@ -93,7 +91,7 @@ Test {
       is $result->{json}->{name}, undef;
     } $current->c;
   });
-} wait => $wait, n => 3, name => '/info bad session';
+} n => 3, name => '/info bad session';
 
 Test {
   my $current = shift;
@@ -117,7 +115,7 @@ Test {
       is $result->{json}->{data}->{foo}, undef;
     } $current->c;
   });
-} wait => $wait, n => 5, name => '/info with data';
+} n => 5, name => '/info with data';
 
 Test {
   my $current = shift;
@@ -141,7 +139,7 @@ Test {
       ok $result->{json}->{group}->{updated};
     } $current->c;
   });
-} wait => $wait, n => 9, name => '/info no sk, group_id';
+} n => 9, name => '/info no sk, group_id';
 
 Test {
   my $current = shift;
@@ -174,7 +172,7 @@ Test {
       ok $result->{json}->{group}->{updated};
     } $current->c;
   });
-} wait => $wait, n => 11, name => '/info with sk, group_id';
+} n => 11, name => '/info with sk, group_id';
 
 for (
   [[[1], [1], [0]] => 1, "matched 1"],
@@ -204,7 +202,7 @@ for (
         }
       } $current->c;
     });
-  } wait => $wait, n => 2, name => ['/info account status filter', $name];
+  } n => 2, name => ['/info account status filter', $name];
 }
 
 for (
@@ -243,7 +241,7 @@ for (
         }
       } $current->c;
     });
-  } wait => $wait, n => 3, name => ['/info group status filter', $name];
+  } n => 3, name => ['/info group status filter', $name];
 }
 
 for (
@@ -286,7 +284,7 @@ for (
         }
       } $current->c;
     });
-  } wait => $wait, n => 3, name => ['/info group member status filter', $name];
+  } n => 3, name => ['/info group member status filter', $name];
 }
 
 Test {
@@ -353,14 +351,13 @@ Test {
       } $current->c;
     });
   });
-} wait => $wait, n => 15, name => ['/info with group data'];
+} n => 15, name => ['/info with group data'];
 
-run_tests;
-stop_web_server;
+RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

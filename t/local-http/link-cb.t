@@ -4,8 +4,6 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
 
-my $wait = web_server;
-
 Test {
   my $current = shift;
   return $current->create_session (1)->then (sub {
@@ -24,7 +22,7 @@ Test {
       is $result->{json}->{reason}, 'Bad |state|';
     } $current->c;
   });
-} wait => $wait, n => 2, name => '/link then /cb';
+} n => 2, name => '/link then /cb';
 
 Test {
   my $current = shift;
@@ -74,7 +72,7 @@ Test {
       ok grep { $_->{service_name} eq 'oauth1server' } values %$links;
     } $current->c;
   });
-} wait => $wait, n => 8, name => '/link then auth then /cb - oauth1';
+} n => 8, name => '/link then auth then /cb - oauth1';
 
 Test {
   my $current = shift;
@@ -163,7 +161,7 @@ Test {
       is $result->{json}->{account_id}, $account_id, 'existing account';
     } $current->c;
   });
-} wait => $wait, n => 13, name => '/link then auth then /cb - oauth2';
+} n => 13, name => '/link then auth then /cb - oauth2';
 
 Test {
   my $current = shift;
@@ -246,7 +244,7 @@ Test {
       is $result->{json}->{account_id}, $account_id, 'existing account linked';
     } $current->c;
   });
-} wait => $wait, n => 15, name => 'link to existing account, same account ID';
+} n => 15, name => 'link to existing account, same account ID';
 
 Test {
   my $current = shift;
@@ -335,7 +333,7 @@ Test {
       is $result->{json}->{account_id}, $account_id, 'existing account linked';
     } $current->c;
   });
-} wait => $wait, n => 15, name => 'link to existing account, different account ID';
+} n => 15, name => 'link to existing account, different account ID';
 
 Test {
   my $current = shift;
@@ -429,7 +427,7 @@ Test {
       is $ls->[0]->{id}, $x_account_id;
     } $current->c;
   });
-} wait => $wait, n => 15, name => 'link to linked-with-another-account account';
+} n => 15, name => 'link to linked-with-another-account account';
 
 Test {
   my $current = shift;
@@ -519,14 +517,13 @@ Test {
       is $result->{json}->{account_id}, $account_id, 'existing account linked';
     } $current->c;
   });
-} wait => $wait, n => 17, name => 'linked to account without ID';
+} n => 17, name => 'linked to account without ID';
 
-run_tests;
-stop_web_server;
+RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
