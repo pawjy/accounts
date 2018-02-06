@@ -19,10 +19,6 @@ sub new ($) {
   }, $_[0];
 } # new
 
-sub _path ($$) {
-  return $_[0]->{config_path}->child ($_[1]);
-} # _path
-
 # OBSOLETE
 sub set_web_host ($$) { }
 
@@ -36,6 +32,22 @@ sub onbeforestart ($;$) {
   }
   return $_[0]->{onbeforestart} || sub { };
 } # onbeforestart
+
+sub _path ($$) {
+  return $_[0]->{config_path}->child ($_[1]);
+} # _path
+
+sub _write_file ($$$) {
+  my $self = $_[0];
+  my $path = $self->_path ($_[1]);
+  my $file = Promised::File->new_from_path ($path);
+  return $file->write_byte_string ($_[2]);
+} # _write_file
+
+sub _write_json ($$$) {
+  my $self = $_[0];
+  return $self->_write_file ($_[1], perl2json_bytes $_[2]);
+} # _write_json
 
 sub _mysqld ($%) {
   my ($self, %args) = @_;
@@ -60,63 +72,66 @@ sub _mysqld ($%) {
   });
 } # _mysqld
 
-sub start ($) {
-  my $self = $_[0];
-
-  my $p = Promise->resolve;
-
-  my ($r_mysqld_data, $s_mysqld_data) = promised_cv;
-  $p = $p->then (sub { return $self->_mysqld (
-    send_data => $s_mysqld_data,
-  ) });
-
-  my $data = {};
-  $p = $p->then (sub {
-    return $r_mysqld_data;
-  })->then (sub {
+sub _app ($%) {
+  my ($self, %args) = @_;
+  return $args{receive_mysqld_data}->then (sub {
     my $mysqld_data = $_[0];
 
-    my $temp_path = $self->_path ('app_config.json');
-    my $temp_file = Promised::File->new_from_path ($temp_path);
+    my $plackup = Promised::Plackup->new;
+    $plackup->wd ($RootPath);
+    $plackup->plackup ($RootPath->child ('plackup'));
+    $plackup->set_option ('--server' => 'Twiggy::Prefork');
+    $plackup->set_option ('--app' => $RootPath->child ('bin/server.psgi'));
+    $plackup->envs->{APP_CONFIG} = $self->_path ('app_config.json');
+    $plackup->start_timeout (60);
 
-    $self->{http} = Promised::Plackup->new;
-    $self->{http}->set_option ('--server' => 'Twiggy::Prefork');
-    $self->{http}->envs->{APP_CONFIG} = $temp_path;
-
+    my $data = {};
     my $servers = {};
-    my $servers_json_path = $self->_path ('app_servers.json');
-
-    my $bearer = rand;
-    $data->{keys} = {'auth.bearer' => $bearer};
-
     my $config = {
-      "auth.bearer" => $bearer,
       servers_json_file => 'app_servers.json',
       alt_dsns => {master => {account => $mysqld_data->{dsn}}},
       #dsns => {account => $mysqld_data->{dsn}},
     }; # $config
 
-    return Promise->all ([
-      $self->onbeforestart->($self,
-                             servers => $servers,
-                             config => $config,
-                             data => $data),
-    ])->then (sub {
+    $data->{keys}->{'auth.bearer'} = $config->{'auth.bearer'} = rand;
+
+    return Promise->resolve->then (sub {
+      return $self->onbeforestart->($self,
+                                    servers => $servers,
+                                    config => $config,
+                                    data => $data);
+    })->then (sub {
       return Promise->all ([
-        Promised::File->new_from_path ($servers_json_path)->write_byte_string (perl2json_bytes $servers),
-        $temp_file->write_byte_string (perl2json_bytes $config),
+        $self->_write_json ('app_servers.json', $servers),
+        $self->_write_json ('app_config.json', $config),
       ]);
+    })->then (sub {
+      $self->{servers}->{app} = {stop => sub { $plackup->stop }};
+      return $plackup->start;
+    })->then (sub {
+      $data->{host} = $plackup->get_host;
+      $self->{web_port} = $plackup->get_port;
+      $args{send_data}->($data);
     });
-  })->then (sub {
-    $self->{http}->wd ($RootPath);
-    $self->{http}->plackup ($RootPath->child ('plackup'));
-    $self->{http}->set_option ('--app' => $RootPath->child ('bin/server.psgi'));
-    $self->{http}->start_timeout (60);
-    $self->{servers}->{http} = {stop => sub { $self->{http}->stop }};
-    return $self->{http}->start;
-  })->then (sub {
-    $data->{host} = $self->{http}->get_host;
-    return $data;
+  });
+} # _app
+
+sub start ($) {
+  my $self = $_[0];
+  return Promise->resolve->then (sub {
+    my ($r_mysqld_data, $s_mysqld_data) = promised_cv;
+    my ($r_app_data, $s_app_data) = promised_cv;
+    return Promise->all ([
+      $self->_mysqld (
+        send_data => $s_mysqld_data,
+      ),
+      $self->_app (
+        receive_mysqld_data => $r_mysqld_data,
+        send_data => $s_app_data,
+      ),
+    ])->then (sub {
+      return $r_app_data;
+    });
   });
 } # start
 
@@ -132,8 +147,9 @@ sub stop ($) {
   } keys %{$self->{servers}} ]);
 } # stop
 
+# DEPRECATED
 sub get_web_port ($) {
-  return $_[0]->{servers}->{http}->get_port;
+  return $_[0]->{web_port};
 } # get_web_port
 
 1;
