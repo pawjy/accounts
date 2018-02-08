@@ -1,0 +1,25 @@
+{
+  "servers_json_file": "servers.json",
+
+  "auth.bearer": ["Base64", "..."],
+
+  "twitter.client_id": "...",
+  "twitter.client_secret": ["Base64", "..."],
+  "hatena.client_id": "...",
+  "hatena.client_secret": ["Base64", "..."],
+  "google.client_id": "...",
+  "google.client_secret": ["Base64", "..."],
+  "facebook.client_id": "...",
+  "facebook.client_secret": ["Base64", "..."],
+  "github.client_id": "...",
+  "github.client_secret": ["Base64", "..."],
+  "github.client_id.MYAPPCONTEXT": "...",
+  "github.client_secret.MYAPPCONTEXT": ["Base64", "..."],
+  "bitbucket.client_id": "...",
+  "bitbucket.client_secret": ["Base64", "..."],
+  "strava.client_id": "...",
+  "strava.client_secret": ["Base64", "..."],
+
+  "test.hatena_id": ["Base64", "..."],
+  "test.hatena_password": ["Base64", "..."]
+}
