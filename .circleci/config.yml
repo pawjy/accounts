@@ -1,0 +1,34 @@
+version: 2
+jobs:
+  build:
+    machine: true
+    steps:
+      - checkout
+
+      - run: sudo docker info >/dev/null 2>&1 || sudo service docker start;
+      - run:
+          command: docker pull quay.io/wakaba/chromedriver:stable
+          no_output_timeout: 600s
+          background: true
+
+      - restore_cache:
+          keys:
+            - deps-{{ .Branch }}
+      - run:
+          command: make test-deps
+          no_output_timeout: 600s
+      - save_cache:
+          key: deps-{{ .Branch }}
+          paths:
+            - local/perlbrew/perls
+            - deps/pmtar
+
+      - run: git config --global user.email "temp@circleci.test"
+      - run: git config --global user.name "CircleCI"
+      
+      - run:
+          command: make test-local-http-circle
+          no_output_timeout: 600s
+      - run:
+          command: WEBUA_DEBUG=1 TEST_WEBDRIVER_BROWSERS="chrome" make test-local-web-circle
+          no_output_timeout: 600s
