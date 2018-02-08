@@ -6,7 +6,6 @@ jobs:
     steps:
       - checkout
 
-      - run: sudo docker info >/dev/null 2>&1 || sudo service docker start;
       - run:
           command: docker pull quay.io/wakaba/chromedriver:stable
           no_output_timeout: 600s
@@ -16,7 +15,7 @@ jobs:
           keys:
             - deps-{{ .Branch }}
       - run:
-          command: make test-deps
+          command: test-deps
           no_output_timeout: 600s
       - save_cache:
           key: deps-{{ .Branch }}
