@@ -42,6 +42,6 @@ jobs:
           command: make test-local-web-circle
           working_directory: /app
           environment:
-            - WEBUA_DEBUG=1
-            - TEST_WEBDRIVER_BROWSERS="chrome"
+            - WEBUA_DEBUG: "1"
+            - TEST_WEBDRIVER_BROWSERS: "chrome"
           no_output_timeout: 600s
