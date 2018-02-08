@@ -5,8 +5,8 @@ jobs:
     docker:
       - image: quay.io/wakaba/docker-perl-app-base
     steps:
-      - cd /app && perl local/bin/pmbp.pl --install-commands "git tar"
-      - apt-get install -y ssh ca-certificates gzip
+      - run: cd /app && perl local/bin/pmbp.pl --install-commands "git tar"
+      - run: apt-get install -y ssh ca-certificates gzip
 
       - checkout
 
