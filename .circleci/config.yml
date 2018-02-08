@@ -14,7 +14,7 @@ jobs:
       - run: apt-get install -y ssh ca-certificates gzip
 
       - checkout
-      - run: mv /repo/* /repo/.* /app
+      - run: mv /repo/* /repo/.[^.]+ /app
 
       - restore_cache:
           keys:
