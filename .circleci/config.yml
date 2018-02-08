@@ -1,26 +1,27 @@
 version: 2
 jobs:
   build:
-    working_directory: /app
+    working_directory: /repo
     docker:
       - image: quay.io/wakaba/docker-perl-app-base
     steps:
-      - run: cd /app && perl local/bin/pmbp.pl --update-pmbp-pl
-      - run: cd /app && perl local/bin/pmbp.pl --install-commands "git tar"
+      - run:
+          command: perl local/bin/pmbp.pl --update-pmbp-pl
+          working_directory: /app
+      - run:
+          command: perl local/bin/pmbp.pl --install-commands "git tar"
+          working_directory: /app
       - run: apt-get install -y ssh ca-certificates gzip
 
       - checkout
-
-      - run:
-          command: docker pull quay.io/wakaba/chromedriver:stable
-          no_output_timeout: 600s
-          background: true
+      - run: mv /repo/* /repo/.* /app
 
       - restore_cache:
           keys:
             - deps-{{ .Branch }}
       - run:
           command: bash .circleci/test-deps
+          working_directory: /app
           no_output_timeout: 600s
       - save_cache:
           key: deps-{{ .Branch }}
@@ -28,12 +29,19 @@ jobs:
             - local/perlbrew/perls
             - deps/pmtar
 
-      - run: git config --global user.email "temp@circleci.test"
-      - run: git config --global user.name "CircleCI"
+      - run:
+          command: docker pull quay.io/wakaba/chromedriver:stable
+          no_output_timeout: 600s
+          background: true
       
       - run:
           command: make test-local-http-circle
+          working_directory: /app
           no_output_timeout: 600s
       - run:
-          command: WEBUA_DEBUG=1 TEST_WEBDRIVER_BROWSERS="chrome" make test-local-web-circle
+          command: make test-local-web-circle
+          working_directory: /app
+          environment:
+            - WEBUA_DEBUG=1
+            - TEST_WEBDRIVER_BROWSERS="chrome"
           no_output_timeout: 600s
