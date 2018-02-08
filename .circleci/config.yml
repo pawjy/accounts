@@ -15,7 +15,7 @@ jobs:
           keys:
             - deps-{{ .Branch }}
       - run:
-          command: test-deps
+          command: make test-deps
           no_output_timeout: 600s
       - save_cache:
           key: deps-{{ .Branch }}
