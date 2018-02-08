@@ -93,24 +93,29 @@ sub _docker ($%) {
         ("http://0:$storage_port");
     $storage_data->{url_for_browser} = Web::URL->parse_string
         ("http://0:$storage_port");
-    my $yml = qq{version: "3.3"
-services:
-  minio:
-    image: minio/minio
-    volumes:
-      - @{[$self->_path ('minio_config')->absolute]}:/config
-      - @{[$self->_path ('minio_data')->absolute]}:/data
-    user: "$<:$>"
-    command: [
-      'server',
-      '--address', '0.0.0.0:8000',
-      '--config-dir', '/config',
-      '/data'
-    ]
-    ports:
-      - "$storage_port:8000"
-    }; # $yml
-    return $self->_write_file ('docker_servers.yml', $yml);
+    my $json = {
+      version => '3.3',
+      services => {
+        minio => {
+          image => 'minio/minio',
+          volumes => [
+            $self->_path ('minio_config')->absolute . ':/config',
+            $self->_path ('minio_data')->absolute . ':/data',
+          ],
+          user => "$<:$>",
+          command => [
+            'server',
+            '--address', '0.0.0.0:8000',
+            '--config-dir', '/config',
+            '/data'
+          ],
+          ports => [
+            "$storage_port:8000",
+          ],
+        },
+      },
+    };
+    return $self->_write_json ('docker_servers.yml', $json);
   })->then (sub {
     my $out;
     my $start = sub {
