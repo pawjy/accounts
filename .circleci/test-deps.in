@@ -1,4 +1,4 @@
 #!/bin/bash
 {{INSTALL}}
-perl local/bin/pmbp.pl --install-commands "make git"
+perl local/bin/pmbp.pl --install-commands "make git gcc"
 make test-deps

@@ -24,5 +24,5 @@ curl -sSLf https://raw.githubusercontent.com/wakaba/perl-setupenv/master/bin/pmb
 perl -c local/bin/pmbp.pl.new 2> /dev/null && \
 mv local/bin/pmbp.pl.new local/bin/pmbp.pl
 
-perl local/bin/pmbp.pl --install-commands "make git"
+perl local/bin/pmbp.pl --install-commands "make git gcc"
 make test-deps
