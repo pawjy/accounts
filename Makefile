@@ -43,7 +43,8 @@ pmbp-update: git-submodules pmbp-upgrade
 pmbp-install: pmbp-upgrade
 	perl local/bin/pmbp.pl $(PMBP_OPTIONS) --install
 
-pmbp-install-local: pmbp-install
+pmbp-install-local: pmbp-install-local-main pmbp-install
+pmbp-install-local-main:
 	./perl local/bin/pmbp.pl $(PMBP_OPTIONS) \
 	    --install-commands "make git docker mysqld wget curl"
 
