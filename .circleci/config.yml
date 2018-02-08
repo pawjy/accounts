@@ -29,6 +29,7 @@ jobs:
             - local/perlbrew/perls
             - deps/pmtar
 
+      - run: service docker start
       - run:
           command: docker pull quay.io/wakaba/chromedriver:stable
           no_output_timeout: 600s
