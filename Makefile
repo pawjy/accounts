@@ -18,7 +18,7 @@ ifdef PMBP_HEROKU_BUILDPACK
 else
 	$(MAKE) git-submodules
 endif
-	$(MAKE) pmbp-install
+	$(MAKE) pmbp-install test-deps-wrapped
 ifdef GAA
 else
 ifdef PMBP_HEROKU_BUILDPACK
@@ -47,6 +47,10 @@ pmbp-install-local: pmbp-install-local-main pmbp-install
 pmbp-install-local-main:
 	./perl local/bin/pmbp.pl $(PMBP_OPTIONS) \
 	    --install-commands "make git docker mysqld wget curl"
+
+test-deps-wrapped: local/bin/pmbp.pl
+	./perl local/bin/pmbp.pl $(PMBP_OPTIONS) \
+	    --create-bootstrap-script ".circleci/test-deps.in .circleci/test-deps"
 
 ## ------ Tests ------
 
