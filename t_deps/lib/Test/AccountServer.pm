@@ -8,6 +8,8 @@ use Promised::Flow;
 use Promised::File;
 use Promised::Command;
 use Promised::Plackup;
+use Web::URL;
+use Web::Transport::ConnectionClient;
 use Test::DockerStack;
 
 ## Use of this module from outside of this repository is DEPRECATED.
@@ -108,12 +110,12 @@ sub _docker ($%) {
           user => "$<:$>",
           command => [
             'server',
-            '--address', '0.0.0.0:8000',
+            #'--address', "0.0.0.0:9000",
             '--config-dir', '/config',
             '/data'
           ],
           ports => [
-            "$storage_port:8000",
+            "$storage_port:9000",
           ],
         },
       },
@@ -125,6 +127,7 @@ sub _docker ($%) {
     my $out = '';
     $stack->logs (sub {
       my $v = $_[0];
+      return unless defined $v;
       $v =~ s/^/docker: start: /gm;
       $v .= "\x0A" unless $v =~ /\x0A\z/;
       $out .= $v;
@@ -148,9 +151,69 @@ sub _docker ($%) {
       })->catch (sub { return 0 });
     } timeout => 60*3;
   })->then (sub {
+    my $client = Web::Transport::ConnectionClient->new_from_url
+        ($storage_data->{url_for_test});
+    $client->last_resort_timeout (1);
+    return promised_cleanup {
+      return $client->close;
+    } promised_wait_until {
+      return (promised_timeout {
+        return $client->request (url => $storage_data->{url_for_test})->then (sub {
+          return 0 if $_[0]->is_network_error;
+          return 1;
+        });
+      } 1)->catch (sub {
+        $client->abort;
+        $client = Web::Transport::ConnectionClient->new_from_url
+            ($storage_data->{url_for_test});
+        return 0;
+      });
+    } timeout => 60, interval => 0.5;
+  })->then (sub {
     $args{send_storage_data}->($storage_data);
   });
 } # _docker
+
+sub _storage_bucket ($%) {
+  my ($self, %args) = @_;
+
+  return $args{receive_storage_data}->then (sub {
+    my $storage_data = $_[0];
+
+    my $bucket_domain = rand . '.test';
+    my $s3_url = Web::URL->parse_string
+        ("/$bucket_domain/", $storage_data->{url_for_test});
+
+    my $client = Web::Transport::ConnectionClient->new_from_url ($s3_url);
+    return promised_cleanup {
+      return $client->close;
+    } $client->request (url => $s3_url, method => 'PUT', aws4 => $storage_data->{aws4})->then (sub {
+      die $_[0] unless $_[0]->status == 200;
+      my $body = qq{{
+        "Version": "2012-10-17",
+        "Statement": [{
+          "Action": ["s3:GetObject"],
+          "Effect": "Allow",
+          "Principal": {"AWS": ["*"]},
+          "Resource": ["arn:aws:s3:::$bucket_domain/*"],
+          "Sid": ""
+        }]
+      }};
+      return $client->request (url => Web::URL->parse_string ('./?policy', $s3_url), method => 'PUT', aws4 => $storage_data->{aws4}, body => $body);
+    })->then (sub {
+      die $_[0] unless $_[0]->is_success;
+
+      my $data = {
+        bucket_domain => $bucket_domain,
+      };
+      $data->{form_url} = Web::URL->parse_string
+          ("/$bucket_domain/", $storage_data->{url_for_browser});
+      $data->{image_root_url} = Web::URL->parse_string
+          ("/$bucket_domain/", $storage_data->{url_for_browser});
+      $args{send_storage_bucket_data}->($data);
+    });
+  });
+} # _storage_bucket
 
 sub _mysqld ($%) {
   my ($self, %args) = @_;
@@ -177,8 +240,12 @@ sub _mysqld ($%) {
 
 sub _app ($%) {
   my ($self, %args) = @_;
-  return $args{receive_mysqld_data}->then (sub {
-    my $mysqld_data = $_[0];
+  return Promise->all ([
+    $args{receive_mysqld_data},
+    $args{receive_storage_data},
+    $args{receive_storage_bucket_data},
+  ])->then (sub {
+    my ($mysqld_data, $storage_data, $storage_bucket_data) = @{$_[0]};
 
     my $plackup = Promised::Plackup->new;
     $plackup->wd ($RootPath);
@@ -196,6 +263,15 @@ sub _app ($%) {
     #dsns => {account => $mysqld_data->{dsn}},
 
     $data->{keys}->{'auth.bearer'} = $config->{'auth.bearer'} = rand;
+
+    $config->{s3_access_key_id} = $storage_data->{aws4}->[0];
+    $config->{s3_secret_access_key} = $storage_data->{aws4}->[1];
+    #"s3_sts_role_arn"
+    $config->{s3_region} = $storage_data->{aws4}->[2];
+    $config->{s3_bucket} = $storage_bucket_data->{bucket_domain};
+    $config->{s3_form_url} = $storage_bucket_data->{form_url}->stringify;
+    $config->{s3_image_url_prefix} = $storage_bucket_data->{image_root_url}->stringify;
+    #$config->{s3_key_prefix}
 
     return Promise->resolve->then (sub {
       return $self->onbeforestart->($self,
@@ -224,6 +300,7 @@ sub start ($) {
     my ($r_mysqld_data, $s_mysqld_data) = promised_cv;
     my ($r_app_data, $s_app_data) = promised_cv;
     my ($r_storage_data, $s_storage_data) = promised_cv;
+    my ($r_storage_bucket_data, $s_storage_bucket_data) = promised_cv;
     return Promise->all ([
       $self->_mysqld (
         send_data => $s_mysqld_data,
@@ -231,9 +308,14 @@ sub start ($) {
       $self->_docker (
         send_storage_data => $s_storage_data,
       ),
+      $self->_storage_bucket (
+        receive_storage_data => $r_storage_data,
+        send_storage_bucket_data => $s_storage_bucket_data,
+      ),
       $self->_app (
         receive_mysqld_data => $r_mysqld_data,
         receive_storage_data => $r_storage_data,
+        receive_storage_bucket_data => $r_storage_bucket_data,
         send_data => $s_app_data,
       ),
     ])->then (sub {
