@@ -39,10 +39,13 @@ use Test::DockerStack;
 
 my $RootPath = path (__FILE__)->parent->parent->parent->parent->absolute;
 
-sub new ($) {
+sub new ($;$) {
+  my $opts = $_[1] || {};
   my $temp = File::Temp->newdir;
   return bless {
     servers => {},
+    app_servers => $opts->{app_servers} || {},
+    app_config => $opts->{app_config} || {},
     _temp => $temp, # files removed when destroyed
     config_path => path ($temp)->absolute,
   }, $_[0];
@@ -55,6 +58,7 @@ sub set_mysql_server ($$) {
   $_[0]->{mysql_server} = $_[1];
 } # set_mysql_server
 
+# DEPRECATED
 sub onbeforestart ($;$) {
   if (@_ > 1) {
     $_[0]->{onbeforestart} = $_[1];
@@ -185,12 +189,11 @@ sub _app ($%) {
     $plackup->start_timeout (60);
 
     my $data = {};
-    my $servers = {};
-    my $config = {
-      servers_json_file => 'app_servers.json',
-      alt_dsns => {master => {account => $mysqld_data->{dsn}}},
-      #dsns => {account => $mysqld_data->{dsn}},
-    }; # $config
+    my $servers = $self->{app_servers};
+    my $config = $self->{app_config};
+    $config->{servers_json_file} = 'app_servers.json';
+    $config->{alt_dsns} = {master => {account => $mysqld_data->{dsn}}};
+    #dsns => {account => $mysqld_data->{dsn}},
 
     $data->{keys}->{'auth.bearer'} = $config->{'auth.bearer'} = rand;
 
