@@ -8,6 +8,7 @@ use Promised::Flow;
 use Promised::File;
 use Promised::Command;
 use Promised::Plackup;
+use Test::DockerStack;
 
 ## Use of this module from outside of this repository is DEPRECATED.
 
@@ -79,7 +80,6 @@ sub _write_json ($$$) {
 
 sub _docker ($%) {
   my ($self, %args) = @_;
-  my $stack_name = $args{stack_name} // 'accounts-test-accountserver';
   my $storage_data = {};
   return Promise->all ([
     Promised::File->new_from_path ($self->_path ('minio_config'))->mkpath,
@@ -93,8 +93,7 @@ sub _docker ($%) {
         ("http://0:$storage_port");
     $storage_data->{url_for_browser} = Web::URL->parse_string
         ("http://0:$storage_port");
-    my $json = {
-      version => '3.3',
+    my $stack = Test::DockerStack->new ({
       services => {
         minio => {
           image => 'minio/minio',
@@ -114,86 +113,21 @@ sub _docker ($%) {
           ],
         },
       },
-    };
-    return $self->_write_json ('docker_servers.yml', $json);
-  })->then (sub {
-    my $out;
-    my $start = sub {
-      $out = '';
-      my $start_cmd = Promised::Command->new ([
-        'docker', 'stack', 'deploy',
-        '--compose-file', $self->_path ('docker_servers.yml'),
-        $stack_name,
-      ]);
-      my $stderr = '';
-      $start_cmd->stdout (sub {
-        return unless defined $_[0];
-        my $v = $_[0];
-        $v =~ s/^/docker: start: /gm;
-        $v .= "\x0A" unless $v =~ /\x0A\z/;
-        $out .= $v;
-      });
-      $start_cmd->stderr (sub {
-        return unless defined $_[0];
-        $stderr .= $_[0];
-        my $v = $_[0];
-        $v =~ s/^/docker: start: /gm;
-        $v .= "\x0A" unless $v =~ /\x0A\z/;
-        $out .= $v;
-      });
-      $start_cmd->signal_before_destruction ('TERM');
-      return $start_cmd->run->then (sub {
-        return $start_cmd->wait;
-      })->then (sub {
-        my $result = $_[0];
-        if ($result->exit_code == 1 and
-            $stderr =~ /^this node is not a swarm manager./) {
-          return $result;
-        }
-        die $result unless $result->exit_code == 0;
-        return undef;
-      });
-    }; # $start
-    my $stop = sub {
-      my $stop_cmd = Promised::Command->new ([
-        'docker', 'stack', 'rm', $stack_name,
-      ]);
-      return $stop_cmd->run->then (sub {
-        return $stop_cmd->wait;
-      })->then (sub {
-        my $result = $_[0];
-        die $result unless $result->exit_code == 0;
-      })->catch (sub {
-        my $error = $_[0];
-        warn "Failed to stop the docker containers: $error\n";
-      });
-    }; # $stop
-
-    $self->{servers}->{docker} = {stop => $stop};
-    return $start->()->catch (sub {
+    });
+    $stack->propagate_signal (1);
+    $stack->signal_before_destruction ('TERM');
+    $stack->stack_name ($args{stack_name} // 'accounts-test-accountserver');
+    my $out = '';
+    $stack->logs (sub {
+      my $v = $_[0];
+      $v =~ s/^/docker: start: /gm;
+      $v .= "\x0A" unless $v =~ /\x0A\z/;
+      $out .= $v;
+    });
+    $self->{servers}->{docker} = {stop => sub { $stack->stop }};
+    return $stack->start->catch (sub {
       warn $out;
       die $_[0];
-    })->then (sub {
-      my $error = $_[0];
-      if (defined $error) {
-        my $init_cmd = Promised::Command->new ([
-          'docker', 'swarm', 'init',
-          '--advertise-addr', '127.0.0.1',
-        ]);
-        return $init_cmd->run->then (sub {
-          return $init_cmd->wait;
-        })->then (sub {
-          my $result = $_[0];
-          die $result unless $result->exit_code == 0;
-          return $start->()->catch (sub {
-            warn $out;
-            die $_[0];
-          })->then (sub {
-            my $error = $_[0];
-            die $error if defined $error;
-          });
-        });
-      } # $error
     });
   })->then (sub {
     my $config_path = $self->_path ('minio_config')->child ('config.json');
