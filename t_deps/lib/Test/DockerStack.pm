@@ -8,6 +8,7 @@ use Promise;
 use Promised::Flow;
 use Promised::Command;
 use Promised::Command::Signals;
+use Promised::Command::Docker;
 use Promised::File;
 use JSON::PS;
 
@@ -54,11 +55,39 @@ sub stack_name ($;$) {
   return $_[0]->{stack_name} //= rand;
 } # stack_name
 
+sub use_fallback ($;$) {
+  if (@_ > 1) {
+    $_[0]->{use_fallback} = $_[1];
+  }
+  return $_[0]->{use_fallback};
+} # use_fallback
+
 sub start ($) {
   my $self = $_[0];
   
   return Promise->reject ("Already running") if $self->{running};
   $self->{running} = 1;
+
+  my $method = '_start_docker_stack';
+  return Promise->resolve->then (sub {
+    if ($self->use_fallback) {
+      my $cmd = Promised::Command->new (['docker', 'stack']);
+      $cmd->stdout (sub { });
+      $cmd->stderr (sub { });
+      return $cmd->run->then (sub { return $cmd->wait })->then (sub {
+        my $result = $_[0];
+        unless ($result->exit_code == 0) {
+          $method = '_start_dockers';
+        }
+      });
+    } # use_fallback
+  })->then (sub {
+    return $self->$method;
+  });
+} # start
+
+sub _start_docker_stack ($) {
+  my $self = $_[0];
 
   my $def = $self->{def};
   $def->{version} //= '3.3';
@@ -66,10 +95,10 @@ sub start ($) {
   my $logs = $self->logs;
   my $propagate = $self->propagate_signal;
   my $before = $self->signal_before_destruction;
+  my $stack_name = $self->stack_name;
 
   my $compose_path = $self->{temp_path}->child ('docker-compose.yml');
-  my $stack_name = $self->stack_name;
-  
+
   my $out;
   my $start = sub {
     $out = '';
@@ -136,11 +165,56 @@ sub start ($) {
     my $e = $_[0];
     return $self->stop->then (sub { die $e }, sub { die $e });
   });
-} # start
+} # _start_docker_stack
+
+sub _start_dockers ($) {
+  my $self = $_[0];
+
+  my $def = $self->{def};
+
+  my $logs = $self->logs;
+  my $propagate = $self->propagate_signal;
+  my $before = $self->signal_before_destruction;
+
+  $self->{dockers} = [];
+  return ((promised_for {
+    my $name = $_[0];
+    my $d = $def->{services}->{$name};
+
+    $logs->("$d->{image}...\n");
+    my $docker = Promised::Command::Docker->new (
+      image => $d->{image},
+      command => $d->{command},
+      docker_run_options => [
+        (map { ('-v', $_) } @{$d->{volumes} or []}),
+        (map { ('-p', $_) } @{$d->{ports} or []}),
+        (map { ('--user', $_) } grep { defined $_ } ($d->{user})),
+      ],
+    );
+    $docker->propagate_signal ($propagate);
+    $docker->signal_before_destruction ($before);
+    $docker->logs ($logs);
+
+    push @{$self->{dockers}}, $docker;
+    return $docker->start;
+  } [keys %{$def->{services}}])->catch (sub {
+    my $e = $_[0];
+    return $self->stop->then (sub { die $e });
+  }));
+} # _start_dockers
 
 sub stop ($) {
   my $self = $_[0];
   return Promise->resolve unless $self->{running};
+
+  if (defined $self->{dockers}) {
+    return promised_cleanup {
+      delete $self->{dockers};
+      delete $self->{running};
+    } Promise->all ([map {
+      $_->stop;
+    } @{$self->{dockers}}]);
+  }
 
   my $stop_cmd = Promised::Command->new ([
     'docker', 'stack', 'rm', $self->stack_name,

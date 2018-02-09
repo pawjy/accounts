@@ -117,6 +117,7 @@ sub _docker ($%) {
     $stack->propagate_signal (1);
     $stack->signal_before_destruction ('TERM');
     $stack->stack_name ($args{stack_name} // 'accounts-test-accountserver');
+    $stack->use_fallback (1);
     my $out = '';
     $stack->logs (sub {
       my $v = $_[0];
