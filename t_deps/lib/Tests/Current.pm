@@ -28,10 +28,37 @@ sub object ($$$) {
   return $self->{objects}->{$name} || die "Object ($type, $name) not found";
 } # object
 
-sub o ($$$) {
+sub o ($$) {
   my ($self, $name) = @_;
   return $self->{objects}->{$name} || die "Object |$name| not found";
 } # o
+
+sub set_o ($$$) {
+  my ($self, $name, $v) = @_;
+  $self->{objects}->{$name} = $v;
+} # set_o
+
+my $Chars = [0x0000..0xD7FF, 0xE000..0x10FFFF];
+sub generate_text ($$$) {
+  my ($self, $name, $opts) = @_;
+  my $length = $opts->{length} || int rand 30 || 1;
+  my $bytes = '';
+  $bytes .= chr $Chars->[rand @$Chars] for 1..$length;
+  return $self->{objects}->{$name} = $bytes;
+} # generate_text
+
+sub generate_id ($$$) {
+  my ($self, $name, $opts) = @_;
+  return $self->{objects}->{$name} = int rand 100000000;
+} # generate_id
+
+sub generate_bytes ($$$) {
+  my ($self, $name, $opts) = @_;
+  my $length = $opts->{length} || int rand 10000 || 1;
+  my $bytes = '';
+  $bytes .= pack 'C', [0x00..0xFF]->[rand 256] for 1..$length;
+  return $self->{objects}->{$name} = $bytes;
+} # generate_bytes
 
 sub post ($$$;%) {
   my ($self, $path, $params, %args) = @_;

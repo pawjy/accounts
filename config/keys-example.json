@@ -20,6 +20,15 @@
   "strava.client_id": "...",
   "strava.client_secret": ["Base64", "..."],
 
+  "s3_access_key_id": "...",
+  "s3_secret_access_key": ["Base64", "..."],
+  "s3_sts_role_arn": "...",
+  "s3_region": "...",
+  "s3_bucket": "media.s3.test",
+  "s3_form_url": "https://s3-....amazonaws.com/media.s3.test/",
+  "s3_image_url_prefix": "https://media.s3.test/",
+  "s3_key_prefix": "images/accounts/icon",
+
   "test.hatena_id": ["Base64", "..."],
   "test.hatena_password": ["Base64", "..."]
 }

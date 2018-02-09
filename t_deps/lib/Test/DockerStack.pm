@@ -71,6 +71,10 @@ sub start ($) {
   my $method = '_start_docker_stack';
   return Promise->resolve->then (sub {
     if ($self->use_fallback) {
+      # XXX As docker stack's networking is unstable, we don't use it
+      # for now.
+      return $method = '_start_dockers';
+      
       my $cmd = Promised::Command->new (['docker', 'stack']);
       $cmd->stdout (sub { });
       $cmd->stderr (sub { });
@@ -110,12 +114,12 @@ sub _start_docker_stack ($) {
     my $stderr = '';
     $start_cmd->stdout (sub {
       my $w = $_[0];
-      Promise->new (sub { $_[0]->($logs->($w)) });
+      Promise->new (sub { $_[0]->($logs->($w)) }) if defined $w;
     });
     $start_cmd->stderr (sub {
       my $w = $_[0];
       $stderr .= $w if defined $w;
-      Promise->new (sub { $_[0]->($logs->($w)) });
+      Promise->new (sub { $_[0]->($logs->($w)) }) if defined $w;
     });
     $start_cmd->propagate_signal ($propagate);
     $start_cmd->signal_before_destruction ($before);

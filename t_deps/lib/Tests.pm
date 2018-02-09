@@ -268,66 +268,67 @@ sub start_web_server (;$$$) {
   my $oauth_host = $_[1] || $web_host;
   my $oauth_hostname_for_docker = $_[2];
 
-  $AccountServer = Test::AccountServer->new;
-  $AccountServer->set_web_host ($web_host);
-  $AccountServer->onbeforestart (sub {
-    my ($self, %args) = @_;
-    return oauth_server ($oauth_host)->then (sub {
-      my $host = $OAuthServer->get_host;
-      $args{data}->{oauth1_auth_url} = sprintf q<http://%s/oauth1/authorize>, $host;
-      $args{data}->{oauth2_auth_url} = sprintf q<http://%s/oauth2/authorize>, $host;
-
-      $args{servers}->{oauth1server} = {
-        name => 'oauth1server',
-        url_scheme => 'http',
-        host => $host,
-        "temp_endpoint" => "/oauth1/temp",
-        "temp_params" => {"scope" => ""},
-        "auth_endpoint" => "/oauth1/authorize",
-        auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
-        "token_endpoint" => "/oauth1/token",
-        "token_res_params" => ["url_name", "display_name", 'email_addr'],
-        "linked_name_field" => "display_name",
-        "linked_id_field" => "url_name",
-        "linked_email_field" => "email_addr",
-        timeout => 60*10,
-      };
-      $args{servers}->{oauth2server} = {
-        name => 'oauth2server',
-        url_scheme => 'http',
-        host => $host,
-        auth_endpoint => '/oauth2/authorize',
-        auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
-        token_endpoint => '/oauth2/token',
-        "profile_endpoint" => "/profile",
-        "profile_id_field" => "id",
-        "profile_key_field" => "login",
-        "profile_name_field" => "name",
-        "profile_email_field" => "email",
-        "auth_scheme" => "token",
-        "linked_id_field" => "profile_id",
-        "linked_key_field" => "profile_key",
-        "linked_name_field" => "profile_name",
-        "linked_email_field" => "profile_email",
-        "scope_separator" => ",",
-        timeout => 60*10,
-      };
-      $args{servers}->{ssh} = {
-        name => 'ssh',
-      };
-      
-      $args{config}->{"oauth1server.client_id"} = $OAuthServer->envs->{CLIENT_ID}.".oauth1";
-      $args{config}->{"oauth1server.client_secret"} = $OAuthServer->envs->{CLIENT_SECRET}.".oauth1";
-      $args{config}->{"oauth2server.client_id"} = $OAuthServer->envs->{CLIENT_ID}.".oauth2";
-      $args{config}->{"oauth2server.client_secret"} = $OAuthServer->envs->{CLIENT_SECRET}.".oauth2";
-      $args{config}->{"oauth1server.client_id.sk2"} = $OAuthServer->envs->{CLIENT_ID}.".oauth1.SK2";
-      $args{config}->{"oauth1server.client_secret.sk2"} = $OAuthServer->envs->{CLIENT_SECRET}.".oauth1.SK2";
-      $args{config}->{"oauth2server.client_id.sk2"} = $OAuthServer->envs->{CLIENT_ID}.".oauth2.SK2";
-      $args{config}->{"oauth2server.client_secret.sk2"} = $OAuthServer->envs->{CLIENT_SECRET}.".oauth2.SK2";
+  return oauth_server ($oauth_host)->then (sub {
+    my $host = $OAuthServer->get_host;
+    $AccountServer = Test::AccountServer->new ({
+      app_servers => {
+        oauth1server => {
+          name => 'oauth1server',
+          url_scheme => 'http',
+          host => $host,
+          "temp_endpoint" => "/oauth1/temp",
+          "temp_params" => {"scope" => ""},
+          "auth_endpoint" => "/oauth1/authorize",
+          auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
+          "token_endpoint" => "/oauth1/token",
+          "token_res_params" => ["url_name", "display_name", 'email_addr'],
+          "linked_name_field" => "display_name",
+          "linked_id_field" => "url_name",
+          "linked_email_field" => "email_addr",
+          timeout => 60*10,
+        },
+        oauth2server => {
+          name => 'oauth2server',
+          url_scheme => 'http',
+          host => $host,
+          auth_endpoint => '/oauth2/authorize',
+          auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
+          token_endpoint => '/oauth2/token',
+          "profile_endpoint" => "/profile",
+          "profile_id_field" => "id",
+          "profile_key_field" => "login",
+          "profile_name_field" => "name",
+          "profile_email_field" => "email",
+          "auth_scheme" => "token",
+          "linked_id_field" => "profile_id",
+          "linked_key_field" => "profile_key",
+          "linked_name_field" => "profile_name",
+          "linked_email_field" => "profile_email",
+          "scope_separator" => ",",
+          timeout => 60*10,
+        },
+        ssh => {
+          name => 'ssh',
+        },
+      }, # app_servers
+      app_config => {
+        "oauth1server.client_id" => $OAuthServer->envs->{CLIENT_ID}.".oauth1",
+        "oauth1server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth1",
+        "oauth2server.client_id" => $OAuthServer->envs->{CLIENT_ID}.".oauth2",
+        "oauth2server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth2",
+        "oauth1server.client_id.sk2" => $OAuthServer->envs->{CLIENT_ID}.".oauth1.SK2",
+        "oauth1server.client_secret.sk2" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth1.SK2",
+        "oauth2server.client_id.sk2" => $OAuthServer->envs->{CLIENT_ID}.".oauth2.SK2",
+        "oauth2server.client_secret.sk2" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth2.SK2",
+      }, # app_config
+    });
+    return $AccountServer->start->then (sub {
+      my $data = $_[0];
+      $data->{oauth1_auth_url} = sprintf q<http://%s/oauth1/authorize>, $host;
+      $data->{oauth2_auth_url} = sprintf q<http://%s/oauth2/authorize>, $host;
+      return $data;
     });
   });
-
-  return $AccountServer->start;
 } # start_web_server
 
 push @EXPORT, qw(web_server);
