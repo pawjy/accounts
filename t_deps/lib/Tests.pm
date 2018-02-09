@@ -268,12 +268,9 @@ sub start_web_server (;$$$) {
   my $oauth_host = $_[1] || $web_host;
   my $oauth_hostname_for_docker = $_[2];
 
-  $AccountServer = Test::AccountServer->new;
-  $AccountServer->set_web_host ($web_host);
-
   return oauth_server ($oauth_host)->then (sub {
     my $host = $OAuthServer->get_host;
-    return $AccountServer->start (
+    $AccountServer = Test::AccountServer->new ({
       app_servers => {
         oauth1server => {
           name => 'oauth1server',
@@ -324,7 +321,8 @@ sub start_web_server (;$$$) {
         "oauth2server.client_id.sk2" => $OAuthServer->envs->{CLIENT_ID}.".oauth2.SK2",
         "oauth2server.client_secret.sk2" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth2.SK2",
       }, # app_config
-    )->then (sub {
+    });
+    return $AccountServer->start->then (sub {
       my $data = $_[0];
       $data->{oauth1_auth_url} = sprintf q<http://%s/oauth1/authorize>, $host;
       $data->{oauth2_auth_url} = sprintf q<http://%s/oauth2/authorize>, $host;
