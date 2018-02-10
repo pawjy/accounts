@@ -25,9 +25,11 @@ test:
     - docker run quay.io/wakaba/accounts which /setup-db-for-test
     - docker run quay.io/wakaba/accounts /showrev
 
-    - docker run -d -p 6533:8080 quay.io/wakaba/accounts
+    - mkdir x
+    - echo '{}' > x/servers.json
+    - echo '{"servers_json_file":"servers.json"}' > x/config.json
+    - docker run -d -v `pwd`/x:/x -e APP_CONFIG=/x/config.json -p 6533:8080 quay.io/wakaba/accounts
     - while ! curl http://localhost:6533/robots.txt ; do sleep 1; done :
-        parallel: true
         timeout: 60
     - curl http://localhost:6533/robots.txt --dump-header - --fail
 
