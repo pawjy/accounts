@@ -12,7 +12,7 @@ ADD t_deps/bin/setup-db-for-test.pl /app/t_deps/bin/setup-db-for-test.pl
 
 RUN cd /app && \
     make deps-docker PMBP_OPTIONS="--execute-system-package-installer --dump-info-file-before-die" && \
-    apt-get install -y mysql-client && \ # XXX
+    apt-get install -y mysql-client && \
     echo '#!/bin/bash' > /server && \
     echo 'cd /app && ./plackup bin/server.psgi -p 8080 -s Twiggy::Prefork --max-workers 5' >> /server && \
     chmod u+x /server && \
