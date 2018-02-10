@@ -3,242 +3,120 @@ use warnings;
 use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
-use Test::More;
-use Test::X1;
-use Promise;
-use Web::UserAgent::Functions qw(http_post http_get);
-use JSON::PS;
 
-my $wait = web_server;
-
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  return Promise->new (sub {
-    my ($ok, $ng) = @_;
-    http_get
-        url => qq<http://$host/profiles>,
-        header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-        anyevent => 1,
-        max_redirect => 0,
-        cb => sub {
-          my $res = $_[1];
-          if ($res->code == 200) {
-            $ok->(json_bytes2perl $res->content);
-          } else {
-            $ng->($res->code);
-          }
-        };
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $status = $_[0];
-    test {
-      is $status, 405;
-    } $c;
-    done $c;
-    undef $c;
-  });
-} wait => $wait, n => 1, name => '/profiles GET';
-
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  return Promise->new (sub {
-    my ($ok, $ng) = @_;
-    http_post
-        url => qq<http://$host/profiles>,
-        anyevent => 1,
-        max_redirect => 0,
-        cb => sub {
-          my $res = $_[1];
-          if ($res->code == 200) {
-            $ok->(json_bytes2perl $res->content);
-          } else {
-            $ng->($res->code);
-          }
-        };
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $status = $_[0];
-    test {
-      is $status, 401;
-    } $c;
-    done $c;
-    undef $c;
-  });
-} wait => $wait, n => 1, name => '/profiles no auth';
-
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  return Promise->new (sub {
-    my ($ok, $ng) = @_;
-    http_post
-        url => qq<http://$host/profiles>,
-        header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-        anyevent => 1,
-        max_redirect => 0,
-        cb => sub {
-          my $res = $_[1];
-          if ($res->code == 200) {
-            $ok->(json_bytes2perl $res->content);
-          } else {
-            $ng->($res->code);
-          }
-        };
+Test {
+  my $current = shift;
+  return Promise->resolve->then (sub {
+    return $current->post (['profiles'], {
+    });
   })->then (sub {
-    my $json = $_[0];
+    my $res = $_[0];
     test {
-      is ref $json->{accounts}, 'HASH';
-      is 0+keys %{$json->{accounts} or {}}, 0;
-    } $c;
-    done $c;
-    undef $c;
+      is 0+keys %{$res->{json}->{accounts}}, 0;
+    } $current->c;
   });
-} wait => $wait, n => 2, name => '/profiles no account_id';
+} n => 1, name => '/profiles without account_id';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  return Promise->new (sub {
-    my ($ok, $ng) = @_;
-    http_post
-        url => qq<http://$host/profiles>,
-        header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-        params => {
-          account_id => [12, 4244444, 'abacee'],
-        },
-        anyevent => 1,
-        max_redirect => 0,
-        cb => sub {
-          my $res = $_[1];
-          if ($res->code == 200) {
-            $ok->(json_bytes2perl $res->content);
-          } else {
-            $ng->($res->code);
-          }
-        };
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {
+    name => $current->generate_text ('n1'),
   })->then (sub {
-    my $json = $_[0];
+    return $current->are_errors (
+      [['profiles'], {
+        account_id => $current->o ('a1')->{account_id},
+      }],
+      [
+        {method => 'GET', status => 405},
+        {bearer => undef, status => 401},
+        {bearer => rand, status => 401},
+      ],
+    );
+  })->then (sub {
+    return $current->post (['profiles'], {
+      account_id => $current->o ('a1')->{account_id},
+    });
+  })->then (sub {
+    my $res = $_[0];
     test {
-      is ref $json->{accounts}, 'HASH';
-      is 0+keys %{$json->{accounts} or {}}, 0;
-    } $c;
-    done $c;
-    undef $c;
+      my $data = $res->{json}->{accounts}->{$current->o ('a1')->{account_id}};
+      is $data->{account_id}, $current->o ('a1')->{account_id};
+      is $data->{name}, $current->o ('n1');
+      like $res->{res}->body_bytes, qr{"account_id"\s*:\s*"};
+    } $current->c;
   });
-} wait => $wait, n => 2, name => '/profiles bad account_id';
+} n => 4, name => '/profiles with account_id, matched';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  session ($c, account => {name => "\x{5000}"})->then (sub {
-    my $a1 = $_[0];
-    return Promise->new (sub {
-      my ($ok, $ng) = @_;
-      http_post
-          url => qq<http://$host/profiles>,
-          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {
-            account_id => $a1->{account_id},
-          },
-          anyevent => 1,
-          max_redirect => 0,
-          cb => sub {
-            my $res = $_[1];
-            if ($res->code == 200) {
-              $ok->(json_bytes2perl $res->content);
-            } else {
-              $ng->($res->code);
-            }
-          };
-    })->then (sub {
-      my $json = $_[0];
-      test {
-        my $data = $json->{accounts}->{$a1->{account_id}};
-        is $data->{account_id}, $a1->{account_id};
-        is $data->{name}, "\x{5000}";
-      } $c;
-      done $c;
-      undef $c;
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {
+    name => $current->generate_text ('n1'),
+  })->then (sub {
+    return $current->create_account (a2 => {
+      name => $current->generate_text ('n2'),
     });
-  });
-} wait => $wait, n => 2, name => '/profiles with account_id, matched';
-
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  session ($c, account => {name => "\x{5000}", user_status => 2})->then (sub {
-    my $a1 = $_[0];
-    return Promise->new (sub {
-      my ($ok, $ng) = @_;
-      http_post
-          url => qq<http://$host/profiles>,
-          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {
-            account_id => $a1->{account_id},
-            user_status => [1, 3],
-          },
-          anyevent => 1,
-          max_redirect => 0,
-          cb => sub {
-            my $res = $_[1];
-            if ($res->code == 200) {
-              $ok->(json_bytes2perl $res->content);
-            } else {
-              $ng->($res->code);
-            }
-          };
-    })->then (sub {
-      my $json = $_[0];
-      test {
-        is $json->{accounts}->{$a1->{account_id}}, undef;
-      } $c;
-      done $c;
-      undef $c;
+  })->then (sub {
+    return $current->post (['profiles'], {
+      account_id => [$current->o ('a1')->{account_id},
+                     $current->o ('a2')->{account_id},
+                     $current->generate_id ('id1')],
     });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      my $data = $res->{json}->{accounts}->{$current->o ('a1')->{account_id}};
+      is $data->{account_id}, $current->o ('a1')->{account_id};
+      is $data->{name}, $current->o ('n1');
+      my $data2 = $res->{json}->{accounts}->{$current->o ('a2')->{account_id}};
+      is $data2->{account_id}, $current->o ('a2')->{account_id};
+      is $data2->{name}, $current->o ('n2');
+      ok ! $res->{json}->{accounts}->{$current->o ('id1')};
+      like $res->{res}->body_bytes, qr{"account_id"\s*:\s*"};
+    } $current->c;
   });
-} wait => $wait, n => 1, name => '/profiles with account_id, user_status filtered';
+} n => 6, name => '/profiles with account_id, multiple';
 
-test {
-  my $c = shift;
-  my $host = $c->received_data->{host};
-  session ($c, account => {name => "\x{5000}", admin_status => 2})->then (sub {
-    my $a1 = $_[0];
-    return Promise->new (sub {
-      my ($ok, $ng) = @_;
-      http_post
-          url => qq<http://$host/profiles>,
-          header_fields => {Authorization => 'Bearer ' . $c->received_data->{keys}->{'auth.bearer'}},
-          params => {
-            account_id => $a1->{account_id},
-            admin_status => [1, 3],
-          },
-          anyevent => 1,
-          max_redirect => 0,
-          cb => sub {
-            my $res = $_[1];
-            if ($res->code == 200) {
-              $ok->(json_bytes2perl $res->content);
-            } else {
-              $ng->($res->code);
-            }
-          };
-    })->then (sub {
-      my $json = $_[0];
-      test {
-        is $json->{accounts}->{$a1->{account_id}}, undef;
-      } $c;
-      done $c;
-      undef $c;
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {
+    name => $current->generate_text ('n1'),
+    user_status => 2,
+  })->then (sub {
+    return $current->post (['profiles'], {
+      account_id => $current->o ('a1'),
+      user_status => [1, 3],
     });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->{json}->{accounts}->{$current->o ('a1')->{account_id}}, undef;
+    } $current->c;
   });
-} wait => $wait, n => 1, name => '/profiles with account_id, admin_status filtered';
+} n => 1, name => '/profiles with account_id, user_status filtered';
 
-run_tests;
-stop_web_server;
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {
+    name => $current->generate_text ('n1'),
+    admin_status => 2,
+  })->then (sub {
+    return $current->post (['profiles'], {
+      account_id => $current->o ('a1'),
+      admin_status => [1, 3],
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->{json}->{accounts}->{$current->o ('a1')->{account_id}}, undef;
+    } $current->c;
+  });
+} n => 1, name => '/profiles with account_id, admin_status filtered';
+
+RUN;
 
 =head1 LICENSE
 
-Copyright 2015 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
