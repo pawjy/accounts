@@ -25,6 +25,12 @@ test:
     - docker run quay.io/wakaba/accounts which /setup-db-for-test
     - docker run quay.io/wakaba/accounts /showrev
 
+    - docker run -d -p 6533:8080 quay.io/wakaba/accounts
+    - while ! curl http://localhost:6533/robots.txt ; do sleep 1; done :
+        parallel: true
+        timeout: 60
+    - curl http://localhost:6533/robots.txt --dump-header - --fail
+
     - make test-local-http-circle :
         timeout: 600
     - WEBUA_DEBUG=1 TEST_WEBDRIVER_BROWSERS="chrome" make test-local-web-circle:
@@ -34,6 +40,7 @@ deployment:
     branch: nightly
     commands:
       - curl -f -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"staging\",\"head\":\"`git rev-parse HEAD`\",\"commit_message\":\"auto-merge nightly into staging\"}" "https://api.github.com/repos/wakaba/accounts/merges"
+    
   staging:
     branch: staging
     commands:
@@ -44,5 +51,11 @@ deployment:
       - git push git@heroku.com:$HEROKU_APP_NAME.git +`cat rev`:master  :
          timeout: 600
       - XTEST_ORIGIN=https://$HEROKU_APP_NAME.herokuapp.com make test-external-http-or-rollback HEROKU_APP_NAME=$HEROKU_APP_NAME
+      
       - curl -f -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"master\",\"head\":\"`cat rev`\",\"commit_message\":\"auto-merge staging into master\"}" "https://api.github.com/repos/wakaba/accounts/merges"
 
+  master:
+    branch: master
+    commands:
+      - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASSWORD quay.io
+      - docker push quay.io/wakaba/accounts
