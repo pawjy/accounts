@@ -60,6 +60,14 @@ sub generate_bytes ($$$) {
   return $self->{objects}->{$name} = $bytes;
 } # generate_bytes
 
+sub generate_context_key ($$$) {
+  my ($self, $name, $opts) = @_;
+  my $length = $opts->{length} || int rand 30 || 1;
+  my $bytes = '';
+  $bytes .= pack 'C', [0x20..0x7E]->[rand 95] for 1..$length;
+  return $self->{objects}->{$name} = $bytes;
+} # generate_context_key
+
 sub post ($$$;%) {
   my ($self, $path, $params, %args) = @_;
   my $p = {sk_context => 'tests'};

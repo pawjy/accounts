@@ -142,6 +142,156 @@ Test {
   });
 } n => 8, name => '/group/profiles with data';
 
+Test {
+  my $current = shift;
+  return $current->create_group (a1 => {
+    context_key => $current->generate_context_key ('gctx' => {}),
+  })->then (sub {
+    return $current->post (['group', 'profiles'], {
+      group_id => $current->o ('a1')->{group_id},
+      with_icon => [$current->generate_context_key ('ctx1' => {})],
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      my $data = $res->{json}->{groups}->{$current->o ('a1')->{group_id}};
+      is 0+keys %{$data->{icons}}, 0;
+      is $data->{icons}->{$current->o ('ctx1')}, undef;
+    } $current->c;
+  });
+} n => 2, name => '/profiles with_icons no icon';
+
+Test {
+  my $current = shift;
+  return $current->create_group (a1 => {
+    context_key => $current->generate_context_key ('gctx' => {}),
+  })->then (sub {
+    return $current->post (['icon', 'updateform'], {
+      context_key => $current->generate_context_key ('ctx1' => {}),
+      target_type => 2,
+      target_id => $current->o ('a1')->{group_id},
+      mime_type => 'image/jpeg',
+      byte_length => length ($current->generate_bytes (b1 => {})),
+    });
+  })->then (sub {
+    my $res = $_[0];
+    $current->set_o (icon_url => $res->{json}->{icon_url});
+    return $current->post (['group', 'profiles'], {
+      context_key => $current->o ('gctx'),
+      group_id => $current->o ('a1')->{group_id},
+      with_icon => [$current->o ('ctx1')],
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      my $data = $res->{json}->{groups}->{$current->o ('a1')->{group_id}};
+      is 0+keys %{$data->{icons}}, 1;
+      is $data->{icons}->{$current->o ('ctx1')}, $current->o ('icon_url');
+    } $current->c;
+  });
+} n => 2, name => '/group/profiles with_icon';
+
+Test {
+  my $current = shift;
+  return $current->create_group (a1 => {
+    context_key => $current->generate_context_key ('gctx' => {}),
+  })->then (sub {
+    return $current->post (['icon', 'updateform'], {
+      context_key => $current->generate_context_key ('ctx1' => {}),
+      target_type => 2,
+      target_id => $current->o ('a1')->{group_id},
+      mime_type => 'image/jpeg',
+      byte_length => length ($current->generate_bytes (b1 => {})),
+    });
+  })->then (sub {
+    my $res = $_[0];
+    $current->set_o (icon_url => $res->{json}->{icon_url});
+    return $current->post (['icon', 'updateform'], {
+      context_key => $current->generate_context_key ('ctx2' => {}),
+      target_type => 2,
+      target_id => $current->o ('a1')->{group_id},
+      mime_type => 'image/jpeg',
+      byte_length => length ($current->generate_bytes (b1 => {})),
+    });
+  })->then (sub {
+    my $res = $_[0];
+    $current->set_o (icon_url2 => $res->{json}->{icon_url});
+    return $current->post (['group', 'profiles'], {
+      context_key => $current->o ('gctx'),
+      group_id => $current->o ('a1')->{group_id},
+      with_icon => [$current->o ('ctx1'), $current->o ('ctx2')],
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      my $data = $res->{json}->{groups}->{$current->o ('a1')->{group_id}};
+      is 0+keys %{$data->{icons}}, 2;
+      is $data->{icons}->{$current->o ('ctx1')}, $current->o ('icon_url');
+      is $data->{icons}->{$current->o ('ctx2')}, $current->o ('icon_url2');
+    } $current->c;
+  });
+} n => 3, name => '/profiles with_icon 2';
+
+Test {
+  my $current = shift;
+  return $current->create_group (a1 => {
+    context_key => $current->generate_context_key ('gctx' => {}),
+  })->then (sub {
+    return $current->create_group (a2 => {
+      context_key => $current->o ('gctx'),
+    });
+  })->then (sub {
+    return $current->post (['icon', 'updateform'], {
+      context_key => $current->generate_context_key ('ctx1' => {}),
+      target_type => 2,
+      target_id => $current->o ('a1')->{group_id},
+      mime_type => 'image/jpeg',
+      byte_length => length ($current->generate_bytes (b1 => {})),
+    });
+  })->then (sub {
+    my $res = $_[0];
+    $current->set_o (icon_url => $res->{json}->{icon_url});
+    return $current->post (['icon', 'updateform'], {
+      context_key => $current->generate_context_key ('ctx2' => {}),
+      target_type => 2,
+      target_id => $current->o ('a1')->{group_id},
+      mime_type => 'image/jpeg',
+      byte_length => length ($current->generate_bytes (b1 => {})),
+    });
+  })->then (sub {
+    my $res = $_[0];
+    $current->set_o (icon_url2 => $res->{json}->{icon_url});
+    return $current->post (['icon', 'updateform'], {
+      context_key => $current->o ('ctx2' => {}),
+      target_type => 2,
+      target_id => $current->o ('a2')->{group_id},
+      mime_type => 'image/jpeg',
+      byte_length => length ($current->generate_bytes (b1 => {})),
+    });
+  })->then (sub {
+    my $res = $_[0];
+    $current->set_o (icon_url3 => $res->{json}->{icon_url});
+    return $current->post (['group', 'profiles'], {
+      context_key => $current->o ('gctx'),
+      group_id => [$current->o ('a1')->{group_id},
+                   $current->o ('a2')->{group_id}],
+      with_icon => [$current->o ('ctx1'), $current->o ('ctx2')],
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      my $data = $res->{json}->{groups}->{$current->o ('a1')->{group_id}};
+      is 0+keys %{$data->{icons}}, 2;
+      is $data->{icons}->{$current->o ('ctx1')}, $current->o ('icon_url');
+      is $data->{icons}->{$current->o ('ctx2')}, $current->o ('icon_url2');
+      my $data2 = $res->{json}->{groups}->{$current->o ('a2')->{group_id}};
+      is 0+keys %{$data2->{icons}}, 1;
+      is $data2->{icons}->{$current->o ('ctx1')}, undef;
+      is $data2->{icons}->{$current->o ('ctx2')}, $current->o ('icon_url3');
+    } $current->c;
+  });
+} n => 6, name => '/profiles with_icon 3';
+
 RUN;
 
 =head1 LICENSE

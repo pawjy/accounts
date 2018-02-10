@@ -780,6 +780,9 @@ sub main ($$) {
     ##
     ## Parameters
     ##   account_id (0..)   Account IDs
+    ##   with_data
+    ##   with_linked
+    ##   with_icons
     ##
     ## Also, status filters |user_status|, |admin_status|,
     ## |terms_version| with empty prefix are available.
@@ -801,6 +804,8 @@ sub main ($$) {
       } @{$_[0]}]);
     })->then (sub {
       return $class->load_data ($app, '', 'account_data', 'account_id', undef, undef, $_[0]);
+    })->then (sub {
+      return $class->load_icons ($app, 1, 'account_id', $_[0]);
     })->then (sub {
       return $app->send_json ({
         accounts => {map { $_->{account_id} => $_ } @{$_[0]}},
@@ -1250,6 +1255,39 @@ sub load_data ($$$$$$$$) {
   });
 } # load_data
 
+sub load_icons ($$$$$) {
+  my ($class, $app, $target_type, $id_key, $items) = @_;
+  my $context_keys = $app->bare_param_list ('with_icon');
+  return $items unless @$context_keys;
+  
+  my $id_to_json = {};
+  my @id = map {
+    $id_to_json->{$_->{$id_key}} = $_;
+    $_->{icons} ||= {};
+    Dongry::Type->serialize ('text', $_->{$id_key});
+  } grep { defined $_->{$id_key} } @$items;
+  return $items unless @id;
+
+  return $app->db->select ('icon', {
+    context_key => {-in => $context_keys},
+    target_type => $target_type,
+    target_id => {-in => \@id},
+    admin_status => 1, # open
+  }, source_name => 'master', fields => ['context_key', 'target_id', 'url'])->then (sub {
+    for (@{$_[0]->all}) {
+      my $json = $id_to_json->{$_->{target_id}};
+      my $cfg = sub {
+        my $n = $_[0];
+        return $app->config->get ($n . '.' . $_->{context_key}) //
+               $app->config->get ($n); # or undef
+      }; # $cfg
+      $json->{icons}->{$_->{context_key}} = $cfg->('s3_image_url_prefix') . $_->{url}
+          if defined $_->{url} and length $_->{url};
+    }
+    return $items;
+  });
+} # load_icons
+
 ## If an end point supports paging, following parameters are
 ## available:
 ##   ref       A short string identifying the page
@@ -1503,6 +1541,7 @@ sub group ($$$) {
     ##   context_key    An opaque string identifying the application.  Required.
     ##   group_id (0..)      Group IDs
     ##   with_data
+    ##   with_icons
     ##
     ## Also, status filters |owner_status| and |admin_status| with
     ## empty prefix are available.
@@ -1521,6 +1560,8 @@ sub group ($$$) {
       });
     })->then (sub {
       return $class->load_data ($app, '', 'group_data', 'group_id', undef, undef, $_[0]);
+    })->then (sub {
+      return $class->load_icons ($app, 2, 'group_id', $_[0]);
     })->then (sub {
       return $app->send_json ({
         groups => {map {
@@ -1978,7 +2019,9 @@ sub icon ($$$) {
     ## /icon/updateform - Get form data to update the icon
     ##
     ## Parameters
-    ##   context_key   An opaque string identifying the application.  Required.
+    ##   context_key   An opaque string identifying the application.
+    ##                 Required.  Note that this is irrelevant to
+    ##                 group's |context_key|.
     ##   target_type   Type of the target with which the icon is associated.
     ##                   1 - account
     ##                   2 - group
@@ -2026,7 +2069,7 @@ sub icon ($$$) {
         my $key = "$id";
         my $time = time;
         return $app->db->insert ('icon', [{
-          context_key => Dongry::Type->serialize ('text', $context_key),
+          context_key => $context_key,
           target_type => $target_type,
           target_id => $target_id,
           created => $time,
