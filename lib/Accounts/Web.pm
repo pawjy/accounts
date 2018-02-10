@@ -2056,6 +2056,12 @@ sub icon ($$$) {
     return $app->throw_error_json ({reason => 'Bad |byte_length|'})
         unless 0 < $byte_length and $byte_length <= 10*1024*1024;
 
+    my $cfg = sub {
+      my $n = $_[0];
+      return $app->config->get ($n . '.' . $context_key) //
+             $app->config->get ($n); # or undef
+    }; # $cfg
+
     return $app->db->select ('icon', {
       context_key => Dongry::Type->serialize ('text', $context_key),
       target_type => $target_type,
@@ -2066,7 +2072,11 @@ sub icon ($$$) {
 
       return $app->db->execute ('select uuid_short() as `id`', undef, source_name => 'master')->then (sub {
         my $id = $_[0]->first->{id};
+    
+        my $key_prefix = $cfg->('s3_key_prefix') // '';
         my $key = "$id";
+        $key = "$key_prefix/$key" if length $key_prefix;
+        
         my $time = time;
         return $app->db->insert ('icon', [{
           context_key => $context_key,
@@ -2075,20 +2085,11 @@ sub icon ($$$) {
           created => $time,
           updated => $time,
           admin_status => 1, # open
-          url => $key,
+          url => Dongry::Type->serialize ('text', $key),
         }])->then (sub { return $key });
       });
     })->then (sub {
       my $key = $_[0];
-
-      my $cfg = sub {
-        my $n = $_[0];
-        return $app->config->get ($n . '.' . $context_key) //
-               $app->config->get ($n); # or undef
-      }; # $cfg
-      
-      my $key_prefix = $cfg->('s3_key_prefix') // '';
-      $key = "$key_prefix/$key" if length $key_prefix;
       
       #my $image_url = "https://$service-$region.amazonaws.com/$bucket/$key";
       #my $image_url = "https://$bucket/$key";

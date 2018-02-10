@@ -142,6 +142,50 @@ Test {
   });
 } n => 3, name => '/icon/updateform second invocation';
 
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {})->then (sub {
+    return $current->post (['icon', 'updateform'], {
+      context_key => 'prefixed',
+      target_type => 1,
+      target_id => $current->o ('a1')->{account_id},
+      mime_type => 'image/png',
+      byte_length => length ($current->generate_bytes (b1 => {})),
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->{status}, 200;
+      like $res->{json}->{icon_url}, qr{^https?://[^/]+/[^/]+/image/key/prefix/[^/]+$};
+    } $current->c;
+    $current->set_o (icon_url => $res->{json}->{icon_url});
+    return $current->post (['icon', 'updateform'], {
+      context_key => 'prefixed',
+      target_type => 1,
+      target_id => $current->o ('a1')->{account_id},
+      mime_type => 'image/jpeg',
+      byte_length => length ($current->generate_bytes (b2 => {})),
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->{status}, 200;
+      is $res->{json}->{icon_url}, $current->o ('icon_url');
+    } $current->c;
+    return $current->post (['profiles'], {
+      account_id => $current->o ('a1')->{account_id},
+      with_icon => 'prefixed',
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      my $data = $res->{json}->{accounts}->{$current->o ('a1')->{account_id}};
+      is 0+keys %{$data->{icons}}, 1;
+      is $data->{icons}->{prefixed}, $current->o ('icon_url');
+    } $current->c;
+  });
+} n => 6, name => '/icon/updateform prefixed second invocation';
+
 RUN;
 
 =head1 LICENSE
