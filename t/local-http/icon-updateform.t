@@ -65,7 +65,7 @@ Test {
     ],
   )->then (sub {
     return $current->post (['icon', 'updateform'], {
-      context_key => $current->generate_bytes ('ctx1' => {length => 1 + int rand 50}),
+      context_key => $current->generate_context_key ('ctx1' => {}),
       target_type => 2,
       target_id => $current->generate_id ('id1' => {}),
       mime_type => 'image/jpeg',
@@ -114,7 +114,7 @@ Test {
   my $current = shift;
   return Promise->resolve->then (sub {
     return $current->post (['icon', 'updateform'], {
-      context_key => $current->generate_bytes ('ctx1' => {length => 1 + int rand 50}),
+      context_key => $current->generate_context_key ('ctx1' => {}),
       target_type => 2,
       target_id => $current->generate_id ('id1' => {}),
       mime_type => 'image/jpeg',
