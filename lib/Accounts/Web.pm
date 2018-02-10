@@ -2115,7 +2115,8 @@ sub icon ($$$) {
           params => {
             Version => '2011-06-15',
             Action => 'AssumeRole',
-            RoleSessionName => 'accounts-icon-' . $context_key,
+            ## Maximum length = 64 (sha1_hex length = 40)
+            RoleSessionName => 'accounts-icon-' . sha1_hex ($context_key),
             RoleArn => $sts_role_arn,
             Policy => perl2json_chars ({
               "Version" => "2012-10-17",
