@@ -4,8 +4,6 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
 
-my $wait = web_server;
-
 Test {
   my $current = shift;
   return $current->create_invitation (i1 => {})->then (sub {
@@ -85,7 +83,7 @@ Test {
       ok $inv->{used};
     } $current->c;
   });
-} wait => $wait, n => 12, name => '/invite/use';
+} n => 12, name => '/invite/use';
 
 Test {
   my $current = shift;
@@ -122,7 +120,7 @@ Test {
       ok $inv->{used};
     } $current->c;
   });
-} wait => $wait, n => 11, name => '/invite/use with data';
+} n => 11, name => '/invite/use with data';
 
 Test {
   my $current = shift;
@@ -175,7 +173,7 @@ Test {
       ok $inv->{used};
     } $current->c;
   });
-} wait => $wait, n => 12, name => '/invite/use targetted';
+} n => 12, name => '/invite/use targetted';
 
 Test {
   my $current = shift;
@@ -216,14 +214,13 @@ Test {
       ok $inv->{used};
     } $current->c;
   });
-} wait => $wait, n => 11, name => '/invite/use targetted but ignored';
+} n => 11, name => '/invite/use targetted but ignored';
 
-run_tests;
-stop_web_server;
+RUN;
 
 =head1 LICENSE
 
-Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

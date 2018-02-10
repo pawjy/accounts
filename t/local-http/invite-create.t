@@ -4,8 +4,6 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
 
-my $wait = web_server;
-
 Test {
   my $current = shift;
   my $k1 = rand;
@@ -81,7 +79,7 @@ Test {
       like $result->{res}->body_bytes, qr{"user_account_id"\s*:\s*"};
     } $current->c;
   });
-} wait => $wait, n => 17, name => '/invite/create';
+} n => 17, name => '/invite/create';
 
 Test {
   my $current = shift;
@@ -128,14 +126,13 @@ Test {
       like $result->{res}->body_bytes, qr{"user_account_id"\s*:\s*"};
     } $current->c;
   });
-} wait => $wait, n => 17, name => '/invite/create';
+} n => 17, name => '/invite/create';
 
-run_tests;
-stop_web_server;
+RUN;
 
 =head1 LICENSE
 
-Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

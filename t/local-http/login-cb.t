@@ -4,8 +4,6 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
 
-my $wait = web_server;
-
 Test {
   my $current = shift;
   return $current->create_session (1)->then (sub {
@@ -22,7 +20,7 @@ Test {
       is $result->{json}->{reason}, 'Bad |state|';
     } $current->c;
   });
-} wait => $wait, n => 2, name => '/login then /cb';
+} n => 2, name => '/login then /cb';
 
 Test {
   my $current = shift;
@@ -64,7 +62,7 @@ Test {
       ok grep { $_->{service_name} eq 'oauth1server' } values %$links;
     } $current->c;
   });
-} wait => $wait, n => 7, name => '/login then auth then /cb - new account, oauth1';
+} n => 7, name => '/login then auth then /cb - new account, oauth1';
 
 Test {
   my $current = shift;
@@ -146,14 +144,13 @@ Test {
       is $result->{json}->{account_id}, $account_id, 'existing account';
     } $current->c;
   });
-} wait => $wait, n => 13, name => '/login then auth then /cb - oauth2';
+} n => 13, name => '/login then auth then /cb - oauth2';
 
-run_tests;
-stop_web_server;
+RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,0 +1,34 @@
+{
+  "servers_json_file": "servers.json",
+
+  "auth.bearer": ["Base64", "..."],
+
+  "twitter.client_id": "...",
+  "twitter.client_secret": ["Base64", "..."],
+  "hatena.client_id": "...",
+  "hatena.client_secret": ["Base64", "..."],
+  "google.client_id": "...",
+  "google.client_secret": ["Base64", "..."],
+  "facebook.client_id": "...",
+  "facebook.client_secret": ["Base64", "..."],
+  "github.client_id": "...",
+  "github.client_secret": ["Base64", "..."],
+  "github.client_id.MYAPPCONTEXT": "...",
+  "github.client_secret.MYAPPCONTEXT": ["Base64", "..."],
+  "bitbucket.client_id": "...",
+  "bitbucket.client_secret": ["Base64", "..."],
+  "strava.client_id": "...",
+  "strava.client_secret": ["Base64", "..."],
+
+  "s3_access_key_id": "...",
+  "s3_secret_access_key": ["Base64", "..."],
+  "s3_sts_role_arn": "...",
+  "s3_region": "...",
+  "s3_bucket": "media.s3.test",
+  "s3_form_url": "https://s3-....amazonaws.com/media.s3.test/",
+  "s3_image_url_prefix": "https://media.s3.test/",
+  "s3_key_prefix": "images/accounts/icon",
+
+  "test.hatena_id": ["Base64", "..."],
+  "test.hatena_password": ["Base64", "..."]
+}

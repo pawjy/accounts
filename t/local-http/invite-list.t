@@ -4,8 +4,6 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
 
-my $wait = web_server;
-
 Test {
   my $current = shift;
   return $current->create_invitation (i1 => {
@@ -46,7 +44,7 @@ Test {
       like $result->{res}->body_bytes, qr{"user_account_id"\s*:\s*"};
     } $current->c;
   });
-} wait => $wait, n => 14, name => '/invite/list';
+} n => 14, name => '/invite/list';
 
 Test {
   my $current = shift;
@@ -92,7 +90,7 @@ Test {
       like $result->{res}->body_bytes, qr{"user_account_id"\s*:\s*"};
     } $current->c;
   });
-} wait => $wait, n => 22, name => '/invite/list';
+} n => 22, name => '/invite/list';
 
 Test {
   my $current = shift;
@@ -191,14 +189,13 @@ Test {
       ok ! $result->{json}->{has_next};
     } $current->c;
   });
-} wait => $wait, n => 22, name => '/invitation/list paging';
+} n => 22, name => '/invitation/list paging';
 
-run_tests;
-stop_web_server;
+RUN;
 
 =head1 LICENSE
 
-Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

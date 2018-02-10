@@ -19,6 +19,14 @@ else
 	$(MAKE) git-submodules
 endif
 	$(MAKE) pmbp-install
+ifdef GAA
+else
+ifdef PMBP_HEROKU_BUILDPACK
+else
+# XXX and not in docker build
+#	$(MAKE) pmbp-install-local
+endif
+endif
 
 deps-before-docker: git-submodules
 deps-docker: pmbp-install
@@ -41,12 +49,21 @@ pmbp-update: git-submodules pmbp-upgrade
 pmbp-install: pmbp-upgrade
 	perl local/bin/pmbp.pl $(PMBP_OPTIONS) --install
 
+pmbp-install-local: pmbp-install-local-main pmbp-install
+pmbp-install-local-main:
+	./perl local/bin/pmbp.pl $(PMBP_OPTIONS) \
+	    --install-commands "make git mysqld wget curl"
+ifdef CIRCLECI
+else
+	./perl local/bin/pmbp.pl $(PMBP_OPTIONS) \
+	    --install-commands docker
+endif
+
 ## ------ Tests ------
 
 PROVE = ./prove
 
-test-deps: deps
-	perl local/bin/pmbp.pl $(PMBP_OPTIONS) --install-mysqld
+test-deps: deps pmbp-install-local
 
 test-local-http-circle:
 	$(PROVE) t/local-http/*.t

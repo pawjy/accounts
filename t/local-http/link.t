@@ -4,8 +4,6 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
 
-my $wait = web_server;
-
 Test {
   my $current = shift;
   return $current->client->request (path => ['link'])->then (sub {
@@ -14,7 +12,7 @@ Test {
       is $res->status, 405;
     } $current->c;
   });
-} wait => $wait, n => 1, name => '/link GET';
+} n => 1, name => '/link GET';
 
 Test {
   my $current = shift;
@@ -24,7 +22,7 @@ Test {
       is $res->status, 401;
     } $current->c;
   });
-} wait => $wait, n => 1, name => '/link no auth';
+} n => 1, name => '/link no auth';
 
 Test {
   my $current = shift;
@@ -35,7 +33,7 @@ Test {
       is $result->{json}->{reason}, 'Bad session';
     } $current->c;
   });
-} wait => $wait, n => 2, name => '/link bad session';
+} n => 2, name => '/link bad session';
 
 Test {
   my $current = shift;
@@ -55,7 +53,7 @@ Test {
       } $current->c;
     });
   });
-} wait => $wait, n => 2, name => '/link bad sk_context';
+} n => 2, name => '/link bad sk_context';
 
 Test {
   my $current = shift;
@@ -73,7 +71,7 @@ Test {
       } $current->c;
     });
   });
-} wait => $wait, n => 2, name => '/link bad server';
+} n => 2, name => '/link bad server';
 
 Test {
   my $current = shift;
@@ -92,7 +90,7 @@ Test {
       like $result->{json}->{authorization_url}, qr{^\Q$auth\E\?oauth_token=.+$};
     } $current->c;
   });
-} wait => $wait, n => 2, name => '/link';
+} n => 2, name => '/link';
 
 Test {
   my $current = shift;
@@ -108,14 +106,13 @@ Test {
       is $result->{json}->{reason}, 'Not a login user';
     } $current->c;
   });
-} wait => $wait, n => 2, name => '/link without account';
+} n => 2, name => '/link without account';
 
-run_tests;
-stop_web_server;
+RUN;
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

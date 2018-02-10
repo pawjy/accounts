@@ -4,8 +4,6 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
 
-my $wait = web_server;
-
 Test {
   my $current = shift;
   return $current->create_group (g1 => {})->then (sub {
@@ -71,7 +69,7 @@ Test {
       is $g1->{admin_status}, 6;
     } $current->c;
   });
-} wait => $wait, n => 3, name => '/group/admin_status';
+} n => 3, name => '/group/admin_status';
 
 Test {
   my $current = shift;
@@ -91,14 +89,13 @@ Test {
       } $current->c;
     });
   });
-} wait => $wait, n => 1, name => '/group/create with admin_status';
+} n => 1, name => '/group/create with admin_status';
 
-run_tests;
-stop_web_server;
+RUN;
 
 =head1 LICENSE
 
-Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

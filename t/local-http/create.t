@@ -4,8 +4,6 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
 
-my $wait = web_server;
-
 Test {
   my $current = shift;
   return $current->client->request (path => ['create'])->then (sub {
@@ -14,7 +12,7 @@ Test {
       is $result->{status}, 405;
     } $current->c;
   });
-} wait => $wait, n => 1, name => '/create GET';
+} n => 1, name => '/create GET';
 
 Test {
   my $current = shift;
@@ -24,7 +22,7 @@ Test {
       is $result->{status}, 401;
     } $current->c;
   });
-} wait => $wait, n => 1, name => '/create no auth';
+} n => 1, name => '/create no auth';
 
 Test {
   my $current = shift;
@@ -36,7 +34,7 @@ Test {
       is $result->{status}, 400;
     } $current->c;
   });
-} wait => $wait, n => 1, name => '/create no session';
+} n => 1, name => '/create no session';
 
 Test {
   my $current = shift;
@@ -46,7 +44,7 @@ Test {
       is $result->{status}, 400;
     } $current->c;
   });
-} wait => $wait, n => 1, name => '/create no session';
+} n => 1, name => '/create no session';
 
 Test {
   my $current = shift;
@@ -71,7 +69,7 @@ Test {
       is $result->{json}->{terms_version}, 0;
     } $current->c;
   });
-} wait => $wait, n => 8, name => '/create has anon session';
+} n => 8, name => '/create has anon session';
 
 Test {
   my $current = shift;
@@ -85,7 +83,7 @@ Test {
       is $result->{json}->{reason}, 'Bad session';
     } $current->c;
   });
-} wait => $wait, n => 2, name => '/create bad session';
+} n => 2, name => '/create bad session';
 
 Test {
   my $current = shift;
@@ -115,7 +113,7 @@ Test {
       is $result->{json}->{terms_version}, 255;
     } $current->c;
   });
-} wait => $wait, n => 8, name => '/create with options';
+} n => 8, name => '/create with options';
 
 Test {
   my $current = shift;
@@ -150,14 +148,13 @@ Test {
       is $result->{json}->{name}, "hoge";
     } $current->c;
   });
-} wait => $wait, n => 6, name => '/create with associated session';
+} n => 6, name => '/create with associated session';
 
-run_tests;
-stop_web_server;
+RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
