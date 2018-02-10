@@ -50,7 +50,7 @@ deployment:
       - git clone $KEYS_REPO_URL local/keys
       - make heroku-save-current-release HEROKU_APP_NAME=$HEROKU_APP_NAME
       - make create-commit-for-heroku
-      - git push git@heroku.com:$HEROKU_APP_NAME.git +`cat rev`:master  :
+      - git push git@heroku.com:$HEROKU_APP_NAME.git +`git rev-parse HEAD`:master  :
          timeout: 600
       - XTEST_ORIGIN=https://$HEROKU_APP_NAME.herokuapp.com make test-external-http-or-rollback HEROKU_APP_NAME=$HEROKU_APP_NAME
       
