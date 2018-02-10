@@ -28,6 +28,12 @@ else
 endif
 endif
 
+deps-before-docker: git-submodules
+deps-docker: pmbp-install
+
+rev: always
+	$(GIT) rev-parse HEAD > rev
+
 git-submodules:
 	$(GIT) submodule update --init
 
