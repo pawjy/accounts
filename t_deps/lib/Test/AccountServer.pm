@@ -271,7 +271,8 @@ sub _app ($%) {
     $config->{s3_bucket} = $storage_bucket_data->{bucket_domain};
     $config->{s3_form_url} = $storage_bucket_data->{form_url}->stringify;
     $config->{s3_image_url_prefix} = $storage_bucket_data->{image_root_url}->stringify;
-    #$config->{s3_key_prefix}
+
+    $config->{"s3_key_prefix.prefixed"} = "image/key/prefix";
 
     return Promise->resolve->then (sub {
       return $self->onbeforestart->($self,
