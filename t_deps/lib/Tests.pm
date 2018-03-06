@@ -16,12 +16,14 @@ use MIME::Base64;
 use JSON::PS;
 use Web::UserAgent::Functions qw(http_get http_post);
 use Web::URL;
+use Web::URL::Encoding;
 use Web::Transport::ConnectionClient;
 use Test::X1;
 use Test::More;
 use Tests::Current;
 
 our @EXPORT = (@JSON::PS::EXPORT,
+               @Web::URL::Encoding::EXPORT,
                @Promised::Flow::EXPORT,
                @Test::X1::EXPORT,
                grep { not /^\$/ } @Test::More::EXPORT);
@@ -306,6 +308,27 @@ sub start_web_server (;$$$) {
           "linked_email_field" => "profile_email",
           "scope_separator" => ",",
           timeout => 60*10,
+        },
+        oauth2server_wrapped => {
+          name => 'oauth2server_wrapped',
+          url_scheme => 'http',
+          host => $host,
+          auth_endpoint => '/oauth2/authorize',
+          auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
+          token_endpoint => '/oauth2/token',
+          "profile_endpoint" => "/profile",
+          "profile_id_field" => "id",
+          "profile_key_field" => "login",
+          "profile_name_field" => "name",
+          "profile_email_field" => "email",
+          "auth_scheme" => "token",
+          "linked_id_field" => "profile_id",
+          "linked_key_field" => "profile_key",
+          "linked_name_field" => "profile_name",
+          "linked_email_field" => "profile_email",
+          "scope_separator" => ",",
+          timeout => 60*10,
+          cb_wrapper_url => 'http://cb.wrapper.test/wrapper/%s?url=%s&test=1',
         },
         ssh => {
           name => 'ssh',

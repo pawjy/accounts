@@ -519,6 +519,36 @@ Test {
   });
 } n => 17, name => 'linked to account without ID';
 
+Test {
+  my $current = shift;
+  my $cb_url = 'http://haoa/' . rand;
+  my $account_id;
+  my $x_account_id = int rand 100000;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['create'], {}, session => 1);
+  })->then (sub {
+    return $current->post (['info'], {}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    $account_id = $result->{json}->{account_id};
+    return $current->post (['link'], {
+      server => 'oauth2server_wrapped',
+      callback_url => $cb_url,
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+    } $current->c;
+    my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
+    test {
+      $url->query =~ m{redirect_uri=([^&]+)};
+      my $u = percent_decode_c $1;
+      is $u, qq{http://cb.wrapper.test/wrapper/@{[percent_encode_c $cb_url]}?url=@{[percent_encode_c $cb_url]}&test=1};
+    } $current->c;
+  });
+} n => 2, name => 'wrapped /cb URL';
+
 RUN;
 
 =head1 LICENSE
