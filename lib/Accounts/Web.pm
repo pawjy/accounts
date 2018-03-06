@@ -222,6 +222,13 @@ sub main ($$) {
     ##
     ##   In /link, the session must be associated with an account.
     ##   Otherwise, an error is returned.
+    ##
+    ##   If the definition for the selected server has
+    ##   |cb_wrapper_url| property, instead of using the
+    ##   |callback_url| as is, the result of replacing |%s|
+    ##   placeholders in |cb_wrapper_url| by percent-encoded variant
+    ##   of |callback_url| is used as the callback URL sent to the
+    ##   server.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
     return $class->resume_session ($app)->then (sub {
@@ -244,7 +251,12 @@ sub main ($$) {
       ## context of the application.
       my $cb = $app->text_param ('callback_url')
           // return $app->send_error_json ({reason => 'Bad |callback_url|'});
-
+      if (defined $server->{cb_wrapper_url}) {
+        my $url = $server->{cb_wrapper_url};
+        $url =~ s{%s}{percent_encode_c $cb}ge;
+        $cb = $url;
+      }
+      
       my $state = id 50;
       my $scope = join $server->{scope_separator} // ' ', grep { defined }
           $server->{login_scope},
@@ -2048,7 +2060,7 @@ sub icon ($$$) {
     my $target_id = $app->bare_param ('target_id')
         // return $app->throw_error (400, reason_phrase => 'Bad |target_id|');
     
-    my $mime_type = $app->bare_param ('mime_type');
+    my $mime_type = $app->bare_param ('mime_type') // '';
     return $app->throw_error_json ({reason => 'Bad |mime_type|'})
         unless $mime_type eq 'image/jpeg' or $mime_type eq 'image/png';
     
