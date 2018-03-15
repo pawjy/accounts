@@ -576,6 +576,11 @@ sub main ($$) {
 
   if (@$path == 1 and $path->[0] eq 'token') {
     ## /token - Get access token of an OAuth server
+    ##
+    ##   |account_id|   - The account ID.
+    ##   |sk_context|, |sk| - The session.  Either session or account ID is
+    ##                    required.
+    ##   |server|       - The server name.  Required.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
@@ -1187,6 +1192,10 @@ sub link_account ($$$) {
   });
 } # link_account
 
+## An account link object:
+##
+##   ...
+##   |account_link_id|   The ID of the account link object.
 sub load_linked ($$$) {
   my ($class, $app, $items) = @_;
 
@@ -1212,6 +1221,7 @@ sub load_linked ($$$) {
   return $items unless @field;
   push @field, 'service_name';
   push @field, 'account_id';
+  push @field, 'account_link_id';
 
   return $app->db->select ('account_link', {
     account_id => {-in => \@account_id},
@@ -1235,6 +1245,7 @@ sub load_linked ($$$) {
           $link->{$_} = $data->{$_} if defined $data->{$_};
         }
       }
+      $link->{account_link_id} = ''.$_->{account_link_id};
     }
     return $items;
   });
