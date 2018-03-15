@@ -581,6 +581,11 @@ sub main ($$) {
     ##   |sk_context|, |sk| - The session.  Either session or account ID is
     ##                    required.
     ##   |server|       - The server name.  Required.
+    ##   |account_link_id| - The account link ID.  If specified, only the
+    ##                    result for this specific account link, if any,
+    ##                    is returned.  (Session or account ID is still
+    ##                    significant.)  Otherwise, one of account links,
+    ##                    if any, is chosen.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
@@ -598,9 +603,11 @@ sub main ($$) {
       my $id = $_[0];
       return {} unless defined $id;
       my $json = {account_id => $id};
+      my $link_id = $app->bare_param ('account_link_id');
       return $app->db->select ('account_link', {
         account_id => Dongry::Type->serialize ('text', $id),
         service_name => Dongry::Type->serialize ('text', $server->{name}),
+        (defined $link_id ? (account_link_id => $link_id) : ()),
       }, source_name => 'master', fields => ['linked_token1', 'linked_token2'])->then (sub {
         my $r = $_[0]->first;
         if (defined $r) {
