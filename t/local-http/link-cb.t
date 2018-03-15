@@ -329,11 +329,15 @@ Test {
       my $link1 = [grep { $_->{name} eq $name1 } values %$links]->[0];
       my $link2 = [grep { $_->{name} eq $name2 } values %$links]->[0];
       is $link1->{id}, $id1;
+      ok $link1->{account_link_id};
       is $link2->{id}, $id2;
+      ok $link2->{account_link_id};
+      isnt $link2->{account_link_id}, $link1->{account_link_id};
       is $result->{json}->{account_id}, $account_id, 'existing account linked';
+      like $result->{res}->body_bytes, qr{"account_link_id"\s*:\s*"};
     } $current->c;
   });
-} n => 15, name => 'link to existing account, different account ID';
+} n => 19, name => 'link to existing account, different account ID';
 
 Test {
   my $current = shift;
