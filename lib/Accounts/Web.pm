@@ -576,6 +576,11 @@ sub main ($$) {
 
   if (@$path == 1 and $path->[0] eq 'token') {
     ## /token - Get access token of an OAuth server
+    ##
+    ##   |account_id|   - The account ID.
+    ##   |sk_context|, |sk| - The session.  Either session or account ID is
+    ##                    required.
+    ##   |server|       - The server name.  Required.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
