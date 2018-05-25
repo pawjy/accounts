@@ -806,14 +806,14 @@ sub main ($$) {
       })->then (sub {
         return $class->load_linked ($app => [$json]);
       })->then (sub {
-        return $class->load_data ($app, '', 'account_data', 'account_id', undef, undef, [$json]);
+        return $class->load_data ($app, '', 'account_data', 'account_id', undef, undef, [$json], 'data');
       })->then (sub {
         return unless defined $json->{group};
-        return $class->load_data ($app, 'group_', 'group_data', 'group_id', undef, undef, [$json->{group}]);
+        return $class->load_data ($app, 'group_', 'group_data', 'group_id', undef, undef, [$json->{group}], 'data');
       })->then (sub {
         delete $json->{group_membership} if not defined $json->{group};
         return unless defined $json->{group_membership};
-        return $class->load_data ($app, 'group_member_', 'group_member_data', 'group_id', 'account_id', $json->{account_id}, [$json->{group_membership}]);
+        return $class->load_data ($app, 'group_member_', 'group_member_data', 'group_id', 'account_id', $json->{account_id}, [$json->{group_membership}], 'data');
       })->then (sub {
         return $app->send_json ($json);
       });
@@ -848,7 +848,7 @@ sub main ($$) {
         };
       } @{$_[0]}]);
     })->then (sub {
-      return $class->load_data ($app, '', 'account_data', 'account_id', undef, undef, $_[0]);
+      return $class->load_data ($app, '', 'account_data', 'account_id', undef, undef, $_[0], 'data');
     })->then (sub {
       return $class->load_icons ($app, 1, 'account_id', $_[0]);
     })->then (sub {
@@ -1279,8 +1279,8 @@ sub load_linked ($$$) {
   });
 } # load_linked
 
-sub load_data ($$$$$$$$) {
-  my ($class, $app, $prefix, $table_name, $id_key, $id2_key, $id2_value, $items) = @_;
+sub load_data ($$$$$$$$$) {
+  my ($class, $app, $prefix, $table_name, $id_key, $id2_key, $id2_value, $items, $item_key) = @_;
 
   my $id_to_json = {};
   my @id = map {
@@ -1299,7 +1299,7 @@ sub load_data ($$$$$$$$) {
   }, source_name => 'master')->then (sub {
     for (@{$_[0]->all}) {
       my $json = $id_to_json->{$_->{$id_key}};
-      $json->{data}->{$_->{key}} = Dongry::Type->parse ('text', $_->{value})
+      $json->{$item_key}->{$_->{key}} = Dongry::Type->parse ('text', $_->{value})
           if defined $_->{value} and length $_->{value};
     }
     return $items;
@@ -1610,7 +1610,7 @@ sub group ($$$) {
         return $_[0]->all->to_a;
       });
     })->then (sub {
-      return $class->load_data ($app, '', 'group_data', 'group_id', undef, undef, $_[0]);
+      return $class->load_data ($app, '', 'group_data', 'group_id', undef, undef, $_[0], 'data');
     })->then (sub {
       return $class->load_icons ($app, 2, 'group_id', $_[0]);
     })->then (sub {
@@ -1755,7 +1755,7 @@ sub group ($$$) {
       order => ['created', $page->{order_direction}],
     )->then (sub {
       my $members = $_[0]->all;
-      return $class->load_data ($app, '', 'group_member_data', 'account_id', 'group_id' => $group_id, $members);
+      return $class->load_data ($app, '', 'group_member_data', 'account_id', 'group_id' => $group_id, $members, 'data');
     })->then (sub {
       my $members = {map {
         $_->{account_id} .= '';
@@ -1773,6 +1773,7 @@ sub group ($$$) {
     ##   context_key   An opaque string identifying the application.  Required.
     ##   account_id    An account ID.  Required.
     ##   with_data
+    ##   with_group_data
     ##
     ## Returns
     ##   memberships   Object of (group_id, group member object)
@@ -1793,7 +1794,9 @@ sub group ($$$) {
       order => ['updated', $page->{order_direction}],
     )->then (sub {
       my $groups = $_[0]->all;
-      return $class->load_data ($app, '', 'group_member_data', 'group_id', 'account_id' => $account_id, $groups);
+      return $class->load_data ($app, '', 'group_member_data', 'group_id', 'account_id' => $account_id, $groups, 'data');
+    })->then (sub {
+      return $class->load_data ($app, 'group_', 'group_data', 'group_id', undef, undef, $_[0], 'group_data');
     })->then (sub {
       my $groups = {map {
         $_->{group_id} .= '';
@@ -1830,7 +1833,7 @@ sub group ($$$) {
     )->then (sub {
       return $_[0]->all->to_a;
     })->then (sub {
-      return $class->load_data ($app, '', 'group_data', 'group_id', undef, undef, $_[0]);
+      return $class->load_data ($app, '', 'group_data', 'group_id', undef, undef, $_[0], 'data');
     })->then (sub {
       my $groups = {map {
         $_->{group_id} .= '';
