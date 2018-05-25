@@ -353,6 +353,88 @@ Test {
   });
 } n => 15, name => ['/info with group data'];
 
+Test {
+  my $current = shift;
+  return $current->create (
+    [a1 => account => {}],
+    [g1 => group => {members => [
+      {account => 'a1', member_type => 3, user_status => 4, owner_status => 5},
+    ], context_key => $current->generate_context_key (k1 => {})}],
+    [g2 => group => {members => [
+      {account => 'a1', member_type => 6, user_status => 7, owner_status => 8},
+    ], context_key => $current->o ('k1')}],
+    [g3 => group => {members => [
+      {account => 'a1', member_type => 9, user_status => 10, owner_status => 11},
+    ], context_key => $current->o ('k1')}],
+    [g4 => group => {}],
+    [g5 => group => {members => [
+      {account => 'a1', member_type => 9, user_status => 10, owner_status => 11},
+    ], context_key => $current->generate_context_key ('k2' => {})}],
+  )->then (sub {
+    return $current->post (['info'], {
+      sk => $current->o ('a1')->{session}->{sk},
+      context_key => $current->o ('k1'),
+      group_id => $current->o ('g1')->{group_id},
+      additional_group_id => [
+        $current->o ('g2')->{group_id},
+        $current->o ('g3')->{group_id},
+        rand,
+        $current->o ('g4')->{group_id},
+        $current->o ('g5')->{group_id},
+      ],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      my $m1 = $result->{json}->{group_membership};
+      is $m1->{member_type}, 3;
+      is $m1->{user_status}, 4;
+      is $m1->{owner_status}, 5;
+      is 0+keys %{$result->{json}->{additional_group_memberships}}, 2;
+      my $m2 = $result->{json}->{additional_group_memberships}->{$current->o ('g2')->{group_id}};
+      is $m2->{member_type}, 6;
+      is $m2->{user_status}, 7;
+      is $m2->{owner_status}, 8;
+      my $m3 = $result->{json}->{additional_group_memberships}->{$current->o ('g3')->{group_id}};
+      is $m3->{member_type}, 9;
+      is $m3->{user_status}, 10;
+      is $m3->{owner_status}, 11;
+    } $current->c;
+  });
+} n => 10, name => 'additional_group_ids';
+
+Test {
+  my $current = shift;
+  return $current->create (
+    [a1 => account => {}],
+    [g1 => group => {members => [
+      {account => 'a1', member_type => 3, user_status => 4, owner_status => 5},
+    ], context_key => $current->generate_context_key (k1 => {})}],
+  )->then (sub {
+    return $current->post (['info'], {
+      sk => $current->o ('a1')->{session}->{sk},
+      context_key => $current->o ('k1'),
+      group_id => $current->o ('g1')->{group_id},
+      additional_group_id => [
+        $current->o ('g1')->{group_id},
+      ],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      my $m1 = $result->{json}->{group_membership};
+      is $m1->{member_type}, 3;
+      is $m1->{user_status}, 4;
+      is $m1->{owner_status}, 5;
+      is 0+keys %{$result->{json}->{additional_group_memberships}}, 1;
+      my $m2 = $result->{json}->{additional_group_memberships}->{$current->o ('g1')->{group_id}};
+      is $m2->{member_type}, 3;
+      is $m2->{user_status}, 4;
+      is $m2->{owner_status}, 5;
+    } $current->c;
+  });
+} n => 7, name => 'additional_group_ids has group_id';
+
 RUN;
 
 =head1 LICENSE
