@@ -233,6 +233,87 @@ Test {
   });
 } n => 5, name => '/group/byaccount with data';
 
+Test {
+  my $current = shift;
+  return $current->create (
+    [a1 => account => {}],
+    [g1 => group => {
+      members => ['a1'],
+      data => {gd1 => 43},
+      context_key => $current->generate_context_key (k1 => {}),
+    }],
+    [g2 => group => {
+      members => ['a1'],
+      data => {gd1 => 76, gd2 => 54},
+      context_key => $current->o ('k1'),
+    }],
+  )->then (sub {
+    return $current->post (['group', 'byaccount'], {
+      context_key => $current->o ('k1'),
+      account_id => $current->o ('a1')->{account_id},
+      with_group_data => ['gd1', 'gd2'],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      my $m1 = $result->{json}->{memberships}->{$current->o ('g1')->{group_id}};
+      is $m1->{data}, undef;
+      is $m1->{group_data}->{gd1}, 43;
+      is $m1->{group_data}->{gd2}, undef;
+      my $m2 = $result->{json}->{memberships}->{$current->o ('g2')->{group_id}};
+      is $m2->{data}, undef;
+      is $m2->{group_data}->{gd1}, 76;
+      is $m2->{group_data}->{gd2}, 54;
+    } $current->c;
+  });
+} n => 6, name => 'with_group_data';
+
+Test {
+  my $current = shift;
+  return $current->create (
+    [a1 => account => {}],
+    [g1 => group => {
+      members => [
+        {account => 'a1', data => {'gd2' => 64}},
+      ],
+      data => {gd1 => 43},
+      context_key => $current->generate_context_key (k1 => {}),
+    }],
+    [g2 => group => {
+      members => [
+        {account => 'a1', data => {'gd3' => 77}},
+      ],
+      data => {gd1 => 76, gd2 => 54},
+      context_key => $current->o ('k1'),
+    }],
+  )->then (sub {
+    return $current->post (['group', 'byaccount'], {
+      context_key => $current->o ('k1'),
+      account_id => $current->o ('a1')->{account_id},
+      with_group_data => ['gd1', 'gd2'],
+      with_data => ['gd2', 'gd3'],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      my $m1 = $result->{json}->{memberships}->{$current->o ('g1')->{group_id}};
+      is $m1->{data}->{gd1}, undef;
+      is $m1->{data}->{gd2}, 64;
+      is $m1->{data}->{gd3}, undef;
+      is $m1->{group_data}->{gd1}, 43;
+      is $m1->{group_data}->{gd2}, undef;
+      is $m1->{group_data}->{gd3}, undef;
+      my $m2 = $result->{json}->{memberships}->{$current->o ('g2')->{group_id}};
+      is $m2->{data}->{gd1}, undef;
+      is $m2->{data}->{gd2}, undef;
+      is $m2->{data}->{gd3}, 77;
+      is $m2->{group_data}->{gd1}, 76;
+      is $m2->{group_data}->{gd2}, 54;
+      is $m2->{group_data}->{gd3}, undef;
+    } $current->c;
+  });
+} n => 12, name => 'with_group_data and with_data';
+
 RUN;
 
 =head1 LICENSE
