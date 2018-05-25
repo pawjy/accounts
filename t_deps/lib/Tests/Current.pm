@@ -146,6 +146,15 @@ sub are_errors ($$$) {
   });
 } # are_errors
 
+sub create ($;@) {
+  my $self = shift;
+  return promised_for {
+    my ($name, $type, $opts) = @{$_[0]};
+    my $method = 'create_' . $type;
+    return $self->$method ($name => $opts);
+  } [@_];
+} # create
+
 sub create_session ($$$) {
   my ($self, $name, $opts) = @_;
   return $self->post (['session'], {})->then (sub {
@@ -214,10 +223,14 @@ sub create_group ($$$) {
     });
   })->then (sub {
     my $members = [map {
+      $_->{account_id} = $self->o (delete $_->{account})->{account_id}
+          if defined $_->{account};
+      $_;
+    } map {
       if (ref $_) {
         $_;
       } else {
-        +{account_id => $self->o ($_)->{account_id},
+        +{account => $_,
           user_status => 1,
           owner_status => 1,
           member_type => 1};

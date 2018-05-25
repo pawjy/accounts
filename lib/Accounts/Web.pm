@@ -710,16 +710,23 @@ sub main ($$) {
     ##   group_id     The group ID.  If specified, properties of group and
     ##                group membership of the account of the session are
     ##                also returned.
+    ##   additional_group_id Additional group ID.  Zero or more options
+    ##                can be specified.  If specified, group memberships
+    ##                of the account of the session for these groups
+    ##                are also returned.  Ignored when |group_id| is not
+    ##                specified.
     ##   with_data
-    ##   with_group_data
-    ##   with_group_member_data
+    ##   with_group_data Data of the group.  Not applicable to additional
+    ##                groups.
+    ##   with_group_member_data Data of the group's membership.  Not
+    ##                applicable to additional groups.
     ##
     ## Also, status filters |user_status|, |admin_status|,
     ## |terms_version| with empty prefix are available for account
     ## data.
     ##
     ## Status filters |owner_status| and |admin_status| with prefix
-    ## |group_| are available for group object.
+    ## |group_| are available for group and additional group objects.
     ##
     ## Status filters |user_status|, |owner_status|, |member_type|
     ## with prefix |group_membership_| are available for group
@@ -733,6 +740,7 @@ sub main ($$) {
     ##   terms_version The terms version of the account, if there is.
     ##   group        The group object, if available.
     ##   group_membership The group membership object, if available.
+    ##   additional_groups[group_id] Additional group's membership object.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
@@ -757,16 +765,29 @@ sub main ($$) {
             $json->{admin_status} = $r->get ('admin_status');
             $json->{terms_version} = $r->get ('terms_version');
             
-            if (defined $context_key or defined $group_id) {
+            if (defined $context_key and defined $group_id) {
+              my $add_group_ids = $app->bare_param_list
+                  ('additional_group_id');
               return $app->db->select ('group_member', {
                 context_key => $context_key,
-                group_id => $group_id,
+                group_id => {-in => [$group_id, @$add_group_ids]},
                 account_id => Dongry::Type->serialize ('text', $account_id),
                 (status_filter $app, 'group_membership_', 'user_status', 'owner_status', 'member_type'),
-              }, fields => ['group_id', 'user_status', 'owner_status', 'member_type'], source_name => 'master')->then (sub {
-                my $mem = $_[0]->first // return;
-                $mem->{group_id} .= '';
-                $json->{group_membership} = $mem;
+              }, fields => [
+                'group_id', 'user_status', 'owner_status', 'member_type',
+              ], source_name => 'master')->then (sub {
+                my $group_id_to_data = {};
+                for (@{$_[0]->all}) {
+                  $group_id_to_data->{$_->{group_id}} = $_;
+                  $_->{group_id} .= '';
+                }
+                if (defined $group_id_to_data->{$group_id}) {
+                  $json->{group_membership} = $group_id_to_data->{$group_id};
+                }
+                for (@$add_group_ids) {
+                  $json->{additional_group_memberships}->{$_} = $group_id_to_data->{$_}
+                      if defined $group_id_to_data->{$_};
+                }
               });
             }
           });
