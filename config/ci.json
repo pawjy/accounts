@@ -1,0 +1,38 @@
+{
+  "circleci": {
+    "merger": 1,
+    "gaa": 1,
+    "required_docker_images": [
+      "quay.io/wakaba/chromedriver:stable",
+      "quay.io/wakaba/docker-perl-app-base"
+    ],
+    "docker-build": "quay.io/wakaba/accounts",
+    "heroku": {
+      "prepare": [
+        "git clone $KEYS_REPO_URL local/keys"
+      ]
+    },
+
+    "build": [
+      "make deps-before-docker rev",
+      "make test-deps"
+    ],
+
+    "tests": [
+      "docker run quay.io/wakaba/accounts which /server",
+      "docker run quay.io/wakaba/accounts which /setup-db-for-test",
+      "docker run quay.io/wakaba/accounts /showrev",
+
+      "mkdir x",
+      "echo '{}' > x/servers.json",
+      "echo '{\u0022servers_json_file\u0022:\u0022servers.json\u0022}' > x/config.json",
+      "docker run -d -v `pwd`/x:/x -e APP_CONFIG=/x/config.json -p 6533:8080 quay.io/wakaba/accounts",
+      "while ! curl http://localhost:6533/robots.txt ; do sleep 1; done",
+      "curl http://localhost:6533/robots.txt --dump-header - --fail",
+
+      "make test-local-http-circle",
+      "WEBUA_DEBUG=1 TEST_WEBDRIVER_BROWSERS=chrome make test-local-web-circle"
+    ]
+    
+  }
+}
