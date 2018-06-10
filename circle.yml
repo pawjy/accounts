@@ -1,63 +1,66 @@
-machine:
-  services:
-    - docker
-dependencies:
-  cache_directories:
-    - "local/perlbrew/perls"
-    - "deps/pmtar"
-  override:
-    - docker info
-    - docker pull quay.io/wakaba/chromedriver:stable && docker pull quay.io/wakaba/docker-perl-app-base:
-        background: true
-        timeout: 3600
-    
-    - git config --global user.email "temp@circleci.test"
-    - git config --global user.name "CircleCI"
-
-    - make deps-before-docker rev
-    - docker build -t quay.io/wakaba/accounts .
-    
-    - make deps test-deps:
-        timeout: 600
-test:
-  override:
-    - docker run quay.io/wakaba/accounts which /server
-    - docker run quay.io/wakaba/accounts which /setup-db-for-test
-    - docker run quay.io/wakaba/accounts /showrev
-
-    - mkdir x
-    - echo '{}' > x/servers.json
-    - echo '{"servers_json_file":"servers.json"}' > x/config.json
-    - docker run -d -v `pwd`/x:/x -e APP_CONFIG=/x/config.json -p 6533:8080 quay.io/wakaba/accounts
-    - while ! curl http://localhost:6533/robots.txt ; do sleep 1; done :
-        timeout: 60
-    - curl http://localhost:6533/robots.txt --dump-header - --fail
-
-    - make test-local-http-circle :
-        timeout: 600
-    - WEBUA_DEBUG=1 TEST_WEBDRIVER_BROWSERS="chrome" make test-local-web-circle:
-        timeout: 600
-deployment:
-  nightly:
-    branch: nightly
-    commands:
-      - curl -f -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"staging\",\"head\":\"`git rev-parse HEAD`\",\"commit_message\":\"auto-merge nightly into staging\"}" "https://api.github.com/repos/wakaba/accounts/merges"
-    
-  staging:
-    branch: staging
-    commands:
-      - git fetch --unshallow
-      - git clone $KEYS_REPO_URL local/keys
-      - make heroku-save-current-release HEROKU_APP_NAME=$HEROKU_APP_NAME
-      - make create-commit-for-heroku
-      - git push git@heroku.com:$HEROKU_APP_NAME.git +`git rev-parse HEAD`:master  :
-         timeout: 600
-      - XTEST_ORIGIN=https://$HEROKU_APP_NAME.herokuapp.com make test-external-http-or-rollback HEROKU_APP_NAME=$HEROKU_APP_NAME
-      
-      - curl -f -s -S --request POST --header "Authorization:token $GITHUB_ACCESS_TOKEN" --header "Content-Type:application/json" --data-binary "{\"base\":\"master\",\"head\":\"`cat rev`\",\"commit_message\":\"auto-merge staging into master\"}" "https://api.github.com/repos/wakaba/accounts/merges"
-
-  master:
-    branch: master
-    commands:
-      - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASSWORD quay.io
-      - docker push quay.io/wakaba/accounts
+{
+   "dependencies" : {
+      "override" : [
+         "docker info",
+         {
+            "docker pull quay.io/wakaba/chromedriver:stable && docker pull quay.io/wakaba/docker-perl-app-base" : {
+               "background" : 1
+            }
+         },
+         "make deps-before-docker rev",
+         "make test-deps",
+         "docker info",
+         "docker build -t quay.io/wakaba/accounts .",
+         "git config --global user.email \u0022temp@circleci.test\u0022",
+         "git config --global user.name \u0022CircleCI\u0022"
+      ]
+   },
+   "deployment" : {
+      "master" : {
+         "branch" : "master",
+         "commands" : [
+            "docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS quay.io",
+            "docker push quay.io/wakaba/accounts && curl -sSLf $BWALL_URL -X POST",
+            "git checkout --orphan herokucommit && git commit -m \u0022Heroku base commit\u0022",
+            "git clone $KEYS_REPO_URL local/keys",
+            "make create-commit-for-heroku",
+            "git push git@heroku.com:$HEROKU_APP_NAME.git \u002B`git rev-parse HEAD`:refs/heads/master"
+         ]
+      },
+      "nightly" : {
+         "branch" : "nightly",
+         "commands" : [
+            "git rev-parse HEAD > head.txt",
+            "curl -f -s -S --request POST --header \u0022Authorization:token $GITHUB_ACCESS_TOKEN\u0022 --header \u0022Content-Type:application/json\u0022 --data-binary \u0022{\u005C\u0022base\u005C\u0022:\u005C\u0022master\u005C\u0022,\u005C\u0022head\u005C\u0022:\u005C\u0022`cat head.txt`\u005C\u0022,\u005C\u0022commit_message\u005C\u0022:\u005C\u0022auto-merge $CIRCLE_BRANCH into master\u005C\u0022}\u0022 \u0022https://api.github.com/repos/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME/merges\u0022"
+         ]
+      },
+      "staging" : {
+         "branch" : "staging",
+         "commands" : [
+            "git rev-parse HEAD > head.txt",
+            "curl -f -s -S --request POST --header \u0022Authorization:token $GITHUB_ACCESS_TOKEN\u0022 --header \u0022Content-Type:application/json\u0022 --data-binary \u0022{\u005C\u0022base\u005C\u0022:\u005C\u0022master\u005C\u0022,\u005C\u0022head\u005C\u0022:\u005C\u0022`cat head.txt`\u005C\u0022,\u005C\u0022commit_message\u005C\u0022:\u005C\u0022auto-merge $CIRCLE_BRANCH into master\u005C\u0022}\u0022 \u0022https://api.github.com/repos/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME/merges\u0022"
+         ]
+      }
+   },
+   "machine" : {
+      "services" : [
+         "docker",
+         "docker"
+      ]
+   },
+   "test" : {
+      "override" : [
+         "docker run quay.io/wakaba/accounts which /server",
+         "docker run quay.io/wakaba/accounts which /setup-db-for-test",
+         "docker run quay.io/wakaba/accounts /showrev",
+         "mkdir x",
+         "echo '{}' > x/servers.json",
+         "echo '{\u0022servers_json_file\u0022:\u0022servers.json\u0022}' > x/config.json",
+         "docker run -d -v `pwd`/x:/x -e APP_CONFIG=/x/config.json -p 6533:8080 quay.io/wakaba/accounts",
+         "while ! curl http://localhost:6533/robots.txt ; do sleep 1; done",
+         "curl http://localhost:6533/robots.txt --dump-header - --fail",
+         "make test-local-http-circle",
+         "WEBUA_DEBUG=1 TEST_WEBDRIVER_BROWSERS=chrome make test-local-web-circle"
+      ]
+   }
+}
