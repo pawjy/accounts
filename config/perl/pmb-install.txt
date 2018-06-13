@@ -1,8 +1,8 @@
 AnyEvent~7.14
 AnyEvent::HTTP~2.23
-AnyEvent::IO
+AnyEvent::Handle
 Canary::Stability~2012
-Carp::Heavy~1.38
+Carp~1.38
 Class::Accessor~0.51
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
@@ -18,13 +18,14 @@ Exporter::Tiny~1.000000
 File::Listing~6.04
 File::Path~2.15
 File::Temp~0.2304
-HTML::HeadParser~3.71
+HTML::Entities~3.69
 HTML::Tagset~3.20
 HTTP::Cookies~6.04
 HTTP::Daemon~6.01
 HTTP::Date~6.02
 HTTP::Negotiate~6.01
-HTTP::Request::Common~6.18
+HTTP::Response~6.18
+HTTP::Status~6.18
 IO::HTML~1.001
 IO::Handle~1.39
 LWP~6.34
@@ -44,7 +45,7 @@ Socket~2.027
 Term::ANSIColor~4.06
 Test::Builder~1.302136
 Time::HiRes~1.9758
-Time::Local~1.27
+Time::Local~1.28
 Try::Tiny~0.30
 UNIVERSAL::require~0.18
 URI~1.74
