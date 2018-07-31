@@ -1,5 +1,6 @@
 AnyEvent~7.14
 AnyEvent::HTTP~2.23
+AnyEvent::IO
 Canary::Stability~2012
 Carp~1.38
 Class::Accessor~0.51
@@ -23,7 +24,6 @@ HTTP::Cookies~6.04
 HTTP::Daemon~6.01
 HTTP::Date~6.02
 HTTP::Negotiate~6.01
-HTTP::Request~6.18
 HTTP::Response~6.18
 IO::HTML~1.001
 IO::Handle~1.39
@@ -36,13 +36,13 @@ Net::HTTP~6.18
 Net::SSLeay~1.85
 OAuth::Lite::Token
 Path::Class~0.37
-Path::Tiny~0.106
+Path::Tiny~0.108
 Pod::Usage~1.69
 Proc::Wait3~0.05
 Scalar::Util~1.50
 Socket~2.027
 Term::ANSIColor~4.06
-Test::More~1.302138
+Test::Builder~1.302138
 Time::HiRes~1.9758
 Time::Local~1.28
 Try::Tiny~0.30
