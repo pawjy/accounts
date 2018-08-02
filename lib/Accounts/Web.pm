@@ -2130,6 +2130,11 @@ sub icon ($$$) {
         my $key_prefix = $cfg->('s3_key_prefix') // '';
         my $key = "$id";
         $key = "$key_prefix/$key" if length $key_prefix;
+
+        $key .= {
+          'image/png' => '.png',
+          'image/jpeg' => '.jpeg',
+        }->{$mime_type} // '';
         
         my $time = time;
         return $app->db->insert ('icon', [{
