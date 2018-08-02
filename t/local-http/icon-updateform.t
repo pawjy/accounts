@@ -186,6 +186,44 @@ Test {
   });
 } n => 6, name => '/icon/updateform prefixed second invocation';
 
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {})->then (sub {
+    return $current->post (['icon', 'updateform'], {
+      context_key => 'prefixed',
+      target_type => 1,
+      target_id => $current->o ('a1')->{account_id},
+      mime_type => 'image/png',
+      byte_length => length ($current->generate_bytes (b1 => {})),
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->{status}, 200;
+      like $res->{json}->{icon_url}, qr{^https?://[^/]+/[^/]+/image/key/prefix/[^/]+\.png$};
+    } $current->c;
+  });
+} n => 2, name => '.png';
+
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {})->then (sub {
+    return $current->post (['icon', 'updateform'], {
+      context_key => 'prefixed',
+      target_type => 1,
+      target_id => $current->o ('a1')->{account_id},
+      mime_type => 'image/jpeg',
+      byte_length => length ($current->generate_bytes (b1 => {})),
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->{status}, 200;
+      like $res->{json}->{icon_url}, qr{^https?://[^/]+/[^/]+/image/key/prefix/[^/]+\.jpeg$};
+    } $current->c;
+  });
+} n => 2, name => '.jpeg';
+
 RUN;
 
 =head1 LICENSE
