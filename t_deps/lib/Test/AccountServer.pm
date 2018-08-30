@@ -138,9 +138,14 @@ sub _docker ($%) {
       die $_[0];
     });
   })->then (sub {
-    my $config_path = $self->_path ('minio_config')->child ('config.json');
+    my $config1_path = $self->_path ('minio_config')->child ('config.json');
+    my $config2_path = $self->_path ('minio_data')->child ('.minio.sys/config/config.json');
+    my $f1 = Promised::File->new_from_path ($config1_path);
+    my $f2 = Promised::File->new_from_path ($config2_path);
     return promised_wait_until {
-      return Promised::File->new_from_path ($config_path)->read_byte_string->then (sub {
+      return Promise->all ([$f1->is_file, $f2->is_file])->then (sub {
+        return (($_[0]->[1] ? $f2 : $f1)->read_byte_string);
+      })->then (sub {
         my $config = json_bytes2perl $_[0];
         $storage_data->{aws4}->[0] = $config->{credential}->{accessKey};
         $storage_data->{aws4}->[1] = $config->{credential}->{secretKey};
@@ -149,7 +154,7 @@ sub _docker ($%) {
                defined $storage_data->{aws4}->[1] &&
                defined $storage_data->{aws4}->[2];
       })->catch (sub { return 0 });
-    } timeout => 60*3;
+    } timeout => 60*3, name => 'minio config';
   })->then (sub {
     my $client = Web::Transport::ConnectionClient->new_from_url
         ($storage_data->{url_for_test});
