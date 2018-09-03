@@ -1324,7 +1324,9 @@ sub load_icons ($$$$$) {
     target_type => $target_type,
     target_id => {-in => \@id},
     admin_status => 1, # open
-  }, source_name => 'master', fields => ['context_key', 'target_id', 'url'])->then (sub {
+  }, source_name => 'master', fields => [
+    'context_key', 'target_id', 'url', 'updated',
+  ])->then (sub {
     for (@{$_[0]->all}) {
       my $json = $id_to_json->{$_->{target_id}};
       my $cfg = sub {
@@ -1332,7 +1334,7 @@ sub load_icons ($$$$$) {
         return $app->config->get ($n . '.' . $_->{context_key}) //
                $app->config->get ($n); # or undef
       }; # $cfg
-      $json->{icons}->{$_->{context_key}} = $cfg->('s3_image_url_prefix') . $_->{url}
+      $json->{icons}->{$_->{context_key}} = $cfg->('s3_image_url_prefix') . $_->{url} . '?' . $_->{updated}
           if defined $_->{url} and length $_->{url};
     }
     return $items;
@@ -2116,13 +2118,22 @@ sub icon ($$$) {
              $app->config->get ($n); # or undef
     }; # $cfg
 
+    my $time = time;
     return $app->db->select ('icon', {
       context_key => Dongry::Type->serialize ('text', $context_key),
       target_type => $target_type,
       target_id => $target_id,
     }, source_name => 'master', fields => ['url'])->then (sub {
       my $v = $_[0]->first;
-      return $v->{url} if defined $v;
+      if (defined $v) {
+        return $app->db->update ('icon', {
+          updated => $time,
+        }, where => {
+          context_key => $context_key,
+          target_type => $target_type,
+          target_id => $target_id,
+        })->then (sub { return $v->{url} });
+      }
 
       return $app->db->execute ('select uuid_short() as `id`', undef, source_name => 'master')->then (sub {
         my $id = $_[0]->first->{id};
@@ -2131,12 +2142,12 @@ sub icon ($$$) {
         my $key = "$id";
         $key = "$key_prefix/$key" if length $key_prefix;
 
+        ## Not changed when updated.
         $key .= {
           'image/png' => '.png',
           'image/jpeg' => '.jpeg',
         }->{$mime_type} // '';
         
-        my $time = time;
         return $app->db->insert ('icon', [{
           context_key => $context_key,
           target_type => $target_type,
@@ -2145,14 +2156,14 @@ sub icon ($$$) {
           updated => $time,
           admin_status => 1, # open
           url => Dongry::Type->serialize ('text', $key),
-        }])->then (sub { return $key });
+        }])->then (sub { return $key }); # duplicate is error!
       });
     })->then (sub {
       my $key = $_[0];
       
       #my $image_url = "https://$service-$region.amazonaws.com/$bucket/$key";
       #my $image_url = "https://$bucket/$key";
-      my $image_url = $cfg->('s3_image_url_prefix') . $key;
+      my $image_url = $cfg->('s3_image_url_prefix') . $key . '?' . $time;
       my $bucket = $cfg->('s3_bucket');
 
       my $accesskey = $cfg->('s3_access_key_id');
