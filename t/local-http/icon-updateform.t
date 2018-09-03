@@ -77,7 +77,7 @@ Test {
       is $res->{status}, 200;
       ok 0+keys %{$res->{json}->{form_data}};
       like $res->{json}->{form_url}, qr{^https?://[^/]+/.+$};
-      like $res->{json}->{icon_url}, qr{^https?://[^/]+/.+$};
+      like $res->{json}->{icon_url}, qr{^https?://[^/]+/.+\?[0-9.]+$};
     } $current->c;
     $current->set_o (icon_url => $res->{json}->{icon_url});
     my $url = Web::URL->parse_string ($res->{json}->{form_url});
@@ -137,10 +137,14 @@ Test {
     my $res = $_[0];
     test {
       is $res->{status}, 200;
-      is $res->{json}->{icon_url}, $current->o ('icon_url');
+      my $u = $current->o ('icon_url');
+      isnt $res->{json}->{icon_url}, $u;
+      ok $res->{json}->{icon_url} =~ s{\?[0-9.]+\z}{};
+      ok $u =~ s{\?[0-9.]+\z}{};
+      is $res->{json}->{icon_url}, $u;
     } $current->c;
   });
-} n => 3, name => '/icon/updateform second invocation';
+} n => 6, name => '/icon/updateform second invocation';
 
 Test {
   my $current = shift;
@@ -156,7 +160,7 @@ Test {
     my $res = $_[0];
     test {
       is $res->{status}, 200;
-      like $res->{json}->{icon_url}, qr{^https?://[^/]+/[^/]+/image/key/prefix/[^/]+$};
+      like $res->{json}->{icon_url}, qr{^https?://[^/]+/[^/]+/image/key/prefix/[^/?.]+\.png\?[0-9.]+$};
     } $current->c;
     $current->set_o (icon_url => $res->{json}->{icon_url});
     return $current->post (['icon', 'updateform'], {
@@ -170,7 +174,12 @@ Test {
     my $res = $_[0];
     test {
       is $res->{status}, 200;
-      is $res->{json}->{icon_url}, $current->o ('icon_url');
+      my $u = $current->o ('icon_url');
+      isnt $res->{json}->{icon_url}, $u;
+      $current->set_o (icon_url2 => $res->{json}->{icon_url});
+      ok $res->{json}->{icon_url} =~ s{\?[0-9.]+\z}{};
+      ok $u =~ s{\?[0-9.]+\z}{};
+      is $res->{json}->{icon_url}, $u;
     } $current->c;
     return $current->post (['profiles'], {
       account_id => $current->o ('a1')->{account_id},
@@ -181,10 +190,10 @@ Test {
     test {
       my $data = $res->{json}->{accounts}->{$current->o ('a1')->{account_id}};
       is 0+keys %{$data->{icons}}, 1;
-      is $data->{icons}->{prefixed}, $current->o ('icon_url');
+      is $data->{icons}->{prefixed}, $current->o ('icon_url2');
     } $current->c;
   });
-} n => 6, name => '/icon/updateform prefixed second invocation';
+} n => 9, name => '/icon/updateform prefixed second invocation';
 
 Test {
   my $current = shift;
@@ -200,7 +209,7 @@ Test {
     my $res = $_[0];
     test {
       is $res->{status}, 200;
-      like $res->{json}->{icon_url}, qr{^https?://[^/]+/[^/]+/image/key/prefix/[^/]+\.png$};
+      like $res->{json}->{icon_url}, qr{^https?://[^/]+/[^/]+/image/key/prefix/[^/]+\.png\?[0-9.]+$};
     } $current->c;
   });
 } n => 2, name => '.png';
@@ -219,7 +228,7 @@ Test {
     my $res = $_[0];
     test {
       is $res->{status}, 200;
-      like $res->{json}->{icon_url}, qr{^https?://[^/]+/[^/]+/image/key/prefix/[^/]+\.jpeg$};
+      like $res->{json}->{icon_url}, qr{^https?://[^/]+/[^/]+/image/key/prefix/[^/]+\.jpeg\?[0-9.]+$};
     } $current->c;
   });
 } n => 2, name => '.jpeg';
