@@ -1,8 +1,8 @@
 AnyEvent~7.14
 AnyEvent::HTTP~2.24
-AnyEvent::Socket
+AnyEvent::IO
 Canary::Stability~2012
-Carp::Heavy~1.50
+Carp~1.50
 Class::Accessor~0.51
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
@@ -23,8 +23,8 @@ HTML::Tagset~3.20
 HTTP::Cookies~6.04
 HTTP::Daemon~6.01
 HTTP::Date~6.02
-HTTP::Headers::Util~6.18
 HTTP::Negotiate~6.01
+HTTP::Request~6.18
 IO::HTML~1.001
 IO::Handle~1.39
 LWP~6.35
@@ -47,7 +47,7 @@ Time::HiRes~1.9758
 Time::Local~1.28
 Try::Tiny~0.30
 UNIVERSAL::require~0.18
-URI~1.74
+URI::Escape~3.31
 WWW::RobotRules~6.02
 common::sense~3.74
 parent~0.237
