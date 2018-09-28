@@ -17,13 +17,14 @@ Exporter::Tiny~1.002001
 File::Listing~6.04
 File::Path~2.16
 File::Temp~0.2308
-HTML::HeadParser~3.71
+HTML::Entities~3.69
 HTML::Tagset~3.20
 HTTP::Cookies~6.04
 HTTP::Daemon~6.01
 HTTP::Date~6.02
 HTTP::Negotiate~6.01
-HTTP::Request~6.18
+HTTP::Response~6.18
+HTTP::Status~6.18
 IO::HTML~1.001
 IO::Handle~1.39
 LWP~6.35
