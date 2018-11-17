@@ -1,6 +1,6 @@
 AnyEvent~7.14
 AnyEvent::HTTP~2.24
-AnyEvent::Util
+AnyEvent::Handle
 Canary::Stability~2012
 Carp::Heavy~1.50
 Class::Accessor~0.51
@@ -23,7 +23,6 @@ HTML::Tagset~3.20
 HTTP::Cookies~6.04
 HTTP::Daemon~6.01
 HTTP::Date~6.02
-HTTP::Headers~6.18
 HTTP::Negotiate~6.01
 HTTP::Response~6.18
 IO::HTML~1.001
