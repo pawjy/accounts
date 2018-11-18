@@ -240,6 +240,78 @@ sub oauth_server ($) {
             params => $params,
           });
         }
+      } elsif ($path eq '/oauth2r/token') {
+        my $params = $http->request_body_params;
+        if ($params->{grant_type}->[0] eq 'authorization_code') {
+          my $session = $Sessions->{$params->{code}->[0]};
+          if (not defined $session) {
+            $http->set_status (400);
+            $http->send_response_body_as_text ("Bad |code|");
+          } elsif ($params->{redirect_uri}->[0] eq $session->{callback} and
+                   $params->{client_id}->[0] =~ /\A\Q$ClientID\E\.oauth2(\.\w+|)\z/ and
+                   $params->{client_secret}->[0] =~ /\A\Q$ClientSecret\E\.oauth2(\Q$1\E)\z/) {
+            my $token = rand;
+            my $no_id = $session->{account_no_id};
+            my $refresh_token = rand;
+            my $expires = time + 1000;
+            my $session = $Sessions->{$token} = $Sessions->{$refresh_token} = {
+              access_token => $token,
+              refresh_token => $refresh_token,
+              expires_at => $expires,
+              account_id => $session->{account_id} // int rand 100000,
+              account_name => $session->{account_name} // $AccountName,
+              account_email => $session->{account_email} // $AccountEmail,
+            };
+            if ($no_id) {
+              delete $session->{account_id};
+              delete $session->{account_key};
+            }
+            $http->set_response_header ('Content-Type' => 'application/json');
+            $http->send_response_body_as_text (perl2json_bytes +{
+              access_token => $session->{access_token}.$1,
+              refresh_token => $session->{refresh_token}.$1,
+              expires_at => $session->{expires_at},
+            });
+            delete $Sessions->{$params->{code}->[0]};
+          } else {
+            $http->send_response_body_as_text (Dumper {
+              _ => 'Bad params',
+              params => $params,
+            });
+          }
+        } elsif ($params->{grant_type}->[0] eq 'refresh_token') {
+          my $session = $Sessions->{$params->{refresh_token}->[0]};
+          if (not defined $session) {
+            $http->set_status (400);
+            $http->send_response_body_as_text ("Bad |refresh_token|");
+          } elsif ($params->{client_id}->[0] =~ /\A\Q$ClientID\E\.oauth2(\.\w+|)\z/ and
+                   $params->{client_secret}->[0] =~ /\A\Q$ClientSecret\E\.oauth2(\Q$1\E)\z/) {
+            delete $Sessions->{$session->{access_token}};
+            delete $Sessions->{$session->{refresh_token}};
+            $session->{access_token} = rand;
+            $session->{refresh_token} = rand;
+            my $expires = time + 1000;
+            $session->{expires_at} = $expires;
+            $Sessions->{$session->{access_token}} = $session;
+            $Sessions->{$session->{refresh_token}} = $session;
+            $http->set_response_header ('Content-Type' => 'application/json');
+            $http->send_response_body_as_text (perl2json_bytes +{
+              access_token => $session->{access_token}.$1,
+              refresh_token => $session->{refresh_token}.$1,
+              expires_at => $session->{expires_at},
+            });
+          } else {
+            $http->send_response_body_as_text (Dumper {
+              _ => 'Bad params',
+              params => $params,
+            });
+          }
+        } else {
+          $http->send_response_body_as_text (Dumper {
+            _ => 'Bad params',
+            params => $params,
+          });
+        }
       }
 
       if ($path eq '/profile') {
@@ -330,6 +402,26 @@ sub start_web_server (;$$$) {
           timeout => 60*10,
           cb_wrapper_url => 'http://cb.wrapper.test/wrapper/%s?url=%s&test=1',
         },
+        oauth2server_refresh => {
+          name => 'oauth2server_refresh',
+          url_scheme => 'http',
+          host => $host,
+          auth_endpoint => '/oauth2/authorize',
+          auth_host => (($oauth_hostname_for_docker // $OAuthServer->get_hostname) . ':' . $OAuthServer->get_port),
+          token_endpoint => '/oauth2r/token',
+          "profile_endpoint" => "/profile",
+          "profile_id_field" => "id",
+          "profile_key_field" => "login",
+          "profile_name_field" => "name",
+          "profile_email_field" => "email",
+          "auth_scheme" => "token",
+          "linked_id_field" => "profile_id",
+          "linked_key_field" => "profile_key",
+          "linked_name_field" => "profile_name",
+          "linked_email_field" => "profile_email",
+          "scope_separator" => ",",
+          timeout => 60*10,
+        },
         ssh => {
           name => 'ssh',
         },
@@ -339,6 +431,8 @@ sub start_web_server (;$$$) {
         "oauth1server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth1",
         "oauth2server.client_id" => $OAuthServer->envs->{CLIENT_ID}.".oauth2",
         "oauth2server.client_secret" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth2",
+        "oauth2server_refresh.client_id" => $OAuthServer->envs->{CLIENT_ID}.".oauth2",
+        "oauth2server_refresh.client_secret" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth2",
         "oauth1server.client_id.sk2" => $OAuthServer->envs->{CLIENT_ID}.".oauth1.SK2",
         "oauth1server.client_secret.sk2" => $OAuthServer->envs->{CLIENT_SECRET}.".oauth1.SK2",
         "oauth2server.client_id.sk2" => $OAuthServer->envs->{CLIENT_ID}.".oauth2.SK2",

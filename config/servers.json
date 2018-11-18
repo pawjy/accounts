@@ -107,6 +107,8 @@
     "profile_name_field": "lastname",
     "linked_id_field": "profile_id",
     "linked_name_field": "profile_name",
+    "login_scope": "read",
+    "scope_separator": ",",
     "auth_scheme": "header"
   },
 

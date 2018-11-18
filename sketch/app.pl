@@ -89,6 +89,23 @@ $plackup->set_app_code (q{
           ;
       $http->set_response_header ('Content-Type' => 'text/plain');
       $http->send_response_body_as_ref (\($res->content));
+    } elsif ($path eq '/athelete') {
+      my (undef, $res) = http_post
+          url => qq<http://$host/token>,
+          header_fields => {Authorization => 'Bearer ' . $api_token},
+          params => {
+            sk => $http->request_cookies->{sk},
+            sk_context => 'sketch',
+            server => 'strava',
+          };
+      my $json = json_bytes2perl $res->content;
+      my $token = $json->{access_token};
+      (undef, $res) = http_get
+          url => q<https://www.strava.com/api/v3/athlete>,
+          header_fields => {Authorization => 'Bearer ' . $token},
+          ;
+      $http->set_response_header ('Content-Type' => 'text/plain');
+      $http->send_response_body_as_ref (\($res->content));
     }
     $http->close_response_body;
     return $http->send_response;

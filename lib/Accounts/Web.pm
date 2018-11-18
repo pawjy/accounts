@@ -259,6 +259,7 @@ sub main ($$) {
       
       my $state = id 50;
       my $scope = join $server->{scope_separator} // ' ', grep { defined }
+          ## Both /login and /link uses |login_scope|.
           $server->{login_scope},
           @{$app->text_param_list ('server_scope')};
       $session_data->{action} = {
@@ -387,44 +388,49 @@ sub main ($$) {
         my $code = $app->bare_param ('code') // '';
         return $app->send_error_json ({reason => 'No |code|'})
             unless length $code;
-        $p = Promise->new (sub {
-          my ($ok, $ng) = @_;
-          http_post
-              url => (($server->{url_scheme} // 'https') . '://' . $server->{host} . $server->{token_endpoint}),
-              params => {
-                client_id => $client_id,
-                client_secret => $client_secret,
-                redirect_uri => $session_data->{action}->{callback_url},
-                code => $app->text_param ('code'),
-                grant_type => 'authorization_code',
-              },
-              timeout => $server->{timeout} || 10,
-              anyevent => 1,
-              cb => sub {
-                my (undef, $res) = @_;
-                my $access_token;
-                my $refresh_token;
-                if ($res->content_type =~ /json/) { ## Standard
-                  my $json = json_bytes2perl $res->content;
-                  if (ref $json eq 'HASH' and defined $json->{access_token}) {
-                    $access_token = $json->{access_token};
-                    $refresh_token = $json->{refresh_token};
-                  }
-                } else { ## Facebook
-                  my $parsed = parse_form_urlencoded_b $res->content;
-                  $access_token = $parsed->{access_token}->[0];
-                  $refresh_token = $parsed->{refresh_token}->[0];
-                }
-                return $ng->("Access token request failed")
-                    unless defined $access_token;
-                $session_data->{$server->{name}}->{access_token} = $access_token;
-                $session_data->{$server->{name}}->{refresh_token} = $refresh_token
-                    if defined $refresh_token;
+        my $url = Web::URL->parse_string
+            (($server->{url_scheme} // 'https') . '://' . $server->{host} . $server->{token_endpoint});
+        my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+        $p = $client->request (
+          method => 'POST',
+          url => $url,
+          params => {
+            client_id => $client_id,
+            client_secret => $client_secret,
+            redirect_uri => $session_data->{action}->{callback_url},
+            code => $app->text_param ('code'),
+            grant_type => 'authorization_code',
+          },
+          # XXX timeout => $server->{timeout} || 10,
+        )->then (sub {
+          my $res = $_[0];
+          die $res unless $res->status == 200;
 
-                $ok->();
-              };
+          my $access_token;
+          my $refresh_token;
+          my $expires_at;
+          if (($res->header ('content-type') // '') =~ /json/) { ## Standard
+            my $json = json_bytes2perl $res->content;
+            if (ref $json eq 'HASH' and defined $json->{access_token}) {
+              $access_token = $json->{access_token};
+              $refresh_token = $json->{refresh_token};
+              $expires_at = $json->{expires_at};
+            }
+          } else { ## Facebook
+            my $parsed = parse_form_urlencoded_b $res->content;
+            $access_token = $parsed->{access_token}->[0];
+            $refresh_token = $parsed->{refresh_token}->[0];
+          }
+          die "Access token request failed" unless defined $access_token;
+          
+          my $server_data = $session_data->{$server->{name}} ||= {};
+          $server_data->{access_token} = $access_token;
+          $server_data->{refresh_token} = $refresh_token; # or undef
+          $server_data->{expires_at} = $expires_at; # or undef
+        })->finally (sub {
+          return $client->close;
         });
-      }
+      } # OAuth 1/2
 
       return $p->then (sub {
         return Promise->resolve->then (sub {
@@ -594,8 +600,9 @@ sub main ($$) {
         or return $app->send_error (400, reason_phrase => 'Bad |server|');
 
     my $id = $app->bare_param ('account_id');
+    my $session_row;
     return ((defined $id ? Promise->resolve ($id) : $class->resume_session ($app)->then (sub {
-      my $session_row = $_[0];
+      $session_row = $_[0];
       return $session_row->get ('data')->{account_id} # or undef
           if defined $session_row;
       return undef;
@@ -608,7 +615,7 @@ sub main ($$) {
         account_id => Dongry::Type->serialize ('text', $id),
         service_name => Dongry::Type->serialize ('text', $server->{name}),
         (defined $link_id ? (account_link_id => $link_id) : ()),
-      }, source_name => 'master', fields => ['linked_token1', 'linked_token2'])->then (sub {
+      }, source_name => 'master', fields => ['account_link_id', 'linked_token1', 'linked_token2'])->then (sub {
         my $r = $_[0]->first;
         if (defined $r) {
           if (defined $server->{temp_endpoint} or # OAuth 1.0
@@ -616,10 +623,71 @@ sub main ($$) {
             $json->{access_token} = [$r->{linked_token1}, $r->{linked_token2}]
                 if length $r->{linked_token1} and length $r->{linked_token2};
           } else {
-            $json->{access_token} = $r->{linked_token1}
-                if length $r->{linked_token1};
+            # linked_token1 : access token
+            # linked_token2 : (expires at or 0) : refresh token or empty
+            my ($expires, $refresh) = split /:/, $r->{linked_token2}, 2;
+
+            if ((not $expires or time + 120 < $expires) and
+                not $app->bare_param ('force_refresh')) {
+              $json->{access_token} = $r->{linked_token1}
+                  if length $r->{linked_token1};
+              $json->{expires} = $expires if $expires;
+              return;
+            }
+            
+            if (defined $refresh and length $refresh) {
+              my $sk_context = $session_row->get ('sk_context');
+              my $client_id = $app->config->get ($server->{name} . '.client_id.' . $sk_context) //
+                              $app->config->get ($server->{name} . '.client_id');
+              my $client_secret = $app->config->get ($server->{name} . '.client_secret.' . $sk_context) //
+                                  $app->config->get ($server->{name} . '.client_secret');
+              my $url = Web::URL->parse_string
+                  (($server->{url_scheme} // 'https') . '://' . $server->{host} . $server->{token_endpoint});
+              my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+              return $client->request (
+                method => 'POST',
+                url => $url,
+                params => {
+                  client_id => $client_id,
+                  client_secret => $client_secret,
+                  grant_type => 'refresh_token',
+                  refresh_token => $refresh,
+                },
+                #XXX timeout => $server->{timeout} || 10,
+              )->then (sub {
+                my $res = $_[0];
+                die $res unless $res->status == 200;
+                my $j = json_bytes2perl $res->content;
+                
+                $json->{access_token} = $j->{access_token};
+                die "No new access token" unless defined $j->{access_token};
+                die "No new refresh token" unless defined $j->{refresh_token};
+
+                my $expires = 0+($j->{expires_at} || 0);
+                my $token1 = $j->{access_token} // '';
+                my $token2 =
+                    ($expires) . ':' .
+                    ($j->{refresh_token} // '');
+                $json->{expires} = $expires;
+
+                my $time = time;
+                return $app->db->update ('account_link', {
+                  linked_token1 => Dongry::Type->serialize ('text', $token1),
+                  linked_token2 => Dongry::Type->serialize ('text', $token2),
+                  updated => $time,
+                }, where => {
+                  account_link_id => $r->{account_link_id},
+                }, source_name => 'master')->then (sub {
+                  my $v = $_[0];
+                  die "Failed to update tokens" unless $v->row_count == 1;
+                });
+              })->finally (sub {
+                return $client->close;
+              });
+            } # has refresh token
           }
         }
+      })->then (sub {
         return $json;
       });
     })->then (sub {
@@ -1068,7 +1136,11 @@ sub login_account ($$$) {
       my $at = $session_data->{$service}->{access_token};
       ($token1, $token2) = @$at if defined $at and ref $at eq 'ARRAY' and @$at == 2;
     } else {
-      $token1 = $session_data->{$service}->{access_token} // '';
+      my $service_data = $session_data->{$service};
+      $token1 = $service_data->{access_token} // '';
+      $token2 =
+          (0+($service_data->{expires_at} || 0)) . ':' .
+          ($service_data->{refresh_token} // '');
     }
     if (@$links == 0) { # new account
       return $app->db->execute ('SELECT UUID_SHORT() AS account_id, UUID_SHORT() AS link_id', undef, source_name => 'master')->then (sub {
@@ -1188,7 +1260,11 @@ sub link_account ($$$) {
     my $at = $session_data->{$service}->{access_token};
     ($token1, $token2) = @$at if defined $at and ref $at eq 'ARRAY' and @$at == 2;
   } else {
-    $token1 = $session_data->{$service}->{access_token} // '';
+    my $service_data = $session_data->{$service};
+    $token1 = $service_data->{access_token} // '';
+    $token2 =
+        (0+($service_data->{expires_at} || 0)) . ':' .
+        ($service_data->{refresh_token} // '');
   }
 
   return $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master')->then (sub {
