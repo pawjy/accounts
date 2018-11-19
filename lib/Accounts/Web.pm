@@ -583,10 +583,10 @@ sub main ($$) {
   if (@$path == 1 and $path->[0] eq 'token') {
     ## /token - Get access token of an OAuth server
     ##
-    ##   |account_id|   - The account ID.
-    ##   |sk_context|, |sk| - The session.  Either session or account ID is
-    ##                    required.
-    ##   |server|       - The server name.  Required.
+    ##   |account_id|        - The account's ID.
+    ##   |sk_context|, |sk|  - The session.  Either session or account ID is
+    ##                         required.
+    ##   |server|            - The server name.  Required.
     ##   |account_link_id| - The account link ID.  If specified, only the
     ##                    result for this specific account link, if any,
     ##                    is returned.  (Session or account ID is still
@@ -773,23 +773,42 @@ sub main ($$) {
     ##
     ## Parameters
     ##
-    ##   |account_id|        The account's ID.
-    ##   |account_link_id|   The account link's ID.
+    ##   |account_id|        - The account's ID.
+    ##   |sk_context|, |sk|  - The session.  Either session or account ID is
+    ##                         required.
+    ##   |server|            - The server name.  Required although redundant.
+    ##   |account_link_id|   - The account link's ID.
     ##
     ## Returns nothing.
     ##
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
-    my $id = $app->bare_param ('account_id')
-        // return $app->send_error (400, reason_phrase => 'Bad |account_id|');
-    my $link_id = $app->bare_param ('account_link_id')
-        // return $app->send_error (400, reason_phrase => 'Bad |account_link_id|');
-    return $app->db->delete ('account_link', {
-      account_id => Dongry::Type->serialize ('text', $id),
-      account_link_id => Dongry::Type->serialize ('text', $link_id),
-    }, source_name => 'master')->then (sub {
+
+    my $server_name = $app->bare_param ('server') // '';
+    my $server = $app->config->get_oauth_server ($server_name)
+        or return $app->send_error (400, reason_phrase => 'Bad |server|');
+
+    my $id = $app->bare_param ('account_id');
+    my $session_row;
+    return ((defined $id ? Promise->resolve ($id) : $class->resume_session ($app)->then (sub {
+      $session_row = $_[0];
+      return $session_row->get ('data')->{account_id} # or undef
+          if defined $session_row;
+      return undef;
+    }))->then (sub {
+      my $id = $_[0];
+      return $app->send_error (400, reason_phrase => 'Bad |account_id|')
+          unless defined $id;
+      my $link_id = $app->bare_param ('account_link_id')
+          // return $app->send_error (400, reason_phrase => 'Bad |account_link_id|');
+      return $app->db->delete ('account_link', {
+        account_id => Dongry::Type->serialize ('text', $id),
+        account_link_id => Dongry::Type->serialize ('text', $link_id),
+        service_name => Dongry::Type->serialize ('text', $server->{name}),
+      }, source_name => 'master');
+    })->then (sub {
       return $app->send_json ({});
-    });
+    }));
   } # /link/delete
 
   if (@$path == 1 and $path->[0] eq 'info') {
