@@ -768,6 +768,30 @@ sub main ($$) {
     });
   } # /keygen
 
+  if (@$path == 2 and $path->[0] eq 'link' and $path->[1] eq 'delete') {
+    ## /link/delete - Delete an account link
+    ##
+    ## Parameters
+    ##
+    ##   |account_id|        The account's ID.
+    ##   |account_link_id|   The account link's ID.
+    ##
+    ## Returns nothing.
+    ##
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $id = $app->bare_param ('account_id')
+        // return $app->send_error (400, reason_phrase => 'Bad |account_id|');
+    my $link_id = $app->bare_param ('account_link_id')
+        // return $app->send_error (400, reason_phrase => 'Bad |account_link_id|');
+    return $app->db->delete ('account_link', {
+      account_id => Dongry::Type->serialize ('text', $id),
+      account_link_id => Dongry::Type->serialize ('text', $link_id),
+    }, source_name => 'master')->then (sub {
+      return $app->send_json ({});
+    });
+  } # /link/delete
+
   if (@$path == 1 and $path->[0] eq 'info') {
     ## /info - Get the current account of the session
     ##
