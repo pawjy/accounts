@@ -69,10 +69,13 @@ Test {
       is $result->{status}, 200;
       is $result->{json}->{account_id}, $account_id;
       my $links = $result->{json}->{links};
-      ok grep { $_->{service_name} eq 'oauth1server' } values %$links;
+      my $l = [grep { $_->{service_name} eq 'oauth1server' } values %$links]->[0];
+      ok $l->{created};
+      ok $l->{updated};
+      ok $l->{account_link_id};
     } $current->c;
   });
-} n => 8, name => '/link then auth then /cb - oauth1';
+} n => 10, name => '/link then auth then /cb - oauth1';
 
 Test {
   my $current = shift;
@@ -159,9 +162,12 @@ Test {
       my $ls = [grep { $_->{service_name} eq 'oauth2server' } values %$links];
       is $ls->[0]->{id}, $x_account_id;
       is $result->{json}->{account_id}, $account_id, 'existing account';
+      ok $ls->[0]->{created};
+      ok $ls->[0]->{updated};
+      ok $ls->[0]->{account_link_id};
     } $current->c;
   });
-} n => 13, name => '/link then auth then /cb - oauth2';
+} n => 16, name => '/link then auth then /cb - oauth2';
 
 Test {
   my $current = shift;

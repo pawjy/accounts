@@ -1323,9 +1323,8 @@ sub load_linked ($$$) {
     push @field, 'linked_data';
   }
   return $items unless @field;
-  push @field, 'service_name';
-  push @field, 'account_id';
-  push @field, 'account_link_id';
+  push @field,
+      qw(service_name account_id account_link_id created updated);
 
   return $app->db->select ('account_link', {
     account_id => {-in => \@account_id},
@@ -1350,6 +1349,8 @@ sub load_linked ($$$) {
         }
       }
       $link->{account_link_id} = ''.$_->{account_link_id};
+      $link->{created} = $_->{created};
+      $link->{updated} = $_->{updated};
     }
     return $items;
   });
