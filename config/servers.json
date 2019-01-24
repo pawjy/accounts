@@ -114,5 +114,8 @@
 
   "ssh": {
     "name": "ssh"
+  },
+  "email": {
+    "name": "email"
   }
 }
