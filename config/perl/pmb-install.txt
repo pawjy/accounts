@@ -1,6 +1,6 @@
 AnyEvent~7.15
 AnyEvent::HTTP~2.24
-AnyEvent::IO
+AnyEvent::Util
 Canary::Stability~2012
 Carp~1.50
 Class::Accessor~0.51
@@ -11,7 +11,7 @@ Crypt::OpenSSL::RSA~0.31
 Crypt::OpenSSL::Random~0.15
 Cwd~3.75
 Digest::SHA~6.02
-Encode~3.00
+Encode~3.01
 Encode::Locale~1.05
 Exporter::Lite~0.08
 Exporter::Tiny~1.002001
