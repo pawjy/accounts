@@ -216,11 +216,51 @@ Test {
   });
 } n => 11, name => '/invite/use targetted but ignored';
 
+Test {
+  my $current = shift;
+  return $current->create_invitation (i1 => {
+    data => ["ab", "\x{6101}"],
+    target_account_id => 636444444334,
+  })->then (sub {
+    return $current->post (['invite', 'use'], {
+      context_key => $current->o ('i1')->{context_key},
+      invitation_context_key => $current->o ('i1')->{invitation_context_key},
+      invitation_key => $current->o ('i1')->{invitation_key},
+      ignore_target => 1,
+      data => (perl2json_chars {abc => "\x{5000}"}),
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is $result->{json}->{invitation_data}->[1], "\x{6101}";
+    } $current->c;
+    return $current->post (['invite', 'list'], {
+      context_key => $current->o ('i1')->{context_key},
+      invitation_context_key => $current->o ('i1')->{invitation_context_key},
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      my $inv = $result->{json}->{invitations}->{$current->o ('i1')->{invitation_key}};
+      is $inv->{invitation_key}, $current->o ('i1')->{invitation_key};
+      ok $inv->{author_account_id};
+      is $inv->{invitation_data}->[0], "ab";
+      is $inv->{target_account_id}, 636444444334;
+      ok $inv->{created};
+      ok $inv->{expires} > $inv->{created};
+      is $inv->{user_account_id}, 0;
+      is $inv->{used_data}->{abc}, "\x{5000}";
+      ok $inv->{used};
+    } $current->c;
+  });
+} n => 11, name => '/invite/use no account_id';
+
 RUN;
 
 =head1 LICENSE
 
-Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
