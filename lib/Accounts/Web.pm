@@ -2044,7 +2044,8 @@ sub invite ($$$) {
     ##                 or target of the invitation.  Required.
     ##   invitation_key An opaque string identifying the invitation.  Required.
     ##   account_id    The ID of the account who uses the invitation.
-    ##                 Required unless |ignore_target| is true.
+    ##                 Required unless |ignore_target| is true.  If missing,
+    ##                 defaulted to zero.
     ##                 This must be a valid account ID (not verified by the
     ##                 end point).
     ##   ignore_target If true, target account of the invitation is ignored.
@@ -2070,7 +2071,7 @@ sub invite ($$$) {
     my $data = Dongry::Type->parse ('json', $app->bare_param ('data'));
     my $time = time;
     return $app->db->update ('invitation', {
-      user_account_id => $user_account_id,
+      user_account_id => $user_account_id // 0,
       used_data => Dongry::Type->serialize ('json', $data) // 'null',
       used => $time,
     }, where => {
