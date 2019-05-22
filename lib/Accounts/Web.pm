@@ -101,6 +101,8 @@ sub main ($$) {
   my ($class, $app) = @_;
   my $path = $app->path_segments;
 
+  $app->db->connect ('master'); # preconnect
+
   if ($path->[0] eq 'group') {
     return $class->group ($app, $path);
   }
