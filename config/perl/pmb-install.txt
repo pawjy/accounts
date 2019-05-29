@@ -1,6 +1,6 @@
 AnyEvent~7.15
 AnyEvent::HTTP~2.24
-AnyEvent::Util
+AnyEvent::IO
 Canary::Stability~2013
 Carp::Heavy~1.50
 Class::Accessor~0.51
@@ -27,7 +27,6 @@ HTTP::Cookies~6.04
 HTTP::Daemon~6.04
 HTTP::Date~6.02
 HTTP::Negotiate~6.01
-HTTP::Response~6.18
 HTTP::Status~6.18
 IO::HTML~1.001
 IO::Handle~1.39
@@ -47,7 +46,7 @@ Proc::Wait3~0.05
 Scalar::Util~1.50
 Socket~2.029
 Term::ANSIColor~4.06
-Test::Builder~1.302164
+Test::More~1.302164
 Time::HiRes~1.9760
 Time::Local~1.28
 Try::Tiny~0.30
