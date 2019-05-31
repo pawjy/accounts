@@ -14,7 +14,7 @@ RUN cd /app && \
     make deps-docker PMBP_OPTIONS="--execute-system-package-installer --dump-info-file-before-die" && \
     apt-get install -y mysql-client && \
     echo '#!/bin/bash' > /server && \
-    echo 'port=${PORT:-80}'
+    echo 'port=${PORT:-80}' >> /server && \
     echo 'cd /app && ./plackup bin/server.psgi -p ${port} -s Twiggy::Prefork --max-workers 5' >> /server && \
     chmod u+x /server && \
     echo '#!/bin/bash' > /setup-db-for-test && \
