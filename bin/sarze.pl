@@ -1,7 +1,6 @@
 use strict;
 use warnings;
 use Path::Tiny;
-use Promise;
 use Sarze;
 
 my $host = shift;
