@@ -26,7 +26,7 @@ Test {
 
 Test {
   my $current = shift;
-  return $current->post (['cb'], {})->then (sub {
+  return $current->post (['cb'], {})->then (sub { test { ok 0 } $current->c }, sub {
     my $result = $_[0];
     test {
       is $result->{status}, 400;
@@ -39,7 +39,7 @@ Test {
   my $current = shift;
   return $current->create_session (1)->then (sub {
     return $current->post (['cb'], {}, session => 1);
-  })->then (sub {
+  })->then (sub { test { ok 0 } $current->c }, sub {
     my $result = $_[0];
     test {
       is $result->{status}, 400;
@@ -52,7 +52,7 @@ RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

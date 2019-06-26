@@ -89,7 +89,7 @@ Test {
       account_id => $account_id,
       account_link_id => [map { $_->{account_link_id} } grep { $_->{id} eq $x_account_id2 } @$ls],
       #server => 'oauth2server',
-    })->then (sub {
+    })->then (sub { test { ok 0 } $current->c }, sub {
       my $result = $_[0];
       test {
         is $result->{status}, 400;
@@ -231,7 +231,7 @@ Test {
     return $current->post (['link', 'delete'], {
       account_link_id => [map { $_->{account_link_id} } grep { $_->{id} eq $x_account_id2 } @$ls],
       #server => 'oauth2server',
-    }, session => 1)->then (sub {
+    }, session => 1)->then (sub { test { ok 0 } $current->c }, sub {
       my $result = $_[0];
       test {
         is $result->{status}, 400;

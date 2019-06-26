@@ -140,7 +140,7 @@ Test {
       ok ! $inv->{used};
     } $current->c;
   });
-} n => 12, name => '/invite/open targetted';
+} n => 10, name => '/invite/open targetted';
 
 RUN;
 

@@ -183,7 +183,7 @@ Test {
       ok ! $result->{json}->{has_next};
     } $current->c;
   });
-} n => 22, name => '/group/byaccount paging';
+} n => 20, name => '/group/byaccount paging';
 
 Test {
   my $current = shift;

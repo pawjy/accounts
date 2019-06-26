@@ -26,7 +26,7 @@ Test {
 
 Test {
   my $current = shift;
-  return $current->post (['link'], {})->then (sub {
+  return $current->post (['link'], {})->then (sub { test { ok 0 } $current->c }, sub {
     my $result = $_[0];
     test {
       is $result->{status}, 400;
@@ -45,7 +45,7 @@ Test {
       sk_context => 'not-tests',
       server => 'oauth1server',
       callback_url => 'http://haoa/',
-    })->then (sub {
+    })->then (sub { test { ok 0 } $current->c }, sub {
       my $result = $_[0];
       test {
         is $result->{status}, 400;
@@ -63,7 +63,7 @@ Test {
     return $current->post (['link'], {
       server => 'xaa',
       callback_url => 'http://haoa/',
-    }, session => 1)->then (sub {
+    }, session => 1)->then (sub { test { ok 0 } $current->c }, sub {
       my $result = $_[0];
       test {
         is $result->{status}, 400;
@@ -99,7 +99,7 @@ Test {
       server => 'oauth2server',
       callback_url => 'http://haoa/',
     }, session => 1);
-  })->then (sub {
+  })->then (sub { test { ok 0 } $current->c }, sub {
     my $result = $_[0];
     test {
       is $result->{status}, 400;

@@ -15,7 +15,7 @@ Test {
     }, session => 1);
   })->then (sub {
     return $current->post (['cb'], {}, session => 1);
-  })->then (sub {
+  })->then (sub { test { ok 0 } $current->c }, sub {
     my $result = $_[0];
     test {
       is $result->{status}, 400;
