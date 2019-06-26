@@ -78,3 +78,11 @@
 	path = modules/web-datetime
 	url = https://github.com/manakai/perl-web-datetime
 	track = master
+[submodule "modules/sarze"]
+	path = modules/sarze
+	url = https://github.com/wakaba/sarze
+	track = master
+[submodule "modules/streams"]
+	path = modules/streams
+	url = https://github.com/manakai/perl-streams
+	track = master
