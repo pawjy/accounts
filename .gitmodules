@@ -86,3 +86,7 @@
 	path = modules/streams
 	url = https://github.com/manakai/perl-streams
 	track = master
+[submodule "t_deps/modules/serverset"]
+	path = t_deps/modules/serverset
+	url = https://github.com/wakaba/serverset
+	track = master
