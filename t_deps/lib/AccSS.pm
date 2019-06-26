@@ -63,10 +63,6 @@ sub run ($%) {
             $config->{"oauth2server.client_id.sk2"} = $cid.".oauth2.SK2";
             $config->{"oauth2server.client_secret.sk2"} = $csc.".oauth2.SK2";
           }
-          
-          #XXX
-          #$data->{oauth1_auth_url} = sprintf q<http://%s/oauth1/authorize>, $host;
-          #$data->{oauth2_auth_url} = sprintf q<http://%s/oauth2/authorize>, $host;
 
           $data->{app_docker_image} = $args{app_docker_image}; # or undef
           my $use_docker = defined $data->{app_docker_image};
@@ -188,7 +184,7 @@ sub run ($%) {
           },
           command => [
             $RootPath->child ('perl'),
-            '-e', (sprintf q{
+            '-e', q{
               use Sarze;
               Sarze->run (
                 hostports => [[shift, shift]],
@@ -196,10 +192,9 @@ sub run ($%) {
                 max_worker_count => 1,
               )->to_cv->recv;
             },
-              $self->local_url ('xs')->host->to_ascii,
-              $self->local_url ('xs')->port,
-              $RootPath->child ('t_deps/bin/xs.psgi'),
-            ),
+            $self->local_url ('xs')->host->to_ascii,
+            $self->local_url ('xs')->port,
+            $RootPath->child ('t_deps/bin/xs.psgi'),
           ],
           local_url => $self->local_url ('xs'),
         };
@@ -216,7 +211,7 @@ sub run ($%) {
           },
           command => [
             $RootPath->child ('perl'),
-            '-e', (sprintf q{
+            '-e', q{
               use Sarze;
               Sarze->run (
                 hostports => [[shift, shift]],
@@ -224,10 +219,9 @@ sub run ($%) {
                 max_worker_count => 1,
               )->to_cv->recv;
             },
-              $self->local_url ('cs')->host->to_ascii,
-              $self->local_url ('cs')->port,
-              $RootPath->child ('t_deps/bin/cs.psgi'),
-            ),
+            $self->local_url ('cs')->host->to_ascii,
+            $self->local_url ('cs')->port,
+            $RootPath->child ('t_deps/bin/cs.psgi'),
           ],
           local_url => $self->local_url ('cs'),
         };
@@ -247,6 +241,9 @@ sub run ($%) {
         $data->{app_client_url} = $self->client_url ('app');
         $data->{app_bearer} = $self->key ('app_bearer');
         $self->set_local_envs ('proxy', $data->{local_envs} = {});
+
+        $data->{oauth1_auth_url} = sprintf q<http://%s/oauth1/authorize>, $self->client_url ('xs')->hostport;
+        $data->{oauth2_auth_url} = sprintf q<http://%s/oauth2/authorize>, $self->client_url ('xs')->hostport;
 
         return [$data, undef];
       },
@@ -274,6 +271,7 @@ sub run ($%) {
         docker_net_host => $args->{docker_net_host},
         no_set_uid => $args->{no_set_uid},
         public_prefixes => [
+          '',
         ],
       },
       app_config => {

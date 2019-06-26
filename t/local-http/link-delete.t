@@ -27,7 +27,7 @@ Test {
       is $result->{status}, 200;
     } $current->c;
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_id => $x_account_id,
     }); # user accepted!
@@ -62,7 +62,7 @@ Test {
   })->then (sub {
     my $result = $_[0];
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_id => $x_account_id2,
     }); # user accepted!
@@ -170,7 +170,7 @@ Test {
       is $result->{status}, 200;
     } $current->c;
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_id => $x_account_id,
     }); # user accepted!
@@ -205,7 +205,7 @@ Test {
   })->then (sub {
     my $result = $_[0];
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_id => $x_account_id2,
     }); # user accepted!
@@ -291,7 +291,7 @@ RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

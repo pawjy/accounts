@@ -3,140 +3,96 @@ use warnings;
 use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/lib');
 use Tests;
-use Test::More;
-use Test::X1;
 
-my $wait = web_server;
+Test {
+  my $current = shift;
+  return $current->create (
+    [s1 => session => {}],
+  )->then (sub {
+    return $current->are_errors (
+      [['email', 'input'], {addr => q<foo@abc.test>}, session => 's1'],
+      [
+        {method => 'GET', status => 405},
+        {bearer => undef, status => 401},
+        {session => undef, status => 400, reason => 'Bad session'},
+        {params => {}, status => 400, reason => 'Bad email address'},
+        {params => {addr => q<@hoge>}, status => 400, reason => 'Bad email address'},
+        {params => {addr => qq<\x{5000}\@hoge.test>}, status => 400, reason => 'Bad email address'},
+      ],
+    );
+  })->then (sub {
 
-test {
-  my $c = shift;
-  return GET ($c, q</email/input>)->then (sub { test { ok 0 } $c }, sub {
-    my $status = $_[0];
-    test {
-      is $status, 405;
-    } $c;
-    done $c;
-    undef $c;
-  });
-} wait => $wait, n => 1, name => '/email/input GET';
-
-test {
-  my $c = shift;
-  return POST ($c, q</email/input>, bad_bearer => 1)->then (sub { test { ok 0 } $c }, sub {
-    my $status = $_[0];
-    test {
-      is $status, 401;
-    } $c;
-    done $c;
-    undef $c;
-  });
-} wait => $wait, n => 1, name => '/email/input POST bad bearer';
-
-test {
-  my $c = shift;
-  return POST ($c, q</email/input>)->then (sub { test { ok 0 } $c }, sub {
-    my $json = $_[0];
-    test {
-      is $json->{reason}, 'Bad email address';
-    } $c;
-    done $c;
-    undef $c;
-  });
-} wait => $wait, n => 1, name => '/email/input POST no args';
-
-test {
-  my $c = shift;
-  return POST ($c, q</email/input>, params => {
-    addr => q<@hoge>,
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $json = $_[0];
-    test {
-      is $json->{reason}, 'Bad email address';
-    } $c;
-    done $c;
-    undef $c;
-  });
-} wait => $wait, n => 1, name => '/email/input POST bad |addr|';
-
-test {
-  my $c = shift;
-  return POST ($c, q</email/input>, params => {
-    addr => qq<\x{5000}\@hoge.test>,
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $json = $_[0];
-    test {
-      is $json->{reason}, 'Bad email address';
-    } $c;
-    done $c;
-    undef $c;
-  });
-} wait => $wait, n => 1, name => '/email/input POST bad |addr|';
-
-test {
-  my $c = shift;
-  return POST ($c, q</email/input>, params => {
-    addr => q<foo@hoge.test>,
-  })->then (sub { test { ok 0 } $c }, sub {
-    my $json = $_[0];
-    test {
-      is $json->{reason}, 'Bad session';
-    } $c;
-    done $c;
-    undef $c;
-  });
-} wait => $wait, n => 1, name => '/email/input POST bad session';
-
-test {
-  my $c = shift;
-  return session ($c)->then (sub {
-    my $session = $_[0];
-    my $key1;
-    return POST ($c, q</email/input>, params => {
+    return $current->post (['email', 'input'], {
       addr => q<foo@hoge.test>,
-    }, session => $session)->then (sub {
-      my $json = $_[0];
-      test {
-        ok $key1 = $json->{key};
-      } $c;
-      return POST ($c, q</email/input>, params => {
-        addr => q<foo@hoge.test>,
-      }, session => $session);
-    })->then (sub {
-      my $json = $_[0];
-      test {
-        ok $json->{key};
-        isnt $json->{key}, $key1;
-      } $c;
-      done $c;
-      undef $c;
-    });
-  });
-} wait => $wait, n => 3, name => '/email/input associated';
-
-test {
-  my $c = shift;
-  return session ($c, account => {email => q<foo@hoge.test>})->then (sub {
-    my $session = $_[0];
-    my $key1;
-    return POST ($c, q</email/input>, params => {
+    }, session => 's1');
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      ok $result->{json}->{key};
+      $current->set_o (key1 => $result->{json}->{key});
+    } $current->c;
+    return $current->post (['email', 'input'], {
       addr => q<foo@hoge.test>,
-    }, session => $session)->then (sub {
-      my $json = $_[0];
-      test {
-        is $json->{key}, undef;
-      } $c;
-      done $c;
-      undef $c;
-    });
-  });
-} wait => $wait, n => 1, name => '/email/input already associated';
+    }, session => 's1');
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      ok $result->{json}->{key};
+      isnt $result->{json}->{key}, $current->o ('key1');
+    } $current->c;
 
-run_tests;
-stop_web_server;
+    return $current->post (['info'], {
+      with_linked => ['id', 'key', 'name', 'email'],
+    }, session => 's1');
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+keys %{$result->{json}->{links}}, 0;
+    } $current->c, name => 'unchanged yet';
+  });
+} n => 5, name => '/email/input associated';
+
+Test {
+  my $current = shift;
+  return $current->create (
+    [u1 => account => {}],
+  )->then (sub {
+    return $current->post (['email', 'input'], {
+      addr => q<foo@bar.test>,
+    }, account => 'u1');
+  })->then (sub {
+    return $current->post (['email', 'verify'], {
+      key => $_[0]->{json}->{key},
+    }, account => 'u1');
+  })->then (sub {
+
+    return $current->post (['email', 'input'], {
+      addr => q<foo@hoge.test>,
+    }, account => 'u1');
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      ok $result->{json}->{key};
+    } $current->c;
+
+    return $current->post (['info'], {
+      with_linked => ['id', 'key', 'name', 'email'],
+    }, account => 'u1');
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+keys %{$result->{json}->{links}}, 1;
+      my $actual = [sort { $a cmp $b } map { $_->{email} } values %{$result->{json}->{links}}];
+      is $actual->[0], 'foo@bar.test';
+    } $current->c, name => 'unchanged';
+  });
+} n => 3, name => '/email/input already associated';
+
+RUN;
 
 =head1 LICENSE
 
-Copyright 2015 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

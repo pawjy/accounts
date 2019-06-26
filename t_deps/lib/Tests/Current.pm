@@ -3,10 +3,11 @@ use strict;
 use warnings;
 use JSON::PS;
 use Web::URL;
-use Web::Transport::ConnectionClient;
+use Web::Transport::BasicClient;
 use Promised::Flow;
 use Test::More;
 use Test::X1;
+use ServerSet::ReverseProxyProxyManager;
 
 sub c ($) {
   return $_[0]->{context};
@@ -15,18 +16,21 @@ sub c ($) {
 sub client ($) {
   my $self = $_[0];
   return $self->{client} ||= do {
-    my $host = $self->{context}->received_data->{host};
-    my $url = Web::URL->parse_string ("http://$host");
-    my $http = Web::Transport::ConnectionClient->new_from_url ($url);
-    $http;
+    my $url = $self->{servers_data}->{app_client_url};
+    $self->client_for ($url);
   };
 } # client
 
-#XXX
-sub object ($$$) {
-  my ($self, $type, $name) = @_;
-  return $self->{objects}->{$name} || die "Object ($type, $name) not found";
-} # object
+sub client_for ($$) {
+  my $self = $_[0];
+  my $url = $_[1];
+  return $self->{client_for}->{$url->get_origin->to_ascii} ||= do {
+    my $http = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => ServerSet::ReverseProxyProxyManager->new_from_envs ($self->{servers_data}->{local_envs}),
+    });
+    $http;
+  };
+} # client_for
 
 sub o ($$) {
   my ($self, $name) = @_;
@@ -72,8 +76,11 @@ sub post ($$$;%) {
   my ($self, $path, $params, %args) = @_;
   my $p = {sk_context => 'tests'};
   if (defined $args{session}) {
-    my $session = $self->object ('session', $args{session});
+    my $session = $self->o ($args{session});
     $p->{sk} = $session->{sk};
+  } elsif (defined $args{account}) {
+    my $account = $self->o ($args{account});
+    $p->{sk} = $account->{session}->{sk};
   }
   return $self->client->request (
     method => 'POST',
@@ -82,14 +89,16 @@ sub post ($$$;%) {
     :
       (url => Web::URL->parse_string ($path, Web::URL->parse_string ($self->client->origin->to_ascii)))
     ),
-    bearer => $self->c->received_data->{keys}->{'auth.bearer'},
+    bearer => $self->{servers_data}->{app_bearer},
     params => {%$p, %$params},
   )->then (sub {
     my $res = $_[0];
     if ($res->status == 200 or $res->status == 400) {
-      return {res => $res,
-              status => $res->status,
-              json => json_bytes2perl $res->body_bytes};
+      my $result = {res => $res,
+                    status => $res->status,
+                    json => json_bytes2perl $res->body_bytes};
+      die $result if $res->status == 400;
+      return $result;
     } elsif ($res->status == 302) {
       return $res;
     }
@@ -108,11 +117,20 @@ sub are_errors ($$$) {
     my %opt = (
       method => 'POST',
       path => $base_path,
-      params => $base_params,
-      bearer => $self->c->received_data->{keys}->{'auth.bearer'},
+      params => {%$base_params},
+      bearer => $self->{servers_data}->{app_bearer},
       %base_args,
       %$test,
     );
+    if (defined $opt{session}) {
+      my $session = $self->o ($opt{session});
+      $opt{params}->{sk} = $session->{sk};
+      $opt{params}->{sk_context} = 'tests';
+    } elsif (defined $opt{account}) {
+      my $account = $self->o ($opt{account});
+      $opt{params}->{sk} = $account->{session}->{sk};
+      $opt{params}->{sk_context} = 'tests';
+    }
     return $self->client->request (
       method => $opt{method}, path => $opt{path}, params => $opt{params},
       bearer => $opt{bearer},
@@ -120,29 +138,27 @@ sub are_errors ($$$) {
       my $res = $_[0];
       unless ($opt{status} == $res->status) {
         test {
-          is $res->status, $opt{status}, $res;
+          is $res->status, $opt{status}, "$res (status)";
         } $self->c, name => $opt{name};
         $has_error = 1;
       }
       if (defined $opt{reason}) {
         my $json = json_bytes2perl $res->body_bytes;
         unless (defined $json and
-                ref $json eq 'JSON' and
+                ref $json eq 'HASH' and
                 defined $json->{reason} and
                 $json->{reason} eq $opt{reason}) {
           test {
-            is $json->{reason}, $opt{reason};
+            is $json->{reason}, $opt{reason}, "$res (reason)";
           } $self->c, name => $opt{name};
           $has_error = 1;
         }
       }
     });
   } $tests)->then (sub {
-    unless ($has_error) {
-      test {
-        ok 1, 'no error';
-      } $self->c;
-    }
+    test {
+      ok !$has_error, 'are_errors: no error';
+    } $self->c;
   });
 } # are_errors
 
@@ -158,8 +174,17 @@ sub create ($;@) {
 sub create_session ($$$) {
   my ($self, $name, $opts) = @_;
   return $self->post (['session'], {})->then (sub {
-    die $_[0]->{res} unless $_[0]->{status} == 200;
-    $self->{objects}->{$name} = $_[0]->{json};
+    my $session = $self->{objects}->{$name} = $_[0]->{json};
+
+    if ($opts->{account}) {
+      return $self->post (['create'], {
+        sk_context => 'tests',
+        sk => $session->{sk},
+        name => $self->generate_text (rand, {}),
+        #user_status
+        #admin_status
+      });
+    }
   });
 } # create_session
 
@@ -168,7 +193,6 @@ sub create_account ($$$) {
   my $session;
   return $self->post (['session'], {})->then (sub {
     my $result = $_[0];
-    die $result->{res} unless $result->{status} == 200;
     $session = $result->{json};
     return $self->post (['create'], {
       sk => $session->{sk},
@@ -283,8 +307,9 @@ sub create_invitation ($$$) {
 sub done ($) {
   my $self = $_[0];
   (delete $self->{context})->done;
+  delete $self->{client};
   return Promise->all ([
-    (defined $self->{client} ? $self->{client}->close : undef),
+    map { $_->close } values %{$self->{client_for}}
   ]);
 } # done
 
@@ -292,7 +317,7 @@ sub done ($) {
 
 =head1 LICENSE
 
-Copyright 2015-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2019 Wakaba <wakaba@suikawiki.org>.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as

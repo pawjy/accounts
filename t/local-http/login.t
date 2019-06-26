@@ -82,7 +82,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      my $auth = $current->c->received_data->{oauth1_auth_url};
+      my $auth = $current->{servers_data}->{oauth1_auth_url};
       like $result->{json}->{authorization_url}, qr{^\Q$auth\E\?oauth_token=.+$};
     } $current->c;
   });
@@ -110,7 +110,7 @@ RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
