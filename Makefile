@@ -67,10 +67,10 @@ PROVE = ./prove
 test-deps: deps pmbp-install-local
 
 test-local-http-circle:
-	$(PROVE) t/local-http/*.t
+	$(PROVE) t/http/*.t
 
 test-local-web-circle:
-	TEST_MAX_CONCUR=1 $(PROVE) t/local-web/*.t
+	TEST_MAX_CONCUR=1 $(PROVE) t/browser/*.t
 
 # Requires $ENV{XTEST_ORIGIN}
 test-external-http:
