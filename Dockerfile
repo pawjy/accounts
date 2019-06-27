@@ -15,7 +15,7 @@ RUN cd /app && \
     apt-get install -y mysql-client && \
     echo '#!/bin/bash' > /server && \
     echo 'port=${PORT:-8080}' >> /server && \
-    echo 'cd /app && ./plackup bin/server.psgi -p ${port} -s Twiggy::Prefork --max-workers 5' >> /server && \
+    echo 'cd /app && ./perl bin/sarze.pl 0 ${port}' >> /server && \
     chmod u+x /server && \
     echo '#!/bin/bash' > /setup-db-for-test && \
     echo 'cd /app' >> /setup-db-for-test && \
@@ -25,6 +25,7 @@ RUN cd /app && \
     echo 'cat /app/rev' >> /showrev && \
     chmod u+x /showrev && \
     rm -rf /var/lib/apt/lists/* /app/local/pmbp/tmp
+    ## Use of |/setup-db-for-test| is deprecated.
 
 CMD ["/server"]
 
