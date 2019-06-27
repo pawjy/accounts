@@ -311,8 +311,6 @@ sub create_browser ($$$) {
   die "Duplicate browser |$name|" if defined $self->{browsers}->{$name};
   $self->{browsers}->{$name} = '';
   require Web::Driver::Client::Connection;
-  #XXX
-  *Web::Transport::TCPTransport::DESTORY = sub { };
   my $wd = Web::Driver::Client::Connection->new_from_url
       ($self->{servers_data}->{wd_local_url});
   push @{$self->{wds} ||= []}, $wd;
@@ -339,20 +337,13 @@ sub b ($$) {
   return $self->{browsers}->{$name} || die "No browser |$name|";
 } # b
 
-# XXX
-sub XXX::Closable::close { }
-
 sub done ($) {
   my $self = $_[0];
   delete $self->{client};
   return Promise->all ([
     (map { $_->close } values %{delete $self->{client_for} or {}}),
-    (map {
-      my $p = $_->close;
-      # XXX
-      $_->{http_client} = bless {}, 'XXX::Closable';
-      $p;
-    } values %{delete $self->{browsers} or {}}),
+    (map { $_->close } values %{delete $self->{wds} or {}}),
+    (map { $_->close } values %{delete $self->{browsers} or {}}),
   ])->finally (sub {
     (delete $self->{context})->done;
   });
