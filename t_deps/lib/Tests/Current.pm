@@ -304,12 +304,48 @@ sub create_invitation ($$$) {
   });
 } # create_invitation
 
+sub create_browser ($$$) {
+  my ($self, $name, $opts) = @_;
+  die "No |browser| option for |Test|"
+      if not defined $self->{servers_data}->{wd_local_url};
+  die "Duplicate browser |$name|" if defined $self->{browsers}->{$name};
+  $self->{browsers}->{$name} = '';
+  require Web::Driver::Client::Connection;
+  my $wd = Web::Driver::Client::Connection->new_from_url
+      ($self->{servers_data}->{wd_local_url});
+  push @{$self->{wds} ||= []}, $wd;
+  return $wd->new_session (
+    desired => {},
+    http_proxy_url => Web::URL->parse_string ($self->{servers_data}->{docker_envs}->{http_proxy}) || die,
+  )->then (sub {
+    $self->{browsers}->{$name} = $_[0];
+  });
+} # create_browser
+
+sub b_go_cs ($$$;%) {
+  my ($self, $name, $url, %args) = @_;
+  if (ref $url eq 'ARRAY') {
+    $url = join '/', map { percent_encode_c $_ } '', @$url;
+  }
+  $url .= '#' . $args{fragment} if defined $args{fragment};
+  $url = Web::URL->parse_string ($url, $self->{servers_data}->{cs_client_url});
+  return $self->b ($name)->go ($url);
+} # b_go
+
+sub b ($$) {
+  my ($self, $name) = @_;
+  return $self->{browsers}->{$name} || die "No browser |$name|";
+} # b
+
 sub done ($) {
   my $self = $_[0];
   (delete $self->{context})->done;
   delete $self->{client};
   return Promise->all ([
-    map { $_->close } values %{$self->{client_for}}
+    (map { $_->close } values %{$self->{client_for}}),
+    (map {
+      ref $_ ? $_->close : undef;
+    } values %{delete $self->{browsers} || {}}),
   ]);
 } # done
 

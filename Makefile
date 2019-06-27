@@ -70,7 +70,7 @@ test-local-http-circle:
 	$(PROVE) t/local-http/*.t
 
 test-local-web-circle:
-	TEST_MAX_CONCUR=1 $(PROVE) t/local-web/*.t || true # XXX
+	TEST_MAX_CONCUR=1 $(PROVE) t/local-web/*.t
 
 # Requires $ENV{XTEST_ORIGIN}
 test-external-http:

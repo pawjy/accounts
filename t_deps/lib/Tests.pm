@@ -6,6 +6,7 @@ use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/modules/*/l
 use Promise;
 use Promised::Flow;
 use JSON::PS;
+use MIME::Base64;
 use Web::URL;
 use Web::URL::Encoding;
 use Test::X1;
@@ -15,6 +16,7 @@ use AccSS;
 use Tests::Current;
 
 our @EXPORT = (@JSON::PS::EXPORT,
+               @MIME::Base64::EXPORT,
                @Web::URL::Encoding::EXPORT,
                @Promised::Flow::EXPORT,
                @Test::X1::EXPORT,
@@ -31,10 +33,16 @@ sub import ($;@) {
   }
 } # import
 
+my $NeedBrowser;
 our $ServersData;
 push @EXPORT, qw(Test);
 sub Test (&;%) {
   my $code = shift;
+  my %args = @_;
+  if (delete $args{browser}) {
+    $NeedBrowser = 1;
+    $args{timeout} //= 120*5;
+  }
   test (sub {
     my $current = bless {
       context => $_[0], servers_data => $ServersData,
@@ -48,7 +56,7 @@ sub Test (&;%) {
     })->finally (sub {
       $current->done;
     });
-  }, @_);
+  }, %args);
 } # Test
 
 push @EXPORT, qw(RUN);
@@ -58,6 +66,8 @@ sub RUN () {
   my $v = AccSS->run (
     signal => $ac->signal,
     mysqld_database_name_suffix => '_test',
+    need_browser => $NeedBrowser,
+    browser_type => $ENV{TEST_WD_BROWSER}, # or undef
   )->to_cv->recv;
 
   note "Tests...";
@@ -86,6 +96,6 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 Affero General Public License for more details.
 
 You does not have received a copy of the GNU Affero General Public
-License along with this program, see <http://www.gnu.org/licenses/>.
+License along with this program, see <https://www.gnu.org/licenses/>.
 
 =cut

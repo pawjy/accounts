@@ -165,22 +165,20 @@ sub run ($%) {
       keys => {
         xs_client_id => 'key',
         xs_client_secret => 'key',
+        xs_account_id => 'id',
+        xs_account_name => 'text',
+        xs_account_email => 'email',
       },
       prepare => sub {
         my ($handler, $self, $args, $data) = @_;
-        my $name = rand;
-
-        #XXX
-        #$data->{oauth_server_account_name} = $OAuthServer->envs->{ACCOUNT_NAME};
-        #$data->{oauth_server_account_email} = $OAuthServer->envs->{ACCOUNT_EMAIL};
         
         return {
           envs => {
             CLIENT_ID => $self->key ('xs_client_id'),
             CLIENT_SECRET => $self->key ('xs_client_secret'),
-            ACCOUNT_ID => $name,
-            ACCOUNT_NAME => $name . '-san',
-            ACCOUNT_EMAIL => $name . '@test',
+            ACCOUNT_ID => $self->key ('xs_account_id'),
+            ACCOUNT_NAME => $self->key ('xs_account_name'),
+            ACCOUNT_EMAIL => $self->key ('xs_account_email'),
           },
           command => [
             $RootPath->child ('perl'),
@@ -204,8 +202,10 @@ sub run ($%) {
       handler => 'ServerSet::SarzeProcessHandler',
       prepare => sub {
         my ($handler, $self, $args, $data) = @_;
+        $self->set_local_envs ('proxy' => my $envs = {});
         return {
           envs => {
+            %$envs,
             API_TOKEN => $self->key ('app_bearer'),
             API_HOST => $self->client_url ('app')->host->to_ascii,
           },
@@ -227,6 +227,9 @@ sub run ($%) {
         };
       }, # prepare
     }, # cs
+    wd => {
+      handler => 'ServerSet::WebDriverServerHandler',
+    },
     _ => {
       requires => ['app_config'],
       start => sub {
@@ -240,10 +243,19 @@ sub run ($%) {
         $data->{app_local_url} = $self->local_url ('app');
         $data->{app_client_url} = $self->client_url ('app');
         $data->{app_bearer} = $self->key ('app_bearer');
-        $self->set_local_envs ('proxy', $data->{local_envs} = {});
 
         $data->{oauth1_auth_url} = sprintf q<http://%s/oauth1/authorize>, $self->client_url ('xs')->hostport;
         $data->{oauth2_auth_url} = sprintf q<http://%s/oauth2/authorize>, $self->client_url ('xs')->hostport;
+
+        $data->{xs_account_name} = $self->key ('xs_account_name');
+        $data->{xs_account_email} = $self->key ('xs_account_email');
+
+        $data->{cs_client_url} = $self->client_url ('cs');
+
+        $data->{wd_local_url} = $self->local_url ('wd');
+
+        $self->set_local_envs ('proxy', $data->{local_envs} = {});
+        $self->set_docker_envs ('proxy', $data->{docker_envs} = {});
 
         return [$data, undef];
       },
@@ -292,6 +304,10 @@ sub run ($%) {
       },
       cs => {
         disabled => $args->{dont_run_xs},
+      },
+      wd => {
+        disabled => ! $args->{need_browser},
+        browser_type => $args->{browser_type},
       },
       _ => {},
     }; # $result->{server_params}

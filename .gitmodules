@@ -90,3 +90,7 @@
 	path = t_deps/modules/serverset
 	url = https://github.com/wakaba/serverset
 	track = master
+[submodule "t_deps/modules/web-driver-client"]
+	path = t_deps/modules/web-driver-client
+	url = https://github.com/manakai/perl-web-driver-client
+	track = master
