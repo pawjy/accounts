@@ -55,7 +55,7 @@ sub Test (&;%) {
         is $error, undef, 'No exception';
       } $current->c;
     })->finally (sub {
-      $current->done;
+      return $current->done;
     });
   }, %args);
 } # Test

@@ -339,14 +339,13 @@ sub b ($$) {
 
 sub done ($) {
   my $self = $_[0];
-  (delete $self->{context})->done;
   delete $self->{client};
   return Promise->all ([
-    (map { $_->close } values %{$self->{client_for}}),
-    (map {
-      ref $_ ? $_->close : undef;
-    } values %{delete $self->{browsers} || {}}),
-  ]);
+    (map { $_->close } values %{delete $self->{client_for} or {}}),
+    (map { $_->close } values %{delete $self->{browsers} or {}}),
+  ])->finally (sub {
+    (delete $self->{context})->done;
+  });
 } # done
 
 1;
