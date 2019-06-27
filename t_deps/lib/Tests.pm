@@ -43,6 +43,7 @@ sub Test (&;%) {
     $NeedBrowser = 1;
     $args{timeout} //= 120*5;
   }
+  $args{timeout} //= 60*2;
   test (sub {
     my $current = bless {
       context => $_[0], servers_data => $ServersData,

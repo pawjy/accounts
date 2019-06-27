@@ -98,7 +98,7 @@
             {
                "run" : {
                   "background" : true,
-                  "command" : "TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl > $CIRCLE_ARTIFACTS/servers-http-$CIRCLE_NODE_INDEX.txt.dat 2>&1"
+                  "command" : "IS_BROWSER_TEST=1 TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl > $CIRCLE_ARTIFACTS/servers-http-$CIRCLE_NODE_INDEX.txt.dat 2>&1"
                }
             },
             {
