@@ -12,7 +12,9 @@ for my $server_type (qw(oauth1server oauth2server)) {
       return $current->b_go_cs (1 => qq</start?app_data=ho%E3%81%82%00e&server=> . $server_type);
     })->then (sub {
       return $current->b (1)->execute (q{
-        document.querySelector ('form [type=submit]').click ();
+        setTimeout (() => {
+          document.querySelector ('form [type=submit]').click ();
+        }, 0);
       });
     })->then (sub {
       return $current->b (1)->url;
@@ -86,7 +88,9 @@ for my $server_type (qw(oauth1server oauth2server)) {
       return $current->b_go_cs (2 => qq</start?server=> . $server_type);
     })->then (sub {
       return $current->b (2)->execute (q{
-        document.querySelector ('form [type=submit]').click ();
+        setTimeout (() => {
+          document.querySelector ('form [type=submit]').click ();
+        }, 0);
       });
     })->then (sub {
       return $current->b_go_cs (2 => qq</info>);
@@ -112,7 +116,9 @@ for my $server_type (qw(oauth1server oauth2server)) {
         input.name = 'account_id';
         input.value = arguments[0];
         document.querySelector ('form').appendChild (input);
-        document.querySelector ('form [type=submit]').click ();
+        setTimeout (() => {
+          document.querySelector ('form [type=submit]').click ();
+        }, 0);
       }, [$current->o ('xid')]);
     })->then (sub {
       return $current->b_go_cs (3 => qq</info>);
@@ -135,7 +141,9 @@ for my $server_type (qw(oauth1server oauth2server)) {
       return $current->b_go_cs (1 => qq</start?app_data=ho%E3%81%82%00e&sk_context=sk2&server=> . $server_type);
     })->then (sub {
       return $current->b (1)->execute (q{
-        document.querySelector ('form [type=submit]').click ();
+        setTimeout (() => {
+          document.querySelector ('form [type=submit]').click ();
+        }, 0);
       });
     })->then (sub {
       return $current->b (1)->url;
@@ -194,7 +202,9 @@ for my $server_type (qw(oauth1server oauth2server)) {
       return $current->b_go_cs (1 => q</start?bad_state=1&server=> . $server_type);
     })->then (sub {
       return $current->b (1)->execute (q{
-        document.querySelector ('form [type=submit]').click ();
+        setTimeout (() => {
+          document.querySelector ('form [type=submit]').click ();
+        }, 0);
       });
     })->then (sub {
       return $current->b (1)->url;
@@ -221,7 +231,9 @@ for my $server_type (qw(oauth1server oauth2server)) {
       return $current->b_go_cs (1 => qq</start?bad_code=1&server=> . $server_type);
     })->then (sub {
       return $current->b (1)->execute (q{
-        document.querySelector ('form [type=submit]').click ();
+        setTimeout (() => {
+          document.querySelector ('form [type=submit]').click ();
+        }, 0);
       });
     })->then (sub {
       return $current->b (1)->url;

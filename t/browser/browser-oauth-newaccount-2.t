@@ -12,7 +12,9 @@ for my $server_type (qw(oauth1server oauth2server)) {
       return $current->b_go_cs (1 => qq</start?create_email_link=1&server=> . $server_type);
     })->then (sub {
       return $current->b (1)->execute (q{
-        document.querySelector ('form [type=submit]').click ();
+        setTimeout (() => {
+          document.querySelector ('form [type=submit]').click ();
+        }, 0);
       });
     })->then (sub {
       return $current->b (1)->url;
