@@ -91,7 +91,6 @@ sub run ($%) {
           }
 
           $config->{servers_json_file} = 'app-servers.json';
-          $data->{config_path} = $self->path ('app-config.json');
           return Promise->all ([
             $self->write_json ('app-config.json', $config),
             $self->write_json ('app-servers.json', $servers),
@@ -111,7 +110,7 @@ sub run ($%) {
           return {
             envs => {
               %{$config_data->{envs}},
-              APP_CONFIG => $config_data->{config_path},
+              APP_CONFIG => $self->path ('app-config.json'),
             },
             command => [
               $RootPath->child ('perl'),
@@ -134,7 +133,8 @@ sub run ($%) {
           return {
             image => $config_data->{app_docker_image},
             volumes => [
-              $config_data->{config_path}->absolute . ':/app-config.json',
+              $self->path ('app-config.json')->absolute . ':/app-config.json',
+              $self->path ('app-servers.json')->absolute . ':/app-servers.json',
             ],
             net_host => $net_host,
             ports => ($net_host ? undef : [
