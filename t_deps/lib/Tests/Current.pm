@@ -337,12 +337,20 @@ sub b ($$) {
   return $self->{browsers}->{$name} || die "No browser |$name|";
 } # b
 
+# XXX
+sub XXX::Closable::close { }
+
 sub done ($) {
   my $self = $_[0];
   delete $self->{client};
   return Promise->all ([
     (map { $_->close } values %{delete $self->{client_for} or {}}),
-    (map { $_->close } values %{delete $self->{browsers} or {}}),
+    (map {
+      my $p = $_->close;
+      # XXX
+      $_->{http_client} = bless {}, 'XXX::Closable';
+      $p;
+    } values %{delete $self->{browsers} or {}}),
   ])->finally (sub {
     (delete $self->{context})->done;
   });
