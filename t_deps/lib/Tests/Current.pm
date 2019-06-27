@@ -312,7 +312,7 @@ sub create_browser ($$$) {
   $self->{browsers}->{$name} = '';
   require Web::Driver::Client::Connection;
   #XXX
-  *Web::Driver::Client::Connection::DESTORY = sub { };
+  *Web::Transport::TCPTransport::DESTORY = sub { };
   my $wd = Web::Driver::Client::Connection->new_from_url
       ($self->{servers_data}->{wd_local_url});
   push @{$self->{wds} ||= []}, $wd;
