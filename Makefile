@@ -60,17 +60,27 @@ else
 	    --install-commands docker
 endif
 
+deps-circleci: deps-before-docker rev test-deps
+
 ## ------ Tests ------
 
 PROVE = ./prove
 
+test: test-deps test-main
+
 test-deps: deps pmbp-install-local
 
-test-local-http-circle:
-	$(PROVE) t/local-http/*.t
+test-main: test-http-circle test-browser-circle
 
-test-local-web-circle:
-	$(PROVE) t/local-web/*.t || true # XXX
+test-circle:
+	$(MAKE) test-http-circle
+	TEST_WD_BROWSER=chrome $(MAKE) test-browser-circle
+
+test-http-circle:
+	$(PROVE) t/http/*.t
+
+test-browser-circle:
+	TEST_MAX_CONCUR=1 $(PROVE) t/browser/*.t
 
 # Requires $ENV{XTEST_ORIGIN}
 test-external-http:

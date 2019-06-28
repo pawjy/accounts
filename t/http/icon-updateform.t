@@ -15,7 +15,7 @@ Test {
       byte_length => (int rand 10000),
     }],
     [
-      {method => 'GET', status => 405},
+      {method => 'GET', params => {}, status => 405},
       {bearer => undef, status => 401},
       {bearer => rand, status => 401},
       {params => {
@@ -81,10 +81,8 @@ Test {
     } $current->c;
     $current->set_o (icon_url => $res->{json}->{icon_url});
     my $url = Web::URL->parse_string ($res->{json}->{form_url});
-    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    return promised_cleanup {
-      return $client->close;
-    } $client->request (url => $url, method => 'POST', params => {
+    my $client = $current->client_for ($url);
+    return $client->request (url => $url, method => 'POST', params => {
       %{$res->{json}->{form_data}},
     }, files => {
       file => {body_ref => \($current->o ('b1')), mime_filename => rand},
@@ -96,13 +94,11 @@ Test {
     });
   })->then (sub {
     my $url = Web::URL->parse_string ($current->o ('icon_url'));
-    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    return promised_cleanup {
-      return $client->close;
-    } $client->request (url => $url)->then (sub {
+    my $client = $current->client_for ($url);
+    return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
-        ok $res->is_success;
+        ok $res->is_success, $res;
         is $res->header ('Content-Type'), 'image/jpeg';
         is $res->body_bytes, $current->o ('b1');
       } $current->c;
@@ -237,7 +233,7 @@ RUN;
 
 =head1 LICENSE
 
-Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2018-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -78,3 +78,19 @@
 	path = modules/web-datetime
 	url = https://github.com/manakai/perl-web-datetime
 	track = master
+[submodule "modules/sarze"]
+	path = modules/sarze
+	url = https://github.com/wakaba/sarze
+	track = master
+[submodule "modules/streams"]
+	path = modules/streams
+	url = https://github.com/manakai/perl-streams
+	track = master
+[submodule "t_deps/modules/serverset"]
+	path = t_deps/modules/serverset
+	url = https://github.com/wakaba/serverset
+	track = master
+[submodule "t_deps/modules/web-driver-client"]
+	path = t_deps/modules/web-driver-client
+	url = https://github.com/manakai/perl-web-driver-client
+	track = master

@@ -122,7 +122,7 @@ sub main ($$) {
 
     my $sk = $app->bare_param ('sk') // '';
     my $sk_context = $app->bare_param ('sk_context')
-        // return $app->send_error (400, reason_phrase => 'No |sk_context|');
+        // return $app->throw_error_json ({reason => 'No |sk_context|'});
     return ((length $sk ? $app->db->select ('session', {
       sk => $sk,
       sk_context => $sk_context,
@@ -178,13 +178,15 @@ sub main ($$) {
       return $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master')->then (sub {
         my $account_id = format_id ($_[0]->first->{uuid});
         my $time = time;
+        my $ver = 0+($app->bare_param ('terms_version') // 0);
+        $ver = 255 if $ver > 255;
         return $app->db->insert ('account', [{
           account_id => $account_id,
           created => $time,
           name => Dongry::Type->serialize ('text', $app->text_param ('name') // $account_id),
           user_status => $app->bare_param ('user_status') // 1,
           admin_status => $app->bare_param ('admin_status') // 1,
-          terms_version => $app->bare_param ('terms_version') // 0,
+          terms_version => $ver,
         }], source_name => 'master')->then (sub {
           $session_data->{account_id} = $account_id;
           return $session_row->update ({data => $session_data}, source_name => 'master');
@@ -704,7 +706,7 @@ sub main ($$) {
 
     my $server_name = $app->bare_param ('server') // '';
     my $server = $app->config->get_oauth_server ($server_name)
-        or return $app->send_error (400, reason_phrase => 'Bad |server|');
+        or return $app->throw_error_json ({reason => 'Bad |server|'});
 
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0];
@@ -757,8 +759,10 @@ sub main ($$) {
           linked_id => '',
           linked_key => '',
           linked_name => '',
+          linked_email => '',
           linked_token1 => $key->{public},
           linked_token2 => $key->{private},
+          linked_data => '{}',
         }], source_name => 'master', duplicate => {
           linked_token1 => $app->db->bare_sql_fragment ('VALUES(linked_token1)'),
           linked_token2 => $app->db->bare_sql_fragment ('VALUES(linked_token2)'),
@@ -1019,7 +1023,8 @@ sub main ($$) {
       return $app->send_error_json ({reason => 'Not a login user'})
           unless defined $account_id;
 
-      my $version = $app->bare_param ('version') || 0;
+      my $version = 0+($app->bare_param ('version') || 0);
+      $version = 255 if $version > 255;
       my $dg = $app->bare_param ('downgrade');
       return $app->db->execute ('UPDATE `account` SET `terms_version` = :version WHERE `account_id` = :account_id'.($dg?'':' AND `terms_version` < :version'), {
         account_id => Dongry::Type->serialize ('text', $account_id),

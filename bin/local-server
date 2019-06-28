@@ -2,75 +2,41 @@
 use strict;
 use warnings;
 use Path::Tiny;
-use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/promised-*/lib');
-use AnyEvent;
-use Promise;
-use Promised::File;
-use Promised::Plackup;
-use Promised::Mysqld;
-use Promised::Command::Signals;
-use JSON::PS;
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/lib');
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 
-$ENV{SQL_DEBUG} //= 1;
-$ENV{WEBUA_DEBUG} //= 1;
+BEGIN {
+  $ENV{SQL_DEBUG} //= 0;
+  $ENV{WEBUA_DEBUG} //= 0;
+  $ENV{WEBSERVER_DEBUG} //= 0;
+  $ENV{PROMISED_COMMAND_DEBUG} //= 0;
+}
 
-my $root_path = path (__FILE__)->parent->parent->absolute;
-my $config_path = $root_path->child ('local/local-server/config/config.json');
-my $config_file = Promised::File->new_from_path ($config_path);
-my $config_keys_path = $root_path->child ('local/keys/devel/config-keys-local.json');
-my $config_keys_file = Promised::File->new_from_path ($config_keys_path);
+use Web::Host;
+use AccSS;
 
-my $main_cv = AE::cv;
+my $RootPath = path (__FILE__)->parent->parent->absolute;
+my $LocalPath = $RootPath->child ('local/local-server');
 
-my $mysqld = Promised::Mysqld->new;
-my $plackup = Promised::Plackup->new;
+AccSS->run (
+  data_root_path => $LocalPath,
+  app_host => Web::Host->parse_string ('0'),
+  app_port => 4311,
+  mysqld_database_name_suffix => '_local',
+  dont_run_xs => 1,
+)->then (sub {
+  my $v = $_[0];
+  warn sprintf "\n\nURL: <%s>\n\n",
+      $v->{data}->{app_local_url}->stringify;
+  
+  return $v->{done};
+})->to_cv->recv;
 
-my $done = sub {
-  return Promise->all ([$plackup->stop, $mysqld->stop]);
-};
-Promised::Command::Signals->add_handler (INT => $done);
-Promised::Command::Signals->add_handler (TERM => $done);
+=head1 LICENSE
 
-sub db_sqls () {
-  my $file = Promised::File->new_from_path
-      ($root_path->child ('db/account.sql'));
-  return $file->read_byte_string->then (sub {
-    return [split /;/, $_[0]];
-  });
-} # db_sqls
+Copyright 2018-2019 Wakaba <wakaba@suikawiki.org>.
 
-my $db_dir = $root_path->child ('local/local-server/mysql');
-$db_dir->mkpath;
-$mysqld->set_db_dir ($db_dir);
-$mysqld->start->then (sub {
-  my $dsn = $mysqld->get_dsn_string (dbname => 'account_devel');
-  return Promise->all ([
-    db_sqls->then (sub {
-      return $mysqld->create_db_and_execute_sqls (account_devel => $_[0]);
-    }),
-    $config_keys_file->read_byte_string->then (sub {
-      my $keys = json_bytes2perl $_[0];
-      return $config_file->write_byte_string (perl2json_bytes {
-        %$keys,
-        alt_dsns => {master => {account => $dsn}},
-        dsns => {account => $dsn},
-      });
-    }),
-  ]);
-})->then (sub {
-  $plackup->envs->{APP_CONFIG} = $config_path;
-  $plackup->plackup ($root_path->child ('plackup'));
-  $plackup->set_option ('--app' => $root_path->child ('bin/server.psgi'));
-  $plackup->set_option ('--host' => 0);
-  $plackup->set_option ('--port' => 5710);
-  $plackup->set_server ('Twiggy::Prefork');
-  return $plackup->start;
-})->catch (sub {
-  my $error = $_[0];
-  AE::log alert => "$error";
-  return Promise->resolve->then ($done)->then (sub {
-    $main_cv->croak;
-  });
-});
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
 
-$main_cv->recv;
+=cut

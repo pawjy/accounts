@@ -15,7 +15,7 @@ Test {
     }, session => 1);
   })->then (sub {
     return $current->post (['cb'], {}, session => 1);
-  })->then (sub {
+  })->then (sub { test { ok 0 } $current->c }, sub {
     my $result = $_[0];
     test {
       is $result->{status}, 400;
@@ -45,7 +45,7 @@ Test {
       is $result->{status}, 200;
     } $current->c;
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST'); # user accepted!
   })->then (sub {
     my $result = $_[0];
@@ -99,7 +99,7 @@ Test {
       is $result->{status}, 200;
     } $current->c;
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_id => $x_account_id,
     }); # user accepted!
@@ -138,7 +138,7 @@ Test {
   })->then (sub {
     my $result = $_[0];
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_id => $x_account_id,
     }); # user accepted!
@@ -185,7 +185,7 @@ Test {
       is $result->{status}, 200;
     } $current->c;
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_id => $x_account_id,
     }); # user accepted!
@@ -221,7 +221,7 @@ Test {
   })->then (sub {
     my $result = $_[0];
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_name => "\x{5001}\x{5700}",
       account_id => $x_account_id,
@@ -271,7 +271,7 @@ Test {
       is $result->{status}, 200;
     } $current->c;
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_id => $id1,
       account_name => $name1,
@@ -308,7 +308,7 @@ Test {
   })->then (sub {
     my $result = $_[0];
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_name => $name2,
       account_id => $id2,
@@ -361,7 +361,7 @@ Test {
       is $result->{status}, 200;
     } $current->c;
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_name => "old account",
       account_id => $x_account_id,
@@ -401,7 +401,7 @@ Test {
   })->then (sub {
     my $result = $_[0];
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_name => "\x{5001}\x{5700}",
       account_id => $x_account_id,
@@ -458,7 +458,7 @@ Test {
       is $result->{status}, 200;
     } $current->c;
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_no_id => 1,
       account_name => $name1,
@@ -498,7 +498,7 @@ Test {
   })->then (sub {
     my $result = $_[0];
     my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
-    my $con = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $con = $current->client_for ($url);
     return $con->request (url => $url, method => 'POST', params => {
       account_name => $name2,
       account_no_id => 1,
@@ -563,7 +563,7 @@ RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

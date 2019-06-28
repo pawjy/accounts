@@ -7,5 +7,5 @@ export APP_CONFIG=local/server/config/config-keys.json
 while true
 do
   echo "-----> Starting application server..."
-  ./plackup bin/server.psgi -p $PORT -s Twiggy::Prefork
+  ./perl bin/sarze.pl 0 $PORT
 done
