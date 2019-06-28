@@ -342,9 +342,12 @@ sub done ($) {
   delete $self->{client};
   return Promise->all ([
     (map { $_->close } values %{delete $self->{client_for} or {}}),
-    (map { $_->close } @{delete $self->{wds} or []}),
     (map { $_->close } values %{delete $self->{browsers} or {}}),
-  ])->finally (sub {
+  ])->then (sub {
+    return Promise->all ([
+      (map { $_->close } @{delete $self->{wds} or []}),
+    ]);
+  })->finally (sub {
     (delete $self->{context})->done;
   });
 } # done
