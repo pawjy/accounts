@@ -177,7 +177,7 @@ Test {
       ok ! $result->{json}->{has_next};
     } $current->c;
   });
-} n => 22, name => '/group/members paging';
+} n => 20, name => '/group/members paging';
 
 Test {
   my $current = shift;
@@ -228,7 +228,7 @@ RUN;
 
 =head1 LICENSE
 
-Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

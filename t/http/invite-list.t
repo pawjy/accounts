@@ -189,13 +189,13 @@ Test {
       ok ! $result->{json}->{has_next};
     } $current->c;
   });
-} n => 22, name => '/invitation/list paging';
+} n => 20, name => '/invitation/list paging';
 
 RUN;
 
 =head1 LICENSE
 
-Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
