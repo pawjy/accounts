@@ -1,7 +1,7 @@
 AnyEvent~7.16
 AnyEvent::Fork~1.31
 AnyEvent::HTTP~2.24
-AnyEvent::Util
+AnyEvent::Socket
 Canary::Stability~2013
 Carp::Heavy~1.50
 Class::Accessor~0.51
@@ -30,6 +30,7 @@ HTTP::Daemon~6.04
 HTTP::Date~6.02
 HTTP::Headers~6.18
 HTTP::Negotiate~6.01
+HTTP::Request~6.18
 IO::FDPass~1.2
 IO::HTML~1.001
 IO::Handle~1.39
@@ -42,7 +43,7 @@ Math::BigInt~1.999816
 Module::Build::Tiny~0.039
 Net::HTTP~6.19
 Net::SSLeay~1.88
-OAuth::Lite::Token
+OAuth::Lite::Consumer
 Path::Class~0.37
 Path::Tiny~0.108
 Pod::Usage~1.69
