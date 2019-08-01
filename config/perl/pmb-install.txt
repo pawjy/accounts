@@ -1,9 +1,8 @@
 AnyEvent~7.16
 AnyEvent::Fork~1.31
 AnyEvent::HTTP~2.24
-AnyEvent::IO
 Canary::Stability~2013
-Carp~1.50
+Carp::Heavy~1.50
 Class::Accessor~0.51
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
@@ -23,13 +22,13 @@ ExtUtils::InstallPaths~0.012
 File::Listing~6.04
 File::Path~2.16
 File::Temp~0.2309
-HTML::Entities~3.69
+HTML::HeadParser~3.71
 HTML::Tagset~3.20
 HTTP::Cookies~6.04
 HTTP::Daemon~6.05
 HTTP::Date~6.02
 HTTP::Negotiate~6.01
-HTTP::Request~6.18
+HTTP::Status~6.18
 IO::FDPass~1.2
 IO::HTML~1.001
 IO::Handle~1.39
