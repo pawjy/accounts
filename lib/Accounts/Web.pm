@@ -1640,21 +1640,26 @@ sub group ($$$) {
     ## /group/touch - Update the timestamp of a group
     ##
     ## With
-    ##   context_key    An opaque string identifying the application.  Required.
+    ##   context_key   An opaque string identifying the application.
+    ##                 Required.
     ##   group_id      The group ID.  Required.
+    ##   timestamp     The group's updated's new value.  Defaulted to "now".
+    ##   force         If true, the group's updated is set to the new
+    ##                 value even if it is less than the current value.
     ##
     ## Returns
     ##   changed       If a group is updated, |1|.  Otherwise, |0|.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
-    my $time = time;
-    return $app->db->update ('group', {
-      updated => $time,
-    }, where => {
+    my $time = 0+$app->bare_param ('timestamp') || time;
+    my $where = {
       context_key => $app->bare_param ('context_key'),
       group_id => $app->bare_param ('group_id'),
-      updated => {'<', $time},
-    })->then (sub {
+    };
+    $where->{updated} = {'<', $time} unless $app->bare_param ('force');
+    return $app->db->update ('group', {
+      updated => $time,
+    }, where => $where)->then (sub {
       my $result = $_[0];
       return $app->send_json ({changed => $result->row_count});
     });

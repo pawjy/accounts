@@ -80,6 +80,7 @@ create table if not exists `group` (
   `admin_status` TINYINT UNSIGNED NOT NULL,
   primary key (`group_id`),
   key (`context_key`, `created`),
+  key (`context_key`, `updated`),
   key (`created`),
   key (`updated`)
 ) default charset=binary engine=innodb;
