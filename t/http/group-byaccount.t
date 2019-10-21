@@ -265,8 +265,35 @@ Test {
       is $g2->{data}->{"x{5000}"}, undef;
       is $g2->{data}->{abc}, "0";
     } $current->c;
+    return $current->post (['group', 'touch'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      timestamp => $current->generate_timestamp (t1 => {}),
+      force => 1,
+    });
+  })->then (sub {
+    return $current->post (['group', 'touch'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g2')->{group_id},
+      timestamp => $current->generate_timestamp (t2 => {}),
+      force => 1,
+    });
+  })->then (sub {
+    return $current->post (['group', 'byaccount'], {
+      context_key => $current->o ('g1')->{context_key},
+      account_id => $current->o ('a1')->{account_id},
+      with_group_updated => 1,
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      my $g1 = $result->{json}->{memberships}->{$current->o ('g1')->{group_id}};
+      is $g1->{group_updated}, $current->o ('t1');
+      my $g2 = $result->{json}->{memberships}->{$current->o ('g2')->{group_id}};
+      is $g2->{group_updated}, $current->o ('t2');
+    } $current->c;
   });
-} n => 5, name => '/group/byaccount with data';
+} n => 7, name => '/group/byaccount with data';
 
 Test {
   my $current = shift;
