@@ -1912,9 +1912,15 @@ sub group ($$$) {
     ##   account_id    An account ID.  Required.
     ##   with_data
     ##   with_group_data
+    ##   with_group_updated : Boolean   Whether the |group_updated|
+    ##                                  should be returned or not.
     ##
     ## Returns
     ##   memberships   Object of (group_id, group member object)
+    ##
+    ##     If |with_group_updated| is true, each group member object
+    ##     has |group_updated| field whose value is the group's
+    ##     updated.
     ##
     ## Supports paging.
     ##
@@ -1924,8 +1930,9 @@ sub group ($$$) {
     $app->requires_api_key;
     my $page = this_page ($app, limit => 100, max_limit => 100);
     my $account_id = $app->bare_param ('account_id');
+    my $context = $app->bare_param ('context_key');
     return $app->db->select ('group_member', {
-      context_key => $app->bare_param ('context_key'),
+      context_key => $context,
       account_id => $account_id,
       (defined $page->{value} ? (updated => $page->{value}) : ()),
       (status_filter $app, '', 'user_status', 'owner_status'),
@@ -1939,6 +1946,24 @@ sub group ($$$) {
       return $class->load_data ($app, '', 'group_member_data', 'group_id', 'account_id' => $account_id, $groups, 'data');
     })->then (sub {
       return $class->load_data ($app, 'group_', 'group_data', 'group_id', undef, undef, $_[0], 'group_data');
+    })->then (sub {
+      my $groups = $_[0];
+      return $groups unless $app->bare_param ('with_group_updated');
+      return $groups unless @$groups;
+      return $app->db->select ('group', {
+        context_key => $context,
+        group_id => {-in => [map { $_->{group_id} } @$groups]},
+        # status filters not applied here (for now, at least)
+      }, fields => ['group_id', 'updated'], source_name => 'master')->then (sub {
+        my $g2u = {};
+        for (@{$_[0]->all}) {
+          $g2u->{$_->{group_id}} = $_->{updated};
+        }
+        for (@$groups) {
+          $_->{group_updated} = $g2u->{$_->{group_id}};
+        }
+        return $groups;
+      });
     })->then (sub {
       my $groups = {map {
         $_->{group_id} .= '';

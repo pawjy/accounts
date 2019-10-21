@@ -1,6 +1,7 @@
 package Tests::Current;
 use strict;
 use warnings;
+use Time::HiRes qw(time);
 use JSON::PS;
 use Web::URL;
 use Web::Transport::BasicClient;
@@ -71,6 +72,11 @@ sub generate_context_key ($$$) {
   $bytes .= pack 'C', [0x20..0x7E]->[rand 95] for 1..$length;
   return $self->{objects}->{$name} = $bytes;
 } # generate_context_key
+
+sub generate_timestamp ($$$) {
+  my ($self, $name, $opts) = @_;
+  return $self->{objects}->{$name} = time - 1000_0000 + int rand 1000_0000;
+} # generate_timestamp
 
 sub post ($$$;%) {
   my ($self, $path, $params, %args) = @_;
