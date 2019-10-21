@@ -1873,7 +1873,10 @@ sub group ($$$) {
     ## Returns
     ##   memberships   Object of (account_id, group member object)
     ##
-    ## Supports paging
+    ## Supports paging.
+    ##
+    ## Also, status filters |user_status| and |owner_status| with
+    ## empty prefix are available.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
     my $page = this_page ($app, limit => 100, max_limit => 100);
@@ -1882,6 +1885,7 @@ sub group ($$$) {
       context_key => $app->bare_param ('context_key'),
       group_id => $group_id,
       (defined $page->{value} ? (created => $page->{value}) : ()),
+      (status_filter $app, '', 'user_status', 'owner_status'),
     }, fields => ['account_id', 'created', 'updated',
                   'user_status', 'owner_status', 'member_type'],
       source_name => 'master',
@@ -1912,7 +1916,10 @@ sub group ($$$) {
     ## Returns
     ##   memberships   Object of (group_id, group member object)
     ##
-    ## Supports paging
+    ## Supports paging.
+    ##
+    ## Also, status filters |user_status| and |owner_status| with
+    ## empty prefix are available.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
     my $page = this_page ($app, limit => 100, max_limit => 100);
@@ -1921,6 +1928,7 @@ sub group ($$$) {
       context_key => $app->bare_param ('context_key'),
       account_id => $account_id,
       (defined $page->{value} ? (updated => $page->{value}) : ()),
+      (status_filter $app, '', 'user_status', 'owner_status'),
     }, fields => ['group_id', 'created', 'updated',
                   'user_status', 'owner_status', 'member_type'],
       source_name => 'master',

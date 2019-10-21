@@ -85,8 +85,35 @@ Test {
       is $m2->{owner_status}, 1;
       is $m2->{user_status}, 4;
     } $current->c;
+    return $current->post (['group', 'members'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      user_status => [3, 5],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+keys %{$result->{json}->{memberships}}, 1;
+      my $m1 = $result->{json}->{memberships}->{$current->o ('a1')->{account_id}};
+      is $m1->{account_id}, $current->o ('a1')->{account_id};
+      ok $m1->{created};
+      ok $m1->{updated};
+      is $m1->{member_type}, 5;
+      is $m1->{owner_status}, 2;
+      is $m1->{user_status}, 5;
+    } $current->c;
+    return $current->post (['group', 'members'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      owner_status => [0],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+keys %{$result->{json}->{memberships}}, 0;
+    } $current->c;
   });
-} n => 2*3 + 13, name => '/group/members';
+} n => 2*3 + 21, name => '/group/members';
 
 Test {
   my $current = shift;
