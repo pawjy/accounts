@@ -87,8 +87,43 @@ Test {
       is $m2->{owner_status}, 1;
       is $m2->{user_status}, 4;
     } $current->c;
+    return $current->post (['group', 'byaccount'], {
+      context_key => $current->o ('g1')->{context_key},
+      account_id => $current->o ('a1')->{account_id},
+      owner_status => [1, 2],
+      user_status => [4, 1],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+keys %{$result->{json}->{memberships}}, 1;
+      my $m1 = $result->{json}->{memberships}->{$current->o ('g2')->{group_id}};
+      is $m1->{group_id}, $current->o ('g2')->{group_id};
+      ok $m1->{created};
+      ok $m1->{updated};
+      is $m1->{member_type}, 9;
+      is $m1->{owner_status}, 1;
+      is $m1->{user_status}, 4;
+    } $current->c;
+    return $current->post (['group', 'byaccount'], {
+      context_key => $current->o ('g1')->{context_key},
+      account_id => $current->o ('a1')->{account_id},
+      user_status => 5,
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+keys %{$result->{json}->{memberships}}, 1;
+      my $m1 = $result->{json}->{memberships}->{$current->o ('g1')->{group_id}};
+      is $m1->{group_id}, $current->o ('g1')->{group_id};
+      ok $m1->{created};
+      ok $m1->{updated};
+      is $m1->{member_type}, 5;
+      is $m1->{owner_status}, 2;
+      is $m1->{user_status}, 5;
+    } $current->c;
   });
-} n => 2*3 + 13, name => '/group/byaccount';
+} n => 2*3 + 27, name => '/group/byaccount';
 
 Test {
   my $current = shift;
