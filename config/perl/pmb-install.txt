@@ -23,14 +23,14 @@ ExtUtils::InstallPaths~0.012
 File::Listing~6.04
 File::Path~2.16
 File::Temp~0.2309
-HTML::HeadParser~3.71
+HTML::Entities~3.69
 HTML::Tagset~3.20
 HTTP::Cookies~6.05
 HTTP::Daemon~6.06
 HTTP::Date~6.02
+HTTP::Headers::Util~6.18
 HTTP::Negotiate~6.01
 HTTP::Request~6.18
-HTTP::Response~6.18
 IO::FDPass~1.2
 IO::HTML~1.001
 IO::Handle~1.39
@@ -43,7 +43,7 @@ Math::BigInt~1.999818
 Module::Build::Tiny~0.039
 Net::HTTP~6.19
 Net::SSLeay~1.88
-OAuth::Lite::AuthMethod
+OAuth::Lite::Consumer
 Path::Class~0.37
 Path::Tiny~0.108
 Pod::Usage~1.69
@@ -52,7 +52,7 @@ Proc::Wait3~0.05
 Scalar::Util~1.53
 Socket~2.029
 Term::ANSIColor~4.06
-Test::More~1.302168
+Test::Builder~1.302168
 Time::HiRes~1.9760
 Time::Local~1.28
 Try::Tiny~0.30
