@@ -2,7 +2,7 @@ AnyEvent~7.17
 AnyEvent::Fork~1.31
 AnyEvent::HTTP~2.24
 Canary::Stability~2013
-Carp::Heavy~1.50
+Carp~1.50
 Class::Accessor~0.51
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
@@ -27,13 +27,13 @@ HTML::Tagset~3.20
 HTTP::Cookies~6.07
 HTTP::Daemon~6.06
 HTTP::Date~6.05
-HTTP::Headers~6.18
 HTTP::Negotiate~6.01
+HTTP::Request::Common~6.18
 HTTP::Response~6.18
 IO::FDPass~1.2
 IO::HTML~1.001
 IO::Handle~1.39
-LWP~6.41
+LWP~6.42
 LWP::MediaTypes~6.04
 List::MoreUtils~0.428
 List::MoreUtils::XS~0.428
@@ -51,7 +51,7 @@ Proc::Wait3~0.05
 Scalar::Util~1.53
 Socket~2.029
 Term::ANSIColor~4.06
-Test::More~1.302169
+Test::Builder~1.302169
 Time::HiRes~1.9760
 Time::Local~1.28
 Time::Zone~2.24
