@@ -14,7 +14,7 @@ for my $server_type (qw(oauth1server oauth2server)) {
       return $current->b (1)->execute (q{
         setTimeout (() => {
           document.querySelector ('form [type=submit]').click ();
-        }, 0);
+        }, 100);
       });
     })->then (sub {
       return $current->b (1)->url;
