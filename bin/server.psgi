@@ -2,8 +2,10 @@
 use strict;
 use warnings;
 use AnyEvent;
+
 use Accounts::Config;
 use Accounts::Web;
+use WorkerState;
 
 $ENV{LANG} = 'C';
 $ENV{TZ} = 'UTC';
@@ -22,7 +24,7 @@ return Accounts::Web->psgi_app ($config);
 
 =head1 LICENSE
 
-Copyright 2007-2015 Wakaba <wakaba@suikawiki.org>.
+Copyright 2007-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
