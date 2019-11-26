@@ -51,6 +51,8 @@ sub status_filter ($$@) {
   return %$result;
 } # status_filter
 
+my $DEBUG = $ENV{ACCOUNTS_DEBUG};
+
 sub psgi_app ($$) {
   my ($class, $config) = @_;
   return sub {
@@ -65,9 +67,12 @@ sub psgi_app ($$) {
     my $http = Wanage::HTTP->new_from_psgi_env ($_[0]);
     my $app = Accounts::AppServer->new_from_http_and_config ($http, $config);
 
-    # XXX accesslog
-    warn sprintf "Access: [%s] %s %s\n",
-        scalar gmtime, $app->http->request_method, $app->http->url->stringify;
+    my $start_time = time;
+    my $access_id = int rand 1000000;
+    warn sprintf "Access[%d]: [%s] %s %s\n",
+        $access_id, scalar gmtime $start_time,
+        $app->http->request_method, $app->http->url->stringify
+        if $DEBUG;
 
     return $app->execute_by_promise (sub {
       return Promise->resolve->then (sub {
@@ -81,6 +86,10 @@ sub psgi_app ($$) {
         $app->error_log ($_[0])
             unless UNIVERSAL::isa ($_[0], 'Warabe::App::Done');
         die $_[0];
+      })->finally (sub {
+        return unless $DEBUG;
+        warn sprintf "Access[%d]: %f s\n",
+            $access_id, time - $start_time;
       });
     });
   };
