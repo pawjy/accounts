@@ -11,6 +11,7 @@ Sarze->run (
     [$host, $port],
   ],
   psgi_file_name => path (__FILE__)->parent->child ('server.psgi'),
+  worker_state_class => 'WorkerState',
   max_request_body_length => 100*1024*1024,
 )->to_cv->recv;
 
