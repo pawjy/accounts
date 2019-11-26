@@ -87,7 +87,6 @@ sub throw_error_json ($$) {
 } # throw_error_json
 
 sub shutdown ($) {
-  return $_[0]->{db}->disconnect if defined $_[0]->{db};
   return Promise->resolve;
 } # shutdown
 
@@ -107,7 +106,8 @@ WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 Affero General Public License for more details.
 
-You does not have received a copy of the GNU Affero General Public
-License along with this program, see <https://www.gnu.org/licenses/>.
+You should have received a copy of the GNU Affero General Public
+License along with this program.  If not, see
+<https://www.gnu.org/licenses/>.
 
 =cut
