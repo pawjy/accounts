@@ -17,6 +17,12 @@ for my $server_type (qw(oauth1server oauth2server)) {
         }, 100);
       });
     })->then (sub {
+      return promised_wait_until {
+        return $current->b (1)->url->then (sub {
+          return $_[0]->path =~ m{/cb};
+        });
+      } timeout => 34;
+    })->then (sub {
       return $current->b (1)->url;
     })->then (sub {
       my $url = $_[0];
