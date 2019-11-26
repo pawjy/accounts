@@ -6,6 +6,7 @@ push our @ISA, qw(Warabe::App);
 use JSON::PS;
 use Promise;
 use Web::UserAgent::Functions qw(http_post);
+use Dongry::Database;
 
 sub new_from_http_and_config ($$$) {
   my $self = $_[0]->SUPER::new_from_http ($_[1]);
@@ -18,7 +19,7 @@ sub config ($) {
 } # config
 
 sub db ($) {
-  return $_[0]->{db} ||= $_[0]->config->get_db;
+  return $_[0]->http->server_state->data->{dbs}->{main} ||= Dongry::Database->new (%{$_[0]->config->get_db_options});
 } # db
 
 
@@ -86,7 +87,6 @@ sub throw_error_json ($$) {
 } # throw_error_json
 
 sub shutdown ($) {
-  return $_[0]->{db}->disconnect if defined $_[0]->{db};
   return Promise->resolve;
 } # shutdown
 
@@ -94,7 +94,7 @@ sub shutdown ($) {
 
 =head1 LICENSE
 
-Copyright 2007-2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2007-2019 Wakaba <wakaba@suikawiki.org>.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -106,7 +106,8 @@ WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 Affero General Public License for more details.
 
-You does not have received a copy of the GNU Affero General Public
-License along with this program, see <http://www.gnu.org/licenses/>.
+You should have received a copy of the GNU Affero General Public
+License along with this program.  If not, see
+<https://www.gnu.org/licenses/>.
 
 =cut
