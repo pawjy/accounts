@@ -147,9 +147,17 @@ sub _docker ($%) {
         return (($_[0]->[1] ? $f2 : $f1)->read_byte_string);
       })->then (sub {
         my $config = json_bytes2perl $_[0];
-        $storage_data->{aws4}->[0] = $config->{credential}->{accessKey};
-        $storage_data->{aws4}->[1] = $config->{credential}->{secretKey};
-        $storage_data->{aws4}->[2] = $config->{region};
+        if (defined $config->{region} and
+            ref $config->{region} eq 'HASH' and
+            defined $config->{region}->{_}) {
+          $storage_data->{aws4}->[0] = [grep { $_->{key} eq 'access_key' } @{$config->{credentials}->{_}}]->[0]->{value};
+          $storage_data->{aws4}->[1] = [grep { $_->{key} eq 'secret_key' } @{$config->{credentials}->{_}}]->[0]->{value};
+          $storage_data->{aws4}->[2] = [grep { $_->{key} eq 'name' } @{$config->{region}->{_}}]->[0]->{value};
+        } else { # old
+          $storage_data->{aws4}->[0] = $config->{credential}->{accessKey};
+          $storage_data->{aws4}->[1] = $config->{credential}->{secretKey};
+          $storage_data->{aws4}->[2] = $config->{region};
+        }
         return defined $storage_data->{aws4}->[0] &&
                defined $storage_data->{aws4}->[1] &&
                defined $storage_data->{aws4}->[2];
