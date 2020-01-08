@@ -19,7 +19,13 @@ sub config ($) {
 } # config
 
 sub db ($) {
-  return $_[0]->http->server_state->data->{dbs}->{main} ||= Dongry::Database->new (%{$_[0]->config->get_db_options});
+  my $ss = $_[0]->http->server_state;
+
+  # XXX Test::Accounts legacy compat
+  return $_[0]->{_dbs}->{main} ||= Dongry::Database->new (%{$_[0]->config->get_db_options})
+      unless defined $ss;
+
+  return $ss->data->{dbs}->{main} ||= Dongry::Database->new (%{$_[0]->config->get_db_options});
 } # db
 
 
