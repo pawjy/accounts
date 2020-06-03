@@ -31,6 +31,8 @@ endif
 
 deps-before-docker: git-submodules
 deps-docker: pmbp-install
+	./perl local/bin/pmbp.pl $(PMBP_OPTIONS) \
+	    --install-commands "mysql-client"
 
 rev: always
 	$(GIT) rev-parse HEAD > rev
