@@ -103,7 +103,7 @@
             {
                "run" : {
                   "background" : true,
-                  "command" : "IS_BROWSER_TEST=1 WEBSERVER_DEBUG=2 SQL_DEBUG=1 PROMISED_COMMAND_DEBUG=1 SS_DEBUG_SERVERS=app,app_docker TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl > $CIRCLE_ARTIFACTS/servers-http-$CIRCLE_NODE_INDEX.txt.dat 2>&1"
+                  "command" : "IS_BROWSER_TEST=1 SS_DEBUG_SERVERS=app_docker TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl > $CIRCLE_ARTIFACTS/servers-http-$CIRCLE_NODE_INDEX.txt.dat 2>&1"
                }
             },
             {
@@ -118,7 +118,7 @@
             },
             {
                "run" : {
-                  "command" : "SS_ENV_FILE=$CIRCLE_ARTIFACTS/ss.env SQL_DEBUG=1 PROMISED_COMMAND_DEBUG=1 WEBUA_DEBUG=2 make test-circle"
+                  "command" : "SS_ENV_FILE=$CIRCLE_ARTIFACTS/ss.env make test-circle"
                }
             },
             {
@@ -138,7 +138,7 @@
             },
             {
                "deploy" : {
-                  "command" : "if [ \u0022${CIRCLE_BRANCH}\u0022 == 'master' ]; then\u000Atrue\u000Adocker push quay.io/wakaba/accounts\u000Afi"
+                  "command" : "if [ \u0022${CIRCLE_BRANCH}\u0022 == 'master' ]; then\u000Atrue\u000Adocker push quay.io/wakaba/accounts && curl -sSLf $BWALL_URL -X POST\u000Afi"
                }
             },
             {
@@ -224,7 +224,7 @@
          "triggers" : [
             {
                "schedule" : {
-                  "cron" : "43 14 * * *",
+                  "cron" : "11 15 * * *",
                   "filters" : {
                      "branches" : {
                         "only" : [
