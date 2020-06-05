@@ -103,7 +103,7 @@
             {
                "run" : {
                   "background" : true,
-                  "command" : "IS_BROWSER_TEST=1 WEBSERVER_DEBUG=2 SQL_DEBUG=1 PROMISED_COMMAND_DEBUG=1 TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl > $CIRCLE_ARTIFACTS/servers-http-$CIRCLE_NODE_INDEX.txt.dat 2>&1"
+                  "command" : "IS_BROWSER_TEST=1 WEBSERVER_DEBUG=2 SQL_DEBUG=1 PROMISED_COMMAND_DEBUG=1 SS_DEBUG_SERVERS=app,app_docker TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl > $CIRCLE_ARTIFACTS/servers-http-$CIRCLE_NODE_INDEX.txt.dat 2>&1"
                }
             },
             {
