@@ -138,7 +138,7 @@
             },
             {
                "deploy" : {
-                  "command" : "if [ \u0022${CIRCLE_BRANCH}\u0022 == 'master' ]; then\u000Atrue\u000Adocker push quay.io/wakaba/accounts && curl -sSLf $BWALL_URL -X POST\u000Afi"
+                  "command" : "if [ \u0022${CIRCLE_BRANCH}\u0022 == 'master' ]; then\u000Atrue\u000Adocker push quay.io/wakaba/accounts\u000Afi"
                }
             },
             {
