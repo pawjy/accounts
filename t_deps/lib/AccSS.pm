@@ -144,6 +144,10 @@ sub run ($%) {
               %{$config_data->{envs}},
               PORT => $port,
               APP_CONFIG => '/app-config.json',
+              WEBUA_DEBUG => $ENV{WEBUA_DEBUG},
+              WEBSERVER_DEBUG => $ENV{WEBSERVER_DEBUG},
+              SQL_DEBUG => $ENV{SQL_DEBUG},
+              PROMISED_COMMAND_DEBUG => $ENV{PROMISED_COMMAND_DEBUG},
             },
             command => ['/server'],
           };
