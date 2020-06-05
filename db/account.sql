@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS `account_link` (
   KEY (linked_email)
 ) DEFAULT CHARSET=BINARY ENGINE=InnoDB;
 
+alter table `account_link`
+  modify linked_token1 VARBINARY(4095) NOT NULL,
+  modify linked_token2 VARBINARY(4095) NOT NULL;
+
 CREATE TABLE IF NOT EXISTS account_data (
   account_id BIGINT UNSIGNED NOT NULL,
   `key` VARBINARY(63) NOT NULL,
