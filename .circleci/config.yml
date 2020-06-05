@@ -47,6 +47,11 @@
             },
             {
                "run" : {
+                  "command" : "docker run quay.io/wakaba/accounts which ssh-keygen"
+               }
+            },
+            {
+               "run" : {
                   "command" : "docker run quay.io/wakaba/accounts which /server"
                }
             },
@@ -219,7 +224,7 @@
          "triggers" : [
             {
                "schedule" : {
-                  "cron" : "42 13 * * *",
+                  "cron" : "43 14 * * *",
                   "filters" : {
                      "branches" : {
                         "only" : [
