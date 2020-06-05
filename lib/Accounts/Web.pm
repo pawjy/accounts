@@ -732,7 +732,7 @@ sub main ($$) {
           $dir->mkpath->then (sub {
             my $cmd = Promised::Command->new ([
               'ssh-keygen',
-              '-t' => 'dsa',
+              '-t' => 'rsa',
               '-N' => '',
               '-C' => $app->bare_param ('comment') // '',
               '-f' => $private_file_name,
@@ -759,6 +759,9 @@ sub main ($$) {
         my $key = $_[0]->[0];
         my $link_id = $_[0]->[1]->first->{uuid};
         my $time = time;
+        #      public private
+        # dsa     590     668
+        # rsa     382    1675
         return $app->db->insert ('account_link', [{
           account_link_id => $link_id,
           account_id => Dongry::Type->serialize ('text', $account_id),

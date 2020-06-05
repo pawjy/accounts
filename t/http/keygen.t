@@ -34,7 +34,7 @@ Test {
     my $json = $_[0]->{json};
     $current->set_o (token1 => $json);
     test {
-      like $json->{access_token}->[0], qr{^ssh-dss \S+};
+      like $json->{access_token}->[0], qr{^ssh-rsa \S+};
       unlike $json->{access_token}->[0], qr{PRIVATE KEY};
       like $json->{access_token}->[1], qr{PRIVATE KEY};
     } $current->c;
@@ -49,7 +49,7 @@ Test {
   })->then (sub {
     my $json = $_[0]->{json};
     test {
-      like $json->{access_token}->[0], qr{^ssh-dss \S+};
+      like $json->{access_token}->[0], qr{^ssh-rsa \S+};
       unlike $json->{access_token}->[0], qr{PRIVATE KEY};
       like $json->{access_token}->[1], qr{PRIVATE KEY};
       isnt $json->{access_token}->[0], $current->o ('token1')->{access_token}->[0];
