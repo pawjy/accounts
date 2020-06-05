@@ -118,7 +118,7 @@
             },
             {
                "run" : {
-                  "command" : "SS_ENV_FILE=$CIRCLE_ARTIFACTS/ss.env make test-circle"
+                  "command" : "SS_ENV_FILE=$CIRCLE_ARTIFACTS/ss.env SQL_DEBUG=1 PROMISED_COMMAND_DEBUG=1 WEBUA_DEBUG=2 make test-circle"
                }
             },
             {
