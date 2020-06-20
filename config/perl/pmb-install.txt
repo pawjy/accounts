@@ -3,7 +3,7 @@ AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.31
 AnyEvent::HTTP~2.25
 Canary::Stability~2013
-Carp~1.50
+Carp::Heavy~1.50
 Class::Accessor~0.51
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
@@ -44,7 +44,7 @@ Method::WeakCallback~0.04
 Module::Build::Tiny~0.039
 Net::HTTP~6.19
 Net::SSLeay~1.88
-OAuth::Lite::AuthMethod
+OAuth::Lite::Token
 Path::Class~0.37
 Path::Tiny~0.114
 Pod::Usage~1.70
