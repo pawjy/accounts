@@ -879,6 +879,18 @@ sub main ($$) {
       my $group_id = $app->bare_param ('group_id');
       my $json = {};
       return Promise->resolve->then (sub {
+        return unless defined $group_id;
+        return $app->db->select ('group', {
+          context_key => $context_key,
+          group_id => $group_id,
+          (status_filter $app, 'group_', 'admin_status', 'owner_status'),
+        }, fields => ['group_id', 'created', 'updated', 'owner_status', 'admin_status'], source_name => 'master')->then (sub {
+          my $g = $_[0]->first // return;
+          $g->{group_id} .= '';
+          $json->{group} = $g;
+          return $class->load_data ($app, 'group_', 'group_data', 'group_id', undef, undef, [$json->{group}], 'data');
+        });
+      })->then (sub {
         my $account_id;
         $account_id = $session_row->get ('data')->{account_id}
             if defined $session_row;
@@ -922,23 +934,9 @@ sub main ($$) {
           });
         } # $account_id
       })->then (sub {
-        return unless defined $group_id;
-        return $app->db->select ('group', {
-          context_key => $context_key,
-          group_id => $group_id,
-          (status_filter $app, 'group_', 'admin_status', 'owner_status'),
-        }, fields => ['group_id', 'created', 'updated', 'owner_status', 'admin_status'], source_name => 'master')->then (sub {
-          my $g = $_[0]->first // return;
-          $g->{group_id} .= '';
-          $json->{group} = $g;
-        });
-      })->then (sub {
         return $class->load_linked ($app => [$json]);
       })->then (sub {
         return $class->load_data ($app, '', 'account_data', 'account_id', undef, undef, [$json], 'data');
-      })->then (sub {
-        return unless defined $json->{group};
-        return $class->load_data ($app, 'group_', 'group_data', 'group_id', undef, undef, [$json->{group}], 'data');
       })->then (sub {
         delete $json->{group_membership} if not defined $json->{group};
         return unless defined $json->{group_membership};
