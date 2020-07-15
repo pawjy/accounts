@@ -844,6 +844,14 @@ sub main ($$) {
     ##                of the account of the session for these groups
     ##                are also returned.  Ignored when |group_id| is not
     ##                specified.
+    ##   additional_group_data Name of data whose value is an additional
+    ##                group ID.  Zero or more options can be specified.
+    ##                If specified, group memberships of the account
+    ##                of the session for these groups are also returned.
+    ##                Ignored when |group_id| is not specified, the
+    ##                group data is not loaded by |with_group_data|
+    ##                option, there is no such data, or the value is not a
+    ##                group ID.
     ##   with_data
     ##   with_group_data Data of the group.  Not applicable to additional
     ##                groups.
@@ -909,6 +917,16 @@ sub main ($$) {
             if (defined $context_key and defined $group_id) {
               my $add_group_ids = $app->bare_param_list
                   ('additional_group_id');
+              if (defined $json->{group}) {
+                my $add_group_data_names = $app->bare_param_list
+                    ('additional_group_data');
+                for my $name (@$add_group_data_names) {
+                  if (defined $json->{group}->{data}->{$name} and
+                      $json->{group}->{data}->{$name} =~ /\A[1-9][0-9]*\z/) {
+                    push @$add_group_ids, 0+$json->{group}->{data}->{$name};
+                  }
+                }
+              }
               return $app->db->select ('group_member', {
                 context_key => $context_key,
                 group_id => {-in => [$group_id, @$add_group_ids]},
