@@ -79,10 +79,10 @@ test-circle:
 	TEST_WD_BROWSER=chrome $(MAKE) test-browser-circle
 
 test-http-circle:
-	$(PROVE) t/http/*.t
+	t_deps/bin/circle-prove t/http/ ""
 
 test-browser-circle:
-	TEST_MAX_CONCUR=1 $(PROVE) t/browser/*.t
+	TEST_MAX_CONCUR=1 t_deps/bin/circle-prove t/browser/ ""
 
 # Requires $ENV{XTEST_ORIGIN}
 test-external-http:

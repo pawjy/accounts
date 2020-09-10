@@ -212,6 +212,7 @@
          "machine" : {
             "enabled" : true
          },
+         "parallelism" : 4,
          "steps" : [
             "checkout",
             {
@@ -231,7 +232,7 @@
             },
             {
                "run" : {
-                  "command" : "make deps-circleci"
+                  "command" : "make test-deps-circleci"
                }
             },
             {
@@ -389,7 +390,7 @@
          "triggers" : [
             {
                "schedule" : {
-                  "cron" : "13 16 * * *",
+                  "cron" : "37 16 * * *",
                   "filters" : {
                      "branches" : {
                         "only" : [
