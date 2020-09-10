@@ -71,6 +71,7 @@ PROVE = ./prove
 test: test-deps test-main
 
 test-deps: deps pmbp-install-local
+test-deps-circleci: test-deps
 
 test-main: test-http-circle test-browser-circle
 
