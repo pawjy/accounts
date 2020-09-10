@@ -20,7 +20,7 @@
     ],
     "build_generated_pmbp": true,
 
-    "parallel": 4,
+    "parallel": 2,
     "tests": [
       "make test-deps-circleci",
       "docker run quay.io/wakaba/accounts which ssh-keygen",
