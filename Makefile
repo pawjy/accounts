@@ -90,6 +90,7 @@ test-external-http:
 
 ## ------ Deployment ------
 
+create-commit-for-heroku-circleci: deps-circleci create-commit-for-heroku
 create-commit-for-heroku:
 	git remote rm origin
 	rm -fr local/keys/.git deps/pmtar/.git deps/pmpp/.git modules/*/.git

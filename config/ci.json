@@ -18,8 +18,10 @@
     "build": [
       "make deps-circleci"
     ],
+    "build_generated_pmbp": true,
 
     "tests": [
+      "make deps-circleci",
       "docker run quay.io/wakaba/accounts which ssh-keygen",
       "docker run quay.io/wakaba/accounts which /server",
       "docker run quay.io/wakaba/accounts which /setup-db-for-test",
