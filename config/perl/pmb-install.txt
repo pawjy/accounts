@@ -28,9 +28,9 @@ HTML::Tagset~3.20
 HTTP::Cookies~6.08
 HTTP::Daemon~6.12
 HTTP::Date~6.05
+HTTP::Headers::Util~6.26
 HTTP::Negotiate~6.01
 HTTP::Request~6.26
-HTTP::Response~6.26
 IO::FDPass~1.2
 IO::HTML~1.004
 IO::Handle~1.42
