@@ -3,7 +3,7 @@ AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.31
 AnyEvent::HTTP~2.25
 Canary::Stability~2013
-Carp~1.50
+Carp::Heavy~1.50
 Class::Accessor~0.51
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
@@ -29,7 +29,8 @@ HTTP::Cookies~6.08
 HTTP::Daemon~6.12
 HTTP::Date~6.05
 HTTP::Negotiate~6.01
-HTTP::Status~6.26
+HTTP::Request~6.26
+HTTP::Response~6.26
 IO::FDPass~1.2
 IO::HTML~1.004
 IO::Handle~1.42
@@ -46,13 +47,13 @@ Net::SSLeay~1.88
 OAuth::Lite::AuthMethod
 Path::Class~0.37
 Path::Tiny~0.114
-Pod::Usage~1.70
+Pod::Usage~2.00
 Proc::FastSpawn~1.2
 Proc::Wait3~0.05
 Scalar::Util~1.55
 Socket~2.030
 Term::ANSIColor~5.01
-Test::Builder~1.302181
+Test::More~1.302181
 Time::HiRes~1.9764
 Time::Local~1.30
 Time::Zone~2.24
