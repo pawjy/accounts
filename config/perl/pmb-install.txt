@@ -28,8 +28,8 @@ HTML::Tagset~3.20
 HTTP::Cookies~6.08
 HTTP::Daemon~6.12
 HTTP::Date~6.05
+HTTP::Headers::Util~6.26
 HTTP::Negotiate~6.01
-HTTP::Request::Common~6.26
 IO::FDPass~1.2
 IO::HTML~1.004
 IO::Handle~1.42
@@ -43,7 +43,7 @@ Method::WeakCallback~0.04
 Module::Build::Tiny~0.039
 Net::HTTP~6.19
 Net::SSLeay~1.88
-OAuth::Lite::Token
+OAuth::Lite::Consumer
 Path::Class~0.37
 Path::Tiny~0.114
 Pod::Usage~2.01
