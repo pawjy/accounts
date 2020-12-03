@@ -13,7 +13,7 @@ Crypt::OpenSSL::Random~0.15
 Cwd~3.75
 Data::Dumper~2.173
 Digest::SHA~6.02
-Encode~3.07
+Encode~3.08
 Encode::Locale~1.05
 Exporter::Lite~0.08
 Exporter::Tiny~1.002002
@@ -28,8 +28,8 @@ HTML::Tagset~3.20
 HTTP::Cookies~6.09
 HTTP::Daemon~6.12
 HTTP::Date~6.05
-HTTP::Headers::Util~6.26
 HTTP::Negotiate~6.01
+HTTP::Response~6.26
 IO::FDPass~1.2
 IO::HTML~1.004
 IO::Handle~1.42
@@ -43,7 +43,7 @@ Method::WeakCallback~0.04
 Module::Build::Tiny~0.039
 Net::HTTP~6.19
 Net::SSLeay~1.88
-OAuth::Lite::Consumer
+OAuth::Lite::AuthMethod
 Path::Class~0.37
 Path::Tiny~0.114
 Pod::Usage~2.01
@@ -52,7 +52,7 @@ Proc::Wait3~0.05
 Scalar::Util~1.55
 Socket~2.030
 Term::ANSIColor~5.01
-Test::More~1.302183
+Test::Builder~1.302183
 Time::HiRes~1.9764
 Time::Local~1.30
 Time::Zone~2.24
