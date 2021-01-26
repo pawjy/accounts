@@ -28,7 +28,7 @@ HTML::Tagset~3.20
 HTTP::Cookies~6.10
 HTTP::Daemon~6.12
 HTTP::Date~6.05
-HTTP::Headers::Util~6.27
+HTTP::Headers~6.27
 HTTP::Negotiate~6.01
 IO::FDPass~1.3
 IO::HTML~1.004
@@ -52,7 +52,7 @@ Proc::Wait3~0.05
 Scalar::Util~1.55
 Socket~2.031
 Term::ANSIColor~5.01
-Test::Builder~1.302183
+Test::More~1.302183
 Time::HiRes~1.9764
 Time::Local~1.30
 Time::Zone~2.24
