@@ -786,7 +786,72 @@ sub main ($$) {
     });
   } # /keygen
 
-  if (@$path == 2 and $path->[0] eq 'link' and $path->[1] eq 'delete') {
+  if (@$path == 2 and $path->[0] eq 'link' and $path->[1] eq 'add') {
+    ## /link/add - Insert an account link
+    ##
+    ## Parameters
+    ##
+    ##   |account_id|        - The account's ID.
+    ##   |sk_context|, |sk|  - The session.  Either session or account ID is
+    ##                         required.
+    ##   |server|            - The server name.  Required.
+    ##   |linked_id|         - The account link's linked ID.
+    ##   |linked_key|        - The account link's linked key.  Either or
+    ##                         both of |linked_id| and |linked_key| is
+    ##                         required.
+    ##   Other linked_* fields are not supported yet (might be added
+    ##   later if necessary).
+    ##
+    ## Returns nothing.
+    ##
+    ## Create an account link.  If there is an existing account link
+    ## with same |linked_id| or |linked_key| for the same account and
+    ## |server|, it is replaced by the new account link.
+    ##
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    my $server_name = $app->bare_param ('server') // '';
+    my $server = $app->config->get_oauth_server ($server_name)
+        or return $app->throw_error (400, reason_phrase => 'Bad |server|');
+
+    my $id = $app->bare_param ('account_id');
+    my $session_row;
+    return ((defined $id ? Promise->resolve ($id) : $class->resume_session ($app)->then (sub {
+      $session_row = $_[0];
+      return $session_row->get ('data')->{account_id} # or undef
+          if defined $session_row;
+      return undef;
+    }))->then (sub {
+      my $account_id = $_[0];
+      return $app->throw_error (400, reason_phrase => 'Bad |account_id|')
+          unless defined $account_id;
+      my $linked_id = $app->bare_param ('linked_id'); # or undef
+      my $linked_key = $app->text_param ('linked_key'); # or undef
+      return $app->throw_error (400, reason_phrase => 'Bad |linked_key|')
+          unless (defined $linked_id or defined $linked_key);
+      return $app->db->uuid_short (1, source_name => 'master')->then (sub {
+        my $link_id = $_[0]->[0];
+        my $time = time;
+        return $app->db->insert ('account_link', [{
+          account_link_id => $link_id,
+          account_id => Dongry::Type->serialize ('text', $account_id),
+          service_name => Dongry::Type->serialize ('text', $server->{name}),
+          created => $time,
+          updated => $time,
+          linked_id => $linked_id,
+          linked_key => Dongry::Type->serialize ('text', $linked_key),
+          linked_name => '',
+          linked_email => '',
+          linked_token1 => '',
+          linked_token2 => '',
+          linked_data => '{}',
+        }], source_name => 'master', duplicate => 'replace');
+      });
+    })->then (sub {
+      return $app->send_json ({});
+    }));
+  } elsif (@$path == 2 and $path->[0] eq 'link' and $path->[1] eq 'delete') {
     ## /link/delete - Delete an account link
     ##
     ## Parameters
@@ -1409,7 +1474,7 @@ sub load_linked ($$$) {
   }, fields => \@field, source_name => 'master')->then (sub {
     for (@{$_[0]->all}) {
       my $json = $account_id_to_json->{$_->{account_id}};
-      my $link = $json->{links}->{$_->{service_name}, $_->{linked_id}} ||= {};
+      my $link = $json->{links}->{$_->{service_name}, $_->{linked_id} // ''} ||= {};
       #my $server = $app->config->get_oauth_server ($_->{service_name}) || {};
       $link->{service_name} = $_->{service_name};
       $link->{id} = ''.$_->{linked_id}
@@ -2451,7 +2516,7 @@ sub icon ($$$) {
 
 =head1 LICENSE
 
-Copyright 2007-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2007-2021 Wakaba <wakaba@suikawiki.org>.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -2464,6 +2529,6 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 Affero General Public License for more details.
 
 You does not have received a copy of the GNU Affero General Public
-License along with this program, see <http://www.gnu.org/licenses/>.
+License along with this program, see <https://www.gnu.org/licenses/>.
 
 =cut

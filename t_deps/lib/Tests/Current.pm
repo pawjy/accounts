@@ -52,6 +52,8 @@ sub generate_text ($$$) {
   return $self->{objects}->{$name} = $bytes;
 } # generate_text
 
+*generate_key = \&generate_text;
+
 sub generate_id ($$$) {
   my ($self, $name, $opts) = @_;
   return $self->{objects}->{$name} = int rand 100000000;
@@ -181,10 +183,11 @@ sub create_session ($$$) {
   my ($self, $name, $opts) = @_;
   return $self->post (['session'], {})->then (sub {
     my $session = $self->{objects}->{$name} = $_[0]->{json};
-
+    $session->{sk_context} = 'tests';
+    
     if ($opts->{account}) {
       return $self->post (['create'], {
-        sk_context => 'tests',
+        sk_context => $session->{sk_context},
         sk => $session->{sk},
         name => $self->generate_text (rand, {}),
         #user_status

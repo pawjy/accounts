@@ -77,5 +77,11 @@
   },
   "ssh": {
     "name": "ssh"
+  },
+  "linktest1":{
+    "name": "linktest1"
+  },
+  "linktest2":{
+    "name": "linktest2"
   }
 }
