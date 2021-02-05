@@ -73,15 +73,19 @@ test: test-deps test-main
 test-deps: deps pmbp-install-local
 test-deps-circleci: test-deps
 
-test-main: test-http-circle test-browser-circle
+test-main: test-http test-browser
 
 test-circle:
 	$(MAKE) test-http-circle
 	TEST_WD_BROWSER=chrome $(MAKE) test-browser-circle
 
+test-http:
+	$(PROVE) t/http/
 test-http-circle:
 	t_deps/bin/circle-prove t/http/ ""
 
+test-browser:
+	TEST_MAX_CONCUR=1 $(PROVE) t/browser/
 test-browser-circle:
 	TEST_MAX_CONCUR=1 t_deps/bin/circle-prove t/browser/ ""
 
