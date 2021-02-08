@@ -99,6 +99,7 @@ create-commit-for-heroku-circleci: deps-circleci create-commit-for-heroku
 create-commit-for-heroku:
 	git config --global url."https://_:$$HEROKU_API_KEY@git.heroku.com/".insteadOf git@heroku.com:
 	git remote rm origin
+	git checkout --orphan herokucommit && git commit -m "Heroku base"
 	rm -fr local/keys/.git deps/pmtar/.git deps/pmpp/.git modules/*/.git
 	git add -f local/keys/* deps/pmtar/* #deps/pmpp/*
 	rm -fr ./t_deps/modules
