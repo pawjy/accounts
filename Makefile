@@ -104,7 +104,7 @@ create-commit-for-heroku:
 	rm -fr ./t_deps/modules
 	git rm -r t_deps/modules .gitmodules
 	git rm modules/* --cached
-	git add -f modules/*/lib modules/*/data module/*/bin
+	git add -f modules/*/lib modules/*/data modules/*/bin
 	git commit -m "for heroku"
 
 heroku-save-current-release:
