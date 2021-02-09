@@ -287,11 +287,125 @@ Test {
   });
 } n => 20, name => '/link/delete with session';
 
+Test {
+  my $current = shift;
+  return $current->create (
+    [a1 => account => {}],
+  )->then (sub {
+    return $current->post (['link', 'add'], {
+      server => 'linktest1',
+      linked_key => $current->generate_key ('k1' => {}),
+      linked_id => $current->generate_id (i1 => {}),
+    }, account => 'a1');
+  })->then (sub {
+    return $current->post (['link', 'add'], {
+      server => 'linktest1',
+      linked_key => $current->generate_key ('k2' => {}),
+      linked_id => $current->generate_id (i2 => {}),
+    }, account => 'a1');
+  })->then (sub {
+    return $current->post (['link', 'add'], {
+      server => 'linktest2',
+      linked_key => $current->generate_key ('k3' => {}),
+      linked_id => $current->generate_id (i3 => {}),
+    }, account => 'a1');
+  })->then (sub {
+    return $current->are_errors (
+      [['link', 'delete'], {
+        server => 'linktest2',
+        sk => $current->o ('a1')->{account}->{sk},
+        #sk_context is implied
+        all => 1,
+      }],
+      [
+        {method => 'GET', status => 405},
+        {bearer => undef, status => 401},
+        {params => {sk => $current->o ('a1')->{session}->{sk},
+                    sk_context => undef,
+                    server => 'linktest2',
+                    all => 1}, status => 400,
+         name => 'no sk_context'},
+        {params => {sk => $current->o ('a1')->{session}->{sk},
+                    sk_context => rand,
+                    server => 'linktest2',
+                    all => 1}, status => 400,
+         name => 'bad sk_context'},
+        {params => {sk => $current->o ('a1')->{session}->{sk},
+                    all => 1}, status => 400, name => 'no server'},
+        {params => {sk => $current->o ('a1')->{session}->{sk},
+                    server => 'hoge',
+                    all => 1}, status => 400, name => 'bad server'},
+        {params => {sk => $current->o ('a1')->{session}->{sk},
+                    server => 'linktest2'}, status => 400,
+         name => 'bad account_link_id'},
+        {params => {sk => $current->o ('a1')->{session}->{sk},
+                    server => 'linktest2',
+                    account_link_id => 124,
+                    all => 1}, status => 400,
+         name => 'bad account_link_id'},
+      ],
+    );
+  })->then (sub {
+    return $current->post (['link', 'delete'], {
+      server => 'linktest1',
+      sk => $current->o ('a1')->{session}->{sk},
+      #sk_context is implied
+      all => 1,
+    });
+  })->then (sub {
+    return $current->post (['info'], {
+      with_linked => ['id', 'key', 'name', 'email', 'foo'],
+    }, account => 'a1');
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      my $acc = $result->{json};
+      is 0+keys %{$acc->{links}}, 1;
+      my $link = [values %{$acc->{links}}]->[0];
+      ok $link->{account_link_id};
+      is $link->{service_name}, 'linktest2';
+      ok $link->{created};
+      ok $link->{updated};
+      is $link->{id}, $current->o ('i3');
+      is $link->{key}, $current->o ('k3');
+      is $link->{name}, undef;
+      is $link->{email}, undef;
+      is $link->{foo}, undef;
+    } $current->c;
+    return $current->post (['link', 'delete'], {
+      server => 'linktest1',
+      sk => $current->o ('a1')->{session}->{sk},
+      #sk_context is implied
+      all => 1,
+    }); # nop
+  })->then (sub {
+    return $current->post (['info'], {
+      with_linked => ['id', 'key', 'name', 'email', 'foo'],
+    }, account => 'a1');
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      my $acc = $result->{json};
+      is 0+keys %{$acc->{links}}, 1;
+      my $link = [values %{$acc->{links}}]->[0];
+      ok $link->{account_link_id};
+      is $link->{service_name}, 'linktest2';
+      ok $link->{created};
+      ok $link->{updated};
+      is $link->{id}, $current->o ('i3');
+      is $link->{key}, $current->o ('k3');
+      is $link->{name}, undef;
+      is $link->{email}, undef;
+      is $link->{foo}, undef;
+    } $current->c;
+  });
+} n => 21, name => '/link/delete?all';
+
 RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2019 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2021 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

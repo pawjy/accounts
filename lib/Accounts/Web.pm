@@ -878,6 +878,8 @@ sub main ($$) {
     ##   |sk_context|, |sk|  - The session.  Either session or account ID is
     ##                         required.
     ##   |server|            - The server name.  Required.
+    ##   |replace|           = If true, any existing account link with
+    ##                         same account ID and server name is replaced.
     ##   |linked_id|         - The account link's linked ID.
     ##   |linked_key|        - The account link's linked key.  Either or
     ##                         both of |linked_id| and |linked_key| is
@@ -897,7 +899,8 @@ sub main ($$) {
     my $server_name = $app->bare_param ('server') // '';
     my $server = $app->config->get_oauth_server ($server_name)
         or return $app->throw_error (400, reason_phrase => 'Bad |server|');
-
+    my $replace = $app->bare_param ('replace');
+    
     my $id = $app->bare_param ('account_id');
     my $session_row;
     return ((defined $id ? Promise->resolve ($id) : $class->resume_session ($app)->then (sub {
@@ -916,20 +919,32 @@ sub main ($$) {
       return $app->db->uuid_short (1, source_name => 'master')->then (sub {
         my $link_id = $_[0]->[0];
         my $time = time;
-        return $app->db->insert ('account_link', [{
-          account_link_id => $link_id,
-          account_id => Dongry::Type->serialize ('text', $account_id),
-          service_name => Dongry::Type->serialize ('text', $server->{name}),
-          created => $time,
-          updated => $time,
-          linked_id => $linked_id,
-          linked_key => Dongry::Type->serialize ('text', $linked_key),
-          linked_name => '',
-          linked_email => '',
-          linked_token1 => '',
-          linked_token2 => '',
-          linked_data => '{}',
-        }], source_name => 'master', duplicate => 'replace');
+        return $app->db->transaction->then (sub {
+          my $tr = $_[0];
+          return Promise->resolve->then (sub {
+            return $tr->delete ('account_link', {
+              account_id => Dongry::Type->serialize ('text', $account_id),
+              service_name => Dongry::Type->serialize ('text', $server->{name}),
+            }) if $replace;
+          })->then (sub {
+            return $tr->insert ('account_link', [{
+              account_link_id => $link_id,
+              account_id => Dongry::Type->serialize ('text', $account_id),
+              service_name => Dongry::Type->serialize ('text', $server->{name}),
+              created => $time,
+              updated => $time,
+              linked_id => $linked_id,
+              linked_key => Dongry::Type->serialize ('text', $linked_key),
+              linked_name => '',
+              linked_email => '',
+              linked_token1 => '',
+              linked_token2 => '',
+              linked_data => '{}',
+            }], source_name => 'master', duplicate => 'replace');
+          })->then (sub {
+            return $tr->commit;
+          });
+        });
       });
     })->then (sub {
       return $app->send_json ({});
@@ -944,6 +959,9 @@ sub main ($$) {
     ##                         required.
     ##   |server|            - The server name.  Required although redundant.
     ##   |account_link_id|   - The account link's ID.
+    ##   |all|               - If true, all account links with same account
+    ##                         ID and server name are removed.  Either
+    ##                         |account_link_id| or |all| is required.
     ##
     ## Returns nothing.
     ##
@@ -965,13 +983,23 @@ sub main ($$) {
       my $id = $_[0];
       return $app->send_error (400, reason_phrase => 'Bad |account_id|')
           unless defined $id;
-      my $link_id = $app->bare_param ('account_link_id')
-          // return $app->send_error (400, reason_phrase => 'Bad |account_link_id|');
-      return $app->db->delete ('account_link', {
-        account_id => Dongry::Type->serialize ('text', $id),
-        account_link_id => Dongry::Type->serialize ('text', $link_id),
-        service_name => Dongry::Type->serialize ('text', $server->{name}),
-      }, source_name => 'master');
+      my $link_id = $app->bare_param ('account_link_id');
+      my $all = $app->bare_param ('all');
+      return $app->send_error (400, reason_phrase => 'Bad |account_link_id|')
+          if not defined $link_id and not $all or
+             $all and defined $link_id;
+      if ($all) {
+        return $app->db->delete ('account_link', {
+          account_id => Dongry::Type->serialize ('text', $id),
+          service_name => Dongry::Type->serialize ('text', $server->{name}),
+        }, source_name => 'master');
+      } else {
+        return $app->db->delete ('account_link', {
+          account_id => Dongry::Type->serialize ('text', $id),
+          account_link_id => Dongry::Type->serialize ('text', $link_id),
+          service_name => Dongry::Type->serialize ('text', $server->{name}),
+        }, source_name => 'master');
+      }
     })->then (sub {
       return $app->send_json ({});
     }));
