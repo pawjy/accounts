@@ -83,8 +83,8 @@ sub psgi_app ($$) {
         my $error = $_[0];
         return $app->shutdown->then (sub { die $error });
       })->catch (sub {
-        $app->error_log ($_[0])
-            unless UNIVERSAL::isa ($_[0], 'Warabe::App::Done');
+        return if UNIVERSAL::isa ($_[0], 'Warabe::App::Done');
+        $app->error_log ($_[0]);
         die $_[0];
       })->finally (sub {
         return unless $DEBUG;
@@ -94,6 +94,89 @@ sub psgi_app ($$) {
     });
   };
 } # psgi_app
+
+## If an end point supports paging, following parameters are
+## available:
+##   ref       A short string identifying the page
+##   limit     The maximum number of the returned items (i.e. page size)
+##
+## If the processing of the end point has succeeded, the result JSON
+## has following fields:
+##   has_next  Whether there is next page or not (at the time of the operation)
+##   next_ref  The |ref| parameter value for the next page
+
+sub this_page ($%) {
+  my ($app, %args) = @_;
+  my $page = {
+    order_direction => 'DESC',
+    limit => 0+($app->bare_param ('limit') // $args{limit} // 30),
+    offset => 0,
+    value => undef,
+  };
+  my $max_limit = $args{max_limit} // 100;
+  return $app->throw_error_json ({reason => "Bad |limit|"})
+      if $page->{limit} < 1 or $page->{limit} > $max_limit;
+  my $ref = $app->bare_param ('ref');
+  if (defined $ref) {
+    if ($ref =~ /\A([+-])([0-9.]+),([0-9]+)\z/) {
+      $page->{order_direction} = $1 eq '+' ? 'ASC' : 'DESC';
+      $page->{exact_value} = 0+$2;
+      $page->{value} = {($page->{order_direction} eq 'ASC' ? '>=' : '<='), $page->{exact_value}};
+      $page->{offset} = 0+$3;
+      return $app->throw_error_json ({reason => "Bad |ref| offset"})
+          if $page->{offset} > 100;
+      $page->{ref} = $ref;
+    } else {
+      return $app->throw_error_json ({reason => "Bad |ref|"});
+    }
+  }
+  return $page;
+} # this_page
+
+sub next_page ($$$) {
+  my ($this_page, $items, $value_key) = @_;
+  my $next_page = {};
+  my $sign = $this_page->{order_direction} eq 'ASC' ? '+' : '-';
+  my $values = {};
+  $values->{$this_page->{exact_value}} = $this_page->{offset}
+      if defined $this_page->{exact_value};
+  if (ref $items eq 'ARRAY') {
+    if (@$items) {
+      my $last_value = $items->[0]->{$value_key};
+      for (@$items) {
+        $values->{$_->{$value_key}}++;
+        if ($sign eq '+') {
+          $last_value = $_->{$value_key} if $last_value < $_->{$value_key};
+        } else {
+          $last_value = $_->{$value_key} if $last_value > $_->{$value_key};
+        }
+      }
+      $next_page->{next_ref} = $sign . $last_value . ',' . $values->{$last_value};
+      $next_page->{has_next} = @$items == $this_page->{limit};
+    } else {
+      $next_page->{next_ref} = $this_page->{ref};
+      $next_page->{has_next} = 0;
+    }
+  } else { # HASH
+    if (keys %$items) {
+      my $last_value = $items->{each %$items}->{$value_key};
+      for (values %$items) {
+        $values->{$_->{$value_key}}++;
+        if ($sign eq '+') {
+          $last_value = $_->{$value_key} if $last_value < $_->{$value_key};
+        } else {
+          $last_value = $_->{$value_key} if $last_value > $_->{$value_key};
+        }
+      }
+      $next_page->{next_ref} = $sign . $last_value . ',' . $values->{$last_value};
+      $next_page->{has_next} = (keys %$items) == $this_page->{limit};
+    } else {
+      $next_page->{next_ref} = $this_page->{ref};
+      $next_page->{has_next} = 0;
+    }
+  }
+  return $next_page;
+} # next_page
 
 {
   my @alphabet = ('A'..'Z', 'a'..'z', 0..9);
@@ -892,7 +975,61 @@ sub main ($$) {
     })->then (sub {
       return $app->send_json ({});
     }));
-  } # /link/delete
+  } elsif (@$path == 2 and $path->[0] eq 'link' and $path->[1] eq 'search') {
+    ## /link/search - Search account links
+    ##
+    ## Parameters
+    ##
+    ##   |server|            - The server name.  Required.
+    ##   |linked_id|         - The account link's linked ID.
+    ##   |linked_key|        - The account link's linked key.  Either or
+    ##                         both of |linked_id| and |linked_key| is
+    ##                         required.
+    ##
+    ## Returns
+    ##   |items|             - An array of account links (fields are
+    ##                         restricted to |account_link_id| and
+    ##                         |account_id| for now).
+    ##
+    ## Supports paging.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $page = this_page ($app, limit => 50, max_limit => 100);
+
+    my $server_name = $app->bare_param ('server') // '';
+    my $server = $app->config->get_oauth_server ($server_name)
+        or return $app->throw_error (400, reason_phrase => 'Bad |server|');
+
+    my $linked_id = $app->bare_param ('linked_id'); # or undef
+    my $linked_key = $app->text_param ('linked_key'); # or undef
+    return $app->throw_error (400, reason_phrase => 'Bad |linked_key|')
+        unless (defined $linked_id or defined $linked_key);
+    my $where = {
+      service_name => $server_name,
+      (defined $page->{value} ? (created => $page->{value}) : ()),
+    };
+    $where->{linked_id} = $linked_id if defined $linked_id;
+    $where->{linked_key} = Dongry::Type->serialize ('text', $linked_key)
+        if defined $linked_key;
+    return $app->db->select ('account_link', $where,
+      fields => ['account_id', 'account_link_id', 'created'],
+      source_name => 'master',
+      offset => $page->{offset}, limit => $page->{limit},
+      order => ['created', $page->{order_direction}],
+    )->then (sub {
+      my $v = $_[0];
+      my $items = [map {
+        $_->{account_id} .= '';
+        $_->{account_link_id} .= '';
+        $_;
+      } $v->all->to_list];
+      my $next_page = next_page $page, $items, 'created';
+      return $app->send_json ({
+        items => $items,
+        %$next_page,
+      });
+    });
+  } # /link/...
 
   if (@$path == 1 and $path->[0] eq 'info') {
     ## /info - Get the current account of the session
@@ -1560,89 +1697,6 @@ sub load_icons ($$$$$) {
     return $items;
   });
 } # load_icons
-
-## If an end point supports paging, following parameters are
-## available:
-##   ref       A short string identifying the page
-##   limit     The maximum number of the returned items (i.e. page size)
-##
-## If the processing of the end point has succeeded, the result JSON
-## has following fields:
-##   has_next  Whether there is next page or not (at the time of the operation)
-##   next_ref  The |ref| parameter value for the next page
-
-sub this_page ($%) {
-  my ($app, %args) = @_;
-  my $page = {
-    order_direction => 'DESC',
-    limit => 0+($app->bare_param ('limit') // $args{limit} // 30),
-    offset => 0,
-    value => undef,
-  };
-  my $max_limit = $args{max_limit} // 100;
-  return $app->throw_error_json ({reason => "Bad |limit|"})
-      if $page->{limit} < 1 or $page->{limit} > $max_limit;
-  my $ref = $app->bare_param ('ref');
-  if (defined $ref) {
-    if ($ref =~ /\A([+-])([0-9.]+),([0-9]+)\z/) {
-      $page->{order_direction} = $1 eq '+' ? 'ASC' : 'DESC';
-      $page->{exact_value} = 0+$2;
-      $page->{value} = {($page->{order_direction} eq 'ASC' ? '>=' : '<='), $page->{exact_value}};
-      $page->{offset} = 0+$3;
-      return $app->throw_error_json ({reason => "Bad |ref| offset"})
-          if $page->{offset} > 100;
-      $page->{ref} = $ref;
-    } else {
-      return $app->throw_error_json ({reason => "Bad |ref|"});
-    }
-  }
-  return $page;
-} # this_page
-
-sub next_page ($$$) {
-  my ($this_page, $items, $value_key) = @_;
-  my $next_page = {};
-  my $sign = $this_page->{order_direction} eq 'ASC' ? '+' : '-';
-  my $values = {};
-  $values->{$this_page->{exact_value}} = $this_page->{offset}
-      if defined $this_page->{exact_value};
-  if (ref $items eq 'ARRAY') {
-    if (@$items) {
-      my $last_value = $items->[0]->{$value_key};
-      for (@$items) {
-        $values->{$_->{$value_key}}++;
-        if ($sign eq '+') {
-          $last_value = $_->{$value_key} if $last_value < $_->{$value_key};
-        } else {
-          $last_value = $_->{$value_key} if $last_value > $_->{$value_key};
-        }
-      }
-      $next_page->{next_ref} = $sign . $last_value . ',' . $values->{$last_value};
-      $next_page->{has_next} = @$items == $this_page->{limit};
-    } else {
-      $next_page->{next_ref} = $this_page->{ref};
-      $next_page->{has_next} = 0;
-    }
-  } else { # HASH
-    if (keys %$items) {
-      my $last_value = $items->{each %$items}->{$value_key};
-      for (values %$items) {
-        $values->{$_->{$value_key}}++;
-        if ($sign eq '+') {
-          $last_value = $_->{$value_key} if $last_value < $_->{$value_key};
-        } else {
-          $last_value = $_->{$value_key} if $last_value > $_->{$value_key};
-        }
-      }
-      $next_page->{next_ref} = $sign . $last_value . ',' . $values->{$last_value};
-      $next_page->{has_next} = (keys %$items) == $this_page->{limit};
-    } else {
-      $next_page->{next_ref} = $this_page->{ref};
-      $next_page->{has_next} = 0;
-    }
-  }
-  return $next_page;
-} # next_page
 
 sub group ($$$) {
   my ($class, $app, $path) = @_;

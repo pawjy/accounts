@@ -170,6 +170,90 @@ sub are_errors ($$$) {
   });
 } # are_errors
 
+sub pages_ok ($$$$;$) {
+  my $self = $_[0];
+  my ($path, $params, %args) = @{$_[1]};
+  my $items = [@{$_[2]}];
+  my $field = $_[3];
+  my $name = $_[4];
+  my $count = int (@$items / 2) + 3;
+  my $page = 1;
+  my $ref;
+  my $has_error = 0;
+  return promised_cleanup {
+    return if $has_error;
+    note "no error (@{[$page-1]} pages)";
+    return $self->are_errors (
+      [$path, $params, %args],
+      [
+        {params => {%$params, ref => rand}, name => 'Bad |ref|', status => 400},
+        {params => {%$params, ref => '+5353,350000'}, name => 'Bad |ref| offset', status => 400},
+        {params => {%$params, limit => 40000}, name => 'Bad |limit|', status => 400},
+      ],
+      $name,
+    );
+  } promised_wait_until {
+    return $self->post ($path, {%$params, limit => 2, ref => $ref}, %args)->then (sub {
+      my $result = $_[0];
+      my $expected_length = (@$items > 2 ? 2 : 0+@$items);
+      my $actual_length = 0+@{$result->{json}->{items}};
+      if ($expected_length == $actual_length) {
+        if ($expected_length >= 1) {
+          unless ($result->{json}->{items}->[0]->{$field} eq $self->o ($items->[-1])->{$field}) {
+            test {
+              is $result->{json}->{items}->[0]->{$field},
+                 $self->o ($items->[-1])->{$field}, "page $page, first item";
+            } $self->c, name => $name;
+            $count = 0;
+            $has_error = 1;
+          }
+        }
+        if ($expected_length >= 2) {
+          unless ($result->{json}->{items}->[1]->{$field} eq $self->o ($items->[-2])->{$field}) {
+            test {
+              is $result->{json}->{items}->[1]->{$field},
+                 $self->o ($items->[-2])->{$field}, "page $page, second item";
+            } $self->c, name => $name;
+            $count = 0;
+            $has_error = 1;
+          }
+        }
+        pop @$items;
+        pop @$items;
+      } else {
+        test {
+          is $actual_length, $expected_length, "page $page length";
+        } $self->c, name => $name;
+        $count = 0;
+        $has_error = 1;
+      }
+      if (@$items) {
+        unless ($result->{json}->{has_next} and
+                defined $result->{json}->{next_ref}) {
+          test {
+            ok $result->{json}->{has_next}, 'has_next';
+            ok $result->{json}->{next_ref}, 'next_ref';
+          } $self->c, name => $name;
+          $count = 0;
+          $has_error = 1;
+        }
+      } else {
+        if ($result->{json}->{has_next}) {
+          test {
+            ok ! $result->{json}->{has_next}, 'no has_next';
+          } $self->c, name => $name;
+          $count = 0;
+          $has_error = 1;
+        }
+      }
+      $ref = $result->{json}->{next_ref};
+    })->then (sub {
+      $page++;
+      return not $count >= $page;
+    });
+  };
+} # pages_ok
+
 sub create ($;@) {
   my $self = shift;
   return promised_for {
@@ -365,7 +449,7 @@ sub done ($) {
 
 =head1 LICENSE
 
-Copyright 2015-2019 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2021 Wakaba <wakaba@suikawiki.org>.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -378,6 +462,6 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 Affero General Public License for more details.
 
 You does not have received a copy of the GNU Affero General Public
-License along with this program, see <http://www.gnu.org/licenses/>.
+License along with this program, see <https://www.gnu.org/licenses/>.
 
 =cut
