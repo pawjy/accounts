@@ -207,8 +207,45 @@ Test {
       is $link3->{email}, undef;
       is $link3->{foo}, undef;
     } $current->c;
+    return $current->post (['link', 'add'], {
+      server => 'linktest1',
+      account_id => $current->o ('a1')->{account_id},
+      linked_id => $current->generate_id (i5 => {}),
+      replace => 1,
+    });
+  })->then (sub {
+    return $current->post (['info'], {
+      with_linked => ['id', 'key', 'name', 'email', 'foo'],
+    }, account => 'a1');
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      my $acc = $result->{json};
+      is 0+keys %{$acc->{links}}, 2;
+      my $links = [sort { $a->{created} <=> $b->{created} } values %{$acc->{links}}];
+      my $link = $links->[1];
+      ok $link->{account_link_id};
+      is $link->{service_name}, 'linktest1';
+      ok $link->{created};
+      ok $link->{updated};
+      is $link->{id}, $current->o ('i5');
+      is $link->{key}, undef;
+      is $link->{name}, undef;
+      is $link->{email}, undef;
+      is $link->{foo}, undef;
+      my $link3 = $links->[0];
+      ok $link3->{account_link_id};
+      is $link3->{service_name}, 'linktest2';
+      ok $link3->{created};
+      ok $link3->{updated};
+      is $link3->{id}, $current->o ('i3');
+      is $link3->{key}, undef;
+      is $link3->{name}, undef;
+      is $link3->{email}, undef;
+      is $link3->{foo}, undef;
+    } $current->c;
   });
-} n => 87, name => '/link/add';
+} n => 106, name => '/link/add';
 
 RUN;
 
