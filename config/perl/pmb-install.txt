@@ -2,7 +2,6 @@ AnyEvent~7.17
 AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.31
 AnyEvent::HTTP~2.25
-AnyEvent::Handle
 Canary::Stability~2013
 Carp~1.50
 Class::Accessor~0.51
@@ -24,7 +23,7 @@ ExtUtils::InstallPaths~0.012
 File::Listing~6.14
 File::Path~2.18
 File::Temp~0.2311
-HTML::HeadParser~3.75
+HTML::Entities~3.75
 HTML::Tagset~3.20
 HTTP::Cookies~6.10
 HTTP::Daemon~6.12
@@ -45,7 +44,7 @@ Method::WeakCallback~0.04
 Module::Build::Tiny~0.039
 Net::HTTP~6.20
 Net::SSLeay~1.90
-OAuth::Lite::Consumer
+OAuth::Lite::Token
 Path::Class~0.37
 Path::Tiny~0.118
 Pod::Usage~2.01
