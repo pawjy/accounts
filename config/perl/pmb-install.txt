@@ -39,7 +39,7 @@ Math::BigInt~1.999818
 Method::WeakCallback~0.04
 Net::HTTP~6.20
 Net::SSLeay~1.90
-OAuth::Lite::AuthMethod
+OAuth::Lite::Consumer
 Path::Class~0.37
 Path::Tiny~0.118
 Pod::Usage~2.01
@@ -48,7 +48,7 @@ Proc::Wait3~0.05
 Scalar::Util~1.55
 Socket~2.031
 Term::ANSIColor~5.01
-Test::More~1.302183
+Test::Builder~1.302183
 Time::HiRes~1.9764
 Time::Local~1.30
 Time::Zone~2.24
