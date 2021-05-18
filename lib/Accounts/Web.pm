@@ -261,7 +261,8 @@ sub main ($$) {
     $app->requires_api_key;
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0]
-          // return $app->send_error_json ({reason => 'Bad session'});
+          // return $app->send_error_json ({reason => 'Bad session',
+                                            error_for_dev => "/create bad session"});
       my $session_data = $session_row->get ('data');
       if (defined $session_data->{account_id}) {
         return $app->send_error_json ({reason => 'Account-associated session'});
@@ -329,7 +330,8 @@ sub main ($$) {
     $app->requires_api_key;
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0]
-          // return $app->send_error_json ({reason => 'Bad session'});
+          // return $app->send_error_json ({reason => 'Bad session',
+                                            error_for_dev => "/l* bad session"});
       my $session_data = $session_row->get ('data');
       if ($path->[0] eq 'link') {
         if (not defined $session_data->{account_id}) {
@@ -428,7 +430,8 @@ sub main ($$) {
 
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0]
-          // return $app->send_error_json ({reason => 'Bad session'});
+          // return $app->send_error_json ({reason => 'Bad session',
+                                            error_for_dev => "/cb bad session"});
 
       my $session_data = $session_row->get ('data');
       return $app->send_error_json ({reason => 'Bad callback call'})
@@ -598,7 +601,8 @@ sub main ($$) {
       my $json = {};
       return $class->resume_session ($app)->then (sub {
         $session_row = $_[0]
-            // return $app->throw_error_json ({reason => 'Bad session'});
+            // return $app->throw_error_json ({reason => 'Bad session',
+                                            error_for_dev => "/email/input bad session"});
         $session_data = $session_row->get ('data');
         $account_id = $session_data->{account_id}; # or undef
 
@@ -640,7 +644,8 @@ sub main ($$) {
       my $key = $app->bare_param ('key') // '';
       return $class->resume_session ($app)->then (sub {
         my $session_row = $_[0]
-            // return $app->throw_error_json ({reason => 'Bad session'});
+            // return $app->throw_error_json ({reason => 'Bad session',
+                                               error_for_dev => "/email/verify bad session"});
         my $session_data = $session_row->get ('data');
         my $account_id = $session_data->{account_id}
             // return $app->throw_error_json ({reason => 'Not a login user'});
