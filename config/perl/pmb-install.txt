@@ -2,9 +2,9 @@ AnyEvent~7.17
 AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.31
 AnyEvent::HTTP~2.25
-AnyEvent::Socket
+AnyEvent::Handle
 Canary::Stability~2013
-Carp::Heavy~1.50
+Carp~1.50
 Class::Accessor~0.51
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
@@ -12,9 +12,9 @@ Crypt::OpenSSL::Guess~0.13
 Crypt::OpenSSL::RSA~0.31
 Crypt::OpenSSL::Random~0.15
 Cwd~3.75
-Data::Dumper~2.173
+Data::Dumper~2.180
 Digest::SHA~6.02
-Encode~3.09
+Encode~3.10
 Encode::Locale~1.05
 Exporter::Lite~0.08
 Exporter::Tiny~1.002002
@@ -39,7 +39,7 @@ Math::BigInt~1.999818
 Method::WeakCallback~0.04
 Net::HTTP~6.21
 Net::SSLeay~1.90
-OAuth::Lite::AuthMethod
+OAuth::Lite::Consumer
 Path::Class~0.37
 Path::Tiny~0.118
 Pod::Usage~2.01
