@@ -429,10 +429,22 @@ sub main ($$) {
     $app->requires_api_key;
 
     return $class->resume_session ($app)->then (sub {
-      my $session_row = $_[0]
-          // return $app->send_error_json ({reason => 'Bad session',
-                                            error_for_dev => "/cb bad session"});
-
+      my $session_row = $_[0];
+      if (not defined $session_row) {
+        my $reload = 0;
+        if (not defined $app->bare_param ('sk') and
+            defined $app->bare_param ('state') and
+            not $app->bare_param ('reloaded')) {
+          ## Some version of Safari does not send SameSite=Lax cookie
+          ## when the fetch is initiated as part of cross-origin
+          ## redirect navigation.
+          $reload = 1;
+        }
+        return $app->send_error_json ({reason => 'Bad session',
+                                       need_reload => $reload,
+                                       error_for_dev => "/cb bad session"});
+      }
+      
       my $session_data = $session_row->get ('data');
       return $app->send_error_json ({reason => 'Bad callback call'})
           unless 'oauth' eq ($session_data->{action}->{endpoint} // '');
