@@ -18,9 +18,10 @@ Test {
     test {
       is $result->{status}, 400;
       is $result->{json}->{reason}, 'Bad |state|';
+      ok ! $result->{json}->{need_reload};
     } $current->c;
   });
-} n => 2, name => '/login then /cb';
+} n => 3, name => '/login then /cb';
 
 Test {
   my $current = shift;
@@ -51,7 +52,8 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is $result->{app_data}, undef;
+      is $result->{json}->{app_data}, undef;
+      ok ! $result->{json}->{need_reload};
     } $current->c;
     return $current->post (['info'], {with_linked => 'id'}, session => 1);
   })->then (sub {
@@ -62,7 +64,7 @@ Test {
       ok grep { $_->{service_name} eq 'oauth1server' } values %$links;
     } $current->c;
   });
-} n => 7, name => '/login then auth then /cb - new account, oauth1';
+} n => 8, name => '/login then auth then /cb - new account, oauth1';
 
 Test {
   my $current = shift;
@@ -97,7 +99,8 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is $result->{app_data}, undef;
+      is $result->{json}->{app_data}, undef;
+      ok ! $result->{json}->{need_reload};
     } $current->c;
     return $current->post (['info'], {with_linked => 'id'}, session => 1);
   })->then (sub {
@@ -131,7 +134,8 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is $result->{app_data}, undef;
+      is $result->{json}->{app_data}, undef;
+      ok ! $result->{json}->{need_reload};
     } $current->c;
     return $current->post (['info'], {with_linked => 'id'}, session => 2);
   })->then (sub {
@@ -144,7 +148,7 @@ Test {
       is $result->{json}->{account_id}, $account_id, 'existing account';
     } $current->c;
   });
-} n => 13, name => '/login then auth then /cb - oauth2';
+} n => 15, name => '/login then auth then /cb - oauth2';
 
 Test {
   my $current = shift;
@@ -174,7 +178,7 @@ RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2019 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2021 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
