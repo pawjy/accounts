@@ -2,6 +2,7 @@ AnyEvent~7.17
 AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.31
 AnyEvent::HTTP~2.25
+AnyEvent::Util
 Canary::Stability~2013
 Carp~1.50
 Class::Accessor~0.51
@@ -20,7 +21,7 @@ Exporter::Tiny~1.002002
 File::Listing~6.14
 File::Path~2.18
 File::Temp~0.2311
-HTML::HeadParser~3.76
+HTML::Entities~3.76
 HTML::Tagset~3.20
 HTTP::Cookies~6.10
 HTTP::Date~6.05
@@ -47,13 +48,13 @@ Proc::Wait3~0.05
 Scalar::Util~1.56
 Socket~2.031
 Term::ANSIColor~5.01
-Test::More~1.302185
+Test::Builder~1.302185
 Time::HiRes~1.9764
 Time::Local~1.30
 Time::Zone~2.24
 Try::Tiny~0.30
 UNIVERSAL::require~0.19
-URI~5.09
+URI::Escape~5.09
 WWW::RobotRules~6.02
 common::sense~3.75
 parent~0.238
