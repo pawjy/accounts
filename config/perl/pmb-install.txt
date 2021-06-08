@@ -2,7 +2,6 @@ AnyEvent~7.17
 AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.31
 AnyEvent::HTTP~2.25
-AnyEvent::IO
 Canary::Stability~2013
 Carp::Heavy~1.50
 Class::Accessor~0.51
@@ -21,12 +20,12 @@ Exporter::Tiny~1.002002
 File::Listing~6.14
 File::Path~2.18
 File::Temp~0.2311
-HTML::HeadParser~3.76
+HTML::Entities~3.76
 HTML::Tagset~3.20
 HTTP::Cookies~6.10
 HTTP::Date~6.05
+HTTP::Headers~6.32
 HTTP::Negotiate~6.01
-HTTP::Request~6.32
 IO::FDPass~1.3
 IO::HTML~1.004
 IO::Handle~1.45
@@ -39,7 +38,7 @@ Math::BigInt~1.999818
 Method::WeakCallback~0.04
 Net::HTTP~6.21
 Net::SSLeay~1.90
-OAuth::Lite::Token
+OAuth::Lite::Consumer
 Path::Class~0.37
 Path::Tiny~0.118
 Pod::Usage~2.01
