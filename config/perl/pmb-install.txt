@@ -20,12 +20,12 @@ Exporter::Tiny~1.002002
 File::Listing~6.14
 File::Path~2.18
 File::Temp~0.2311
-HTML::Entities~3.76
+HTML::HeadParser~3.76
 HTML::Tagset~3.20
 HTTP::Cookies~6.10
 HTTP::Date~6.05
 HTTP::Negotiate~6.01
-HTTP::Status~6.33
+HTTP::Response~6.33
 IO::FDPass~1.3
 IO::HTML~1.004
 IO::Handle~1.48
@@ -38,7 +38,7 @@ Math::BigInt~1.999827
 Method::WeakCallback~0.04
 Net::HTTP~6.21
 Net::SSLeay~1.90
-OAuth::Lite::Token
+OAuth::Lite::AuthMethod
 Path::Class~0.37
 Path::Tiny~0.120
 Pod::Usage~2.01
