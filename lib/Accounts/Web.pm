@@ -187,7 +187,7 @@ sub next_page ($$$) {
   } # id
 }
 
-my $SessionTimeout = 60*60*24*10;
+my $MaxSessionTimeout = 60*60*24*10;
 
 sub main ($$) {
   my ($class, $app) = @_;
@@ -227,11 +227,15 @@ sub main ($$) {
         return [$session_row, 0];
       } else {
         $sk = id 100;
+        my $time = time;
+        my $age = $MaxSessionTimeout;
+        my $ma = $app->config->{session_max_age} || 'Infinity';
+        $age = $ma if $ma < $age;
         return $app->db->insert ('session', [{
           sk => $sk,
           sk_context => $sk_context,
-          created => time,
-          expires => time + $SessionTimeout,
+          created => $time,
+          expires => $time + $age,
           data => '{}',
         }], source_name => 'master')->then (sub {
           $session_row = $_[0]->first_as_row;
@@ -1357,7 +1361,7 @@ sub resume_session ($$) {
   return (length $sk ? $app->db->select ('session', {
     sk => $sk,
     sk_context => $app->bare_param ('sk_context') // '',
-    created => {'>', time - $SessionTimeout},
+    created => {'>', time - $MaxSessionTimeout},
   }, source_name => 'master')->then (sub {
     return $_[0]->first_as_row; # or undef
   }) : Promise->resolve (undef));
@@ -1365,7 +1369,7 @@ sub resume_session ($$) {
 
 sub delete_old_sessions ($$) {
   return $_[1]->db->execute ('DELETE FROM `session` WHERE created < ?', {
-    created => time - $SessionTimeout,
+    created => time - $MaxSessionTimeout,
   });
 } # delete_old_sessions
 
