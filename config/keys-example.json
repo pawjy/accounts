@@ -3,6 +3,8 @@
 
   "auth.bearer": ["Base64", "..."],
 
+  "session_max_age": null,
+
   "twitter.client_id": "...",
   "twitter.client_secret": ["Base64", "..."],
   "hatena.client_id": "...",
