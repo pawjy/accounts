@@ -328,7 +328,10 @@
    "workflows" : {
       "build" : {
          "jobs" : [
-            "build",
+            {
+               "build" : {
+               }
+            },
             {
                "test" : {
                   "requires" : [
