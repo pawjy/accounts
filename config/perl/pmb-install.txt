@@ -2,8 +2,9 @@ AnyEvent~7.17
 AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.32
 AnyEvent::HTTP~2.25
+AnyEvent::Socket
 Canary::Stability~2013
-Carp::Heavy~1.50
+Carp~1.50
 Class::Accessor~0.51
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
@@ -15,7 +16,7 @@ Data::Dumper~2.183
 Digest::SHA~6.02
 Encode~3.16
 Encode::Locale~1.05
-Exporter::Lite~0.08
+Exporter::Lite~0.09
 Exporter::Tiny~1.002002
 File::Listing~6.14
 File::Path~2.18
