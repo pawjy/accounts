@@ -138,32 +138,9 @@ sub _docker ($%) {
       die $_[0];
     });
   })->then (sub {
-    my $config1_path = $self->_path ('minio_config')->child ('config.json');
-    my $config2_path = $self->_path ('minio_data')->child ('.minio.sys/config/config.json');
-    my $f1 = Promised::File->new_from_path ($config1_path);
-    my $f2 = Promised::File->new_from_path ($config2_path);
-    return promised_wait_until {
-      return Promise->all ([$f1->is_file, $f2->is_file])->then (sub {
-        return (($_[0]->[1] ? $f2 : $f1)->read_byte_string);
-      })->then (sub {
-        my $config = json_bytes2perl $_[0];
-        if (defined $config->{region} and
-            ref $config->{region} eq 'HASH' and
-            defined $config->{region}->{_}) {
-          $storage_data->{aws4}->[0] = [grep { $_->{key} eq 'access_key' } @{$config->{credentials}->{_}}]->[0]->{value};
-          $storage_data->{aws4}->[1] = [grep { $_->{key} eq 'secret_key' } @{$config->{credentials}->{_}}]->[0]->{value};
-          $storage_data->{aws4}->[2] = [grep { $_->{key} eq 'name' } @{$config->{region}->{_}}]->[0]->{value};
-        } else { # old
-          $storage_data->{aws4}->[0] = $config->{credential}->{accessKey};
-          $storage_data->{aws4}->[1] = $config->{credential}->{secretKey};
-          $storage_data->{aws4}->[2] = $config->{region};
-        }
-        return defined $storage_data->{aws4}->[0] &&
-               defined $storage_data->{aws4}->[1] &&
-               defined $storage_data->{aws4}->[2];
-      })->catch (sub { return 0 });
-    } timeout => 60*3, name => 'minio config';
-  })->then (sub {
+    $storage_data->{aws4}->[0] = 'minioadmin';
+    $storage_data->{aws4}->[1] = 'minioadmin';
+    $storage_data->{aws4}->[2] = '';
     my $client = Web::Transport::ConnectionClient->new_from_url
         ($storage_data->{url_for_test});
     $client->last_resort_timeout (1);
