@@ -17,6 +17,7 @@ AccSS->run (
   no_set_uid => 1,
   need_browser => $NeedBrowser,
   browser_type => $ENV{TEST_WD_BROWSER}, # or undef
+  docker_net_host => $ENV{CIRCLECI},
   write_ss_env => 1,
   signal => $ac->signal,
 )->then (sub {
