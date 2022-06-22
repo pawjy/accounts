@@ -61,8 +61,30 @@ Test {
       is $inv->{used_data}, undef;
       ok ! $inv->{used};
     } $current->c;
+    return $current->post (['invite', 'open'], {
+      context_key => $current->o ('i1')->{context_key},
+      invitation_context_key => $current->o ('i1')->{invitation_context_key},
+      invitation_key => $current->o ('i1')->{invitation_key},
+      account_id => 2235353333344444,
+      with_used_data => 1,
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      my $inv = $result->{json};
+      is $inv->{invitation_key}, $current->o ('i1')->{invitation_key};
+      ok $inv->{author_account_id};
+      is $inv->{invitation_data}, undef;
+      is $inv->{target_account_id}, 0;
+      ok $inv->{created};
+      ok $inv->{expires} > $inv->{created};
+      is $inv->{user_account_id}, undef;
+      is $inv->{used_data}, undef;
+      ok ! $inv->{used};
+    } $current->c;
   });
-} n => 11, name => '/invite/open';
+} n => 21, name => '/invite/open';
 
 Test {
   my $current = shift;
@@ -142,11 +164,44 @@ Test {
   });
 } n => 10, name => '/invite/open targetted';
 
+Test {
+  my $current = shift;
+  return $current->create_invitation (i1 => {data => ["ab", "\x{6101}"]})->then (sub {
+    return $current->post (['invite', 'use'], {
+      context_key => $current->o ('i1')->{context_key},
+      invitation_context_key => $current->o ('i1')->{invitation_context_key},
+      invitation_key => $current->o ('i1')->{invitation_key},
+      account_id => 2235353333344444,
+      data => (perl2json_chars {abc => "\x{5000}"}),
+    });
+  })->then (sub {
+    return $current->post (['invite', 'open'], {
+      context_key => $current->o ('i1')->{context_key},
+      invitation_context_key => $current->o ('i1')->{invitation_context_key},
+      invitation_key => $current->o ('i1')->{invitation_key},
+      with_used_data => 1,
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      my $inv = $result->{json};
+      is $inv->{invitation_key}, $current->o ('i1')->{invitation_key};
+      ok $inv->{author_account_id};
+      is $inv->{invitation_data}->[0], "ab";
+      is $inv->{target_account_id}, 0;
+      ok $inv->{created};
+      ok $inv->{expires} > $inv->{created};
+      is $inv->{used_data}->{abc}, "\x{5000}";
+      ok $inv->{used};
+    } $current->c;
+  });
+} n => 8, name => 'with_used_data';
+
 RUN;
 
 =head1 LICENSE
 
-Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2022 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
