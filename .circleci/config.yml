@@ -402,7 +402,7 @@
          "triggers" : [
             {
                "schedule" : {
-                  "cron" : "13 17 * * *",
+                  "cron" : "20 1 * * *",
                   "filters" : {
                      "branches" : {
                         "only" : [

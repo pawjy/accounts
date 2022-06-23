@@ -1,10 +1,8 @@
 {
    "jobs" : {
       "test" : {
-         "continue-on-error" : "${{ matrix.experimental }}",
          "env" : {
-            "CIRCLE_ARTIFACTS" : "/tmp/circle-artifacts/test",
-            "PMBP_PERL_VERSION" : "${{ matrix.perl_version }}"
+            "CIRCLE_ARTIFACTS" : "/tmp/circle-artifacts/test"
          },
          "runs-on" : "ubuntu-latest",
          "steps" : [
@@ -15,10 +13,25 @@
                "run" : "mkdir -p $CIRCLE_ARTIFACTS"
             },
             {
-               "run" : "make test-deps"
+               "run" : "make deps-circleci"
             },
             {
-               "run" : "make test"
+               "run" : "docker build -t quay.io/wakaba/accounts ."
+            },
+            {
+               "run" : "SS_DEBUG_SERVERS=app_docker TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl &"
+            },
+            {
+               "run" : "while [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; do sleep 1; done"
+            },
+            {
+               "run" : "if [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; then cat $CIRCLE_ARTIFACTS/ss.env; fi; cat $CIRCLE_ARTIFACTS/ss.pid"
+            },
+            {
+               "run" : "SS_ENV_FILE=$CIRCLE_ARTIFACTS/ss.env make test-circle"
+            },
+            {
+               "run" : "true"
             },
             {
                "uses" : "actions/upload-artifact@v3",
@@ -26,26 +39,7 @@
                   "path" : "/tmp/circle-artifacts/test"
                }
             }
-         ],
-         "strategy" : {
-            "fail-fast" : false,
-            "matrix" : {
-               "include" : [
-                  {
-                     "experimental" : false,
-                     "perl_version" : "latest"
-                  },
-                  {
-                     "experimental" : false,
-                     "perl_version" : "5.14.2"
-                  },
-                  {
-                     "experimental" : false,
-                     "perl_version" : "5.8.9"
-                  }
-               ]
-            }
-         }
+         ]
       }
    },
    "name" : "test",
