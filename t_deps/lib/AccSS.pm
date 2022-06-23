@@ -255,9 +255,9 @@ sub run ($%) {
         $data->{xs_account_email} = $self->key ('xs_account_email');
 
         $data->{cs_client_url} = $self->client_url ('cs');
-
-        $data->{wd_local_url} = $self->local_url ('wd');
-
+        $data->{wd_actual_url} = $self->actual_url ('wd')
+            if $args{need_browser};
+        
         $self->set_local_envs ('proxy', $data->{local_envs} = {});
         $self->set_docker_envs ('proxy', $data->{docker_envs} = {});
 
@@ -313,7 +313,9 @@ sub run ($%) {
         disabled => ! $args->{need_browser},
         browser_type => $args->{browser_type},
       },
-      _ => {},
+      _ => {
+        need_browser => $args->{need_browser},
+      },
     }; # $result->{server_params}
 
     return $result;
