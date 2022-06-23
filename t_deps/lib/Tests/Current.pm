@@ -400,12 +400,12 @@ sub create_invitation ($$$) {
 sub create_browser ($$$) {
   my ($self, $name, $opts) = @_;
   die "No |browser| option for |Test|"
-      if not defined $self->{servers_data}->{wd_local_url};
+      if not defined $self->{servers_data}->{wd_actual_url};
   die "Duplicate browser |$name|" if defined $self->{browsers}->{$name};
   $self->{browsers}->{$name} = '';
   require Web::Driver::Client::Connection;
   my $wd = Web::Driver::Client::Connection->new_from_url
-      ($self->{servers_data}->{wd_local_url});
+      ($self->{servers_data}->{wd_actual_url});
   push @{$self->{wds} ||= []}, $wd;
   return $wd->new_session (
     desired => {},

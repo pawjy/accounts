@@ -1,0 +1,50 @@
+{
+   "jobs" : {
+      "test" : {
+         "env" : {
+            "CIRCLE_ARTIFACTS" : "/tmp/circle-artifacts/test"
+         },
+         "runs-on" : "ubuntu-latest",
+         "steps" : [
+            {
+               "uses" : "actions/checkout@v2"
+            },
+            {
+               "run" : "mkdir -p $CIRCLE_ARTIFACTS"
+            },
+            {
+               "run" : "make deps-circleci"
+            },
+            {
+               "run" : "docker build -t quay.io/wakaba/accounts ."
+            },
+            {
+               "run" : "IS_BROWSER_TEST=1 SS_DEBUG_SERVERS=app_docker TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl &"
+            },
+            {
+               "run" : "while [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; do sleep 1; done"
+            },
+            {
+               "run" : "if [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; then cat $CIRCLE_ARTIFACTS/ss.env; fi; cat $CIRCLE_ARTIFACTS/ss.pid"
+            },
+            {
+               "run" : "SS_ENV_FILE=$CIRCLE_ARTIFACTS/ss.env make test-circle"
+            },
+            {
+               "run" : "true"
+            },
+            {
+               "uses" : "actions/upload-artifact@v3",
+               "with" : {
+                  "path" : "/tmp/circle-artifacts/test"
+               }
+            }
+         ]
+      }
+   },
+   "name" : "test",
+   "on" : {
+      "push" : {
+      }
+   }
+}

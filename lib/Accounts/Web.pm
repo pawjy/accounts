@@ -2356,6 +2356,7 @@ sub invite ($$$) {
     ##   account_id    The ID of the account who reads the invitation.
     ##                 Can be |0| for "anyone".  Required.  This must be
     ##                 a valid account ID (not verified by the end point).
+    ##   with_used_data : Boolean If true, |used_data| is returned, if any.
     ##
     ## Returns
     ##   author_account_id
@@ -2364,24 +2365,30 @@ sub invite ($$$) {
     ##   created
     ##   expires
     ##   used
+    ##   used_data : Object?
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
     my $context_key = $app->bare_param ('context_key');
     my $inv_context_key = $app->bare_param ('invitation_context_key');
     my $invitation_key = $app->bare_param ('invitation_key');
     my $user_account_id = $app->bare_param ('account_id') || 0;
+    my $wud = $app->bare_param ('with_used_data');
     return $app->db->select ('invitation', {
       context_key => $context_key,
       invitation_context_key => $inv_context_key,
       invitation_key => $invitation_key,
       target_account_id => {-in => [0, $user_account_id]},
-    }, fields => ['author_account_id', 'invitation_data',
-                   'target_account_id', 'created', 'expires',
-                   'used'], source_name => 'master')->then (sub {
+    }, fields => [
+      'author_account_id', 'invitation_data',
+      'target_account_id', 'created', 'expires',
+      'used', ($wud ? 'used_data' : ()),
+    ], source_name => 'master')->then (sub {
       my $d = $_[0]->first
           // return $app->throw_error_json ({reason => 'Bad invitation'});
       $d->{invitation_key} = $invitation_key;
       $d->{invitation_data} = Dongry::Type->parse ('json', $d->{invitation_data});
+      $d->{used_data} = Dongry::Type->parse ('json', $d->{used_data})
+          if defined $d->{used_data};
       return $app->send_json ($d);
     });
   } # /invite/open

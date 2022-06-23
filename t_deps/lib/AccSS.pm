@@ -235,7 +235,7 @@ sub run ($%) {
       handler => 'ServerSet::WebDriverServerHandler',
     },
     _ => {
-      requires => ['app_config'],
+      requires => ['app_config', 'wd'],
       start => sub {
         my ($handler, $self, %args) = @_;
         my $data = {};
@@ -243,25 +243,30 @@ sub run ($%) {
         ## app_client_url Web::URL of the main application server for clients.
         ## app_local_url Web::URL the main application server is listening.
         ## local_envs   Environment variables setting proxy for /this/ host.
-        
-        $data->{app_local_url} = $self->local_url ('app');
-        $data->{app_client_url} = $self->client_url ('app');
-        $data->{app_bearer} = $self->key ('app_bearer');
 
-        $data->{oauth1_auth_url} = sprintf q<http://%s/oauth1/authorize>, $self->client_url ('xs')->hostport;
-        $data->{oauth2_auth_url} = sprintf q<http://%s/oauth2/authorize>, $self->client_url ('xs')->hostport;
+        return Promise->all ([
+          $args{receive_wd_data},
+        ])->then (sub {
+          
+          $data->{app_local_url} = $self->local_url ('app');
+          $data->{app_client_url} = $self->client_url ('app');
+          $data->{app_bearer} = $self->key ('app_bearer');
 
-        $data->{xs_account_name} = $self->key ('xs_account_name');
-        $data->{xs_account_email} = $self->key ('xs_account_email');
+          $data->{oauth1_auth_url} = sprintf q<http://%s/oauth1/authorize>, $self->client_url ('xs')->hostport;
+          $data->{oauth2_auth_url} = sprintf q<http://%s/oauth2/authorize>, $self->client_url ('xs')->hostport;
 
-        $data->{cs_client_url} = $self->client_url ('cs');
+          $data->{xs_account_name} = $self->key ('xs_account_name');
+          $data->{xs_account_email} = $self->key ('xs_account_email');
 
-        $data->{wd_local_url} = $self->local_url ('wd');
+          $data->{cs_client_url} = $self->client_url ('cs');
+          $data->{wd_actual_url} = $self->actual_url ('wd')
+              if $args{need_browser};
+          
+          $self->set_local_envs ('proxy', $data->{local_envs} = {});
+          $self->set_docker_envs ('proxy', $data->{docker_envs} = {});
 
-        $self->set_local_envs ('proxy', $data->{local_envs} = {});
-        $self->set_docker_envs ('proxy', $data->{docker_envs} = {});
-
-        return [$data, undef];
+          return [$data, undef];
+        });
       },
     }, # _
   }, sub {
@@ -313,7 +318,9 @@ sub run ($%) {
         disabled => ! $args->{need_browser},
         browser_type => $args->{browser_type},
       },
-      _ => {},
+      _ => {
+        need_browser => $args->{need_browser},
+      },
     }; # $result->{server_params}
 
     return $result;
