@@ -55,12 +55,7 @@ pmbp-install: pmbp-upgrade
 pmbp-install-local: pmbp-install-local-main pmbp-install
 pmbp-install-local-main:
 	./perl local/bin/pmbp.pl $(PMBP_OPTIONS) \
-	    --install-commands "make git mysqld wget curl"
-ifdef CIRCLECI
-else
-	./perl local/bin/pmbp.pl $(PMBP_OPTIONS) \
-	    --install-commands docker
-endif
+	    --install-commands "make git mysqld wget curl docker"
 
 deps-circleci: deps-before-docker rev test-deps
 
