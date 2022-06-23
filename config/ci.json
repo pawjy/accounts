@@ -51,7 +51,7 @@
       "curl http://localhost:6533/robots.txt --dump-header - --fail",
 
       "rm -fr $CIRCLE_ARTIFACTS/ss.pid",
-      {"IS_BROWSER_TEST=1 SS_DEBUG_SERVERS=app_docker TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl > $CIRCLE_ARTIFACTS/servers-http-$CIRCLE_NODE_INDEX.txt.dat 2>&1": {
+      {"IS_BROWSER_TEST=1 SS_DEBUG_SERVERS=app_docker TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl": {
         "background": true}},
       "while [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; do sleep 1; done",
       "if [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; then cat $CIRCLE_ARTIFACTS/ss.env; fi; cat $CIRCLE_ARTIFACTS/ss.pid",

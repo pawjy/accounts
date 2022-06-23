@@ -19,7 +19,7 @@
                "run" : "docker build -t quay.io/wakaba/accounts ."
             },
             {
-               "run" : "SS_DEBUG_SERVERS=app_docker TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl &"
+               "run" : "IS_BROWSER_TEST=1 SS_DEBUG_SERVERS=app_docker TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl &"
             },
             {
                "run" : "while [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; do sleep 1; done"
