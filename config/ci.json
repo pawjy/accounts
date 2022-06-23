@@ -1,4 +1,7 @@
 {
+  "github": {
+    "pmbp": true
+  },
   "circleci": {
     "merger": 1,
     "gaa": 1,
