@@ -15,7 +15,6 @@ use Dongry::Type;
 use Dongry::Type::JSONPS;
 use Dongry::SQL;
 use Accounts::AppServer;
-use Web::UserAgent::Functions qw(http_post http_get);
 use Web::UserAgent::Functions::OAuth;
 use Web::URL;
 use Web::DateTime::Clock;
@@ -23,6 +22,7 @@ use Web::DOM::Document;
 use Web::XML::Parser;
 use Web::Transport::AWS;
 use Web::Transport::ConnectionClient;
+use Web::Transport::BasicClient;
 
 sub format_id ($) {
   return sprintf '%llu', $_[0];
@@ -1380,39 +1380,36 @@ sub get_resource_owner_profile ($$%) {
   my $session_data = $args{session_data} or die;
   return unless defined $server->{profile_endpoint};
 
-  return Promise->new (sub {
-    my ($ok, $ng) = @_;
-    my %param;
-    if ($server->{auth_scheme} eq 'header') {
-      $param{header_fields}->{Authorization} = 'Bearer ' . $session_data->{$service}->{access_token};
-    } elsif ($server->{auth_scheme} eq 'query') {
-      $param{params}->{access_token} = $session_data->{$service}->{access_token};
-    } elsif ($server->{auth_scheme} eq 'token') {
-      $param{header_fields}->{Authorization} = 'token ' . $session_data->{$service}->{access_token};
-    } elsif ($server->{auth_scheme} eq 'oauth1') {
-      my $client_id = $app->config->get ($server->{name} . '.client_id.' . $args{sk_context}) //
-                      $app->config->get ($server->{name} . '.client_id');
-      my $client_secret = $app->config->get ($server->{name} . '.client_secret.' . $args{sk_context}) //
-                          $app->config->get ($server->{name} . '.client_secret');
-
-      $param{oauth} = [$client_id, $client_secret,
-                       @{$session_data->{$service}->{access_token}}];
-      $param{params}->{user_id} = $session_data->{$service}->{user_id}
-          if $server->{name} eq 'twitter';
-    }
-    http_get
-        url => (($server->{url_scheme} // 'https') . '://' . ($server->{profile_host} // $server->{host}) . $server->{profile_endpoint}),
-        %param,
-        timeout => $server->{timeout} || 30,
-        anyevent => 1,
-        cb => sub {
-          my (undef, $res) = @_;
-          if ($res->code == 200) {
-            $ok->(json_bytes2perl $res->content);
-          } else {
-            $ng->($res->code);
-          }
-        };
+  my %param;
+  if ($server->{auth_scheme} eq 'header') {
+    $param{headers}->{Authorization} = 'Bearer ' . $session_data->{$service}->{access_token};
+  } elsif ($server->{auth_scheme} eq 'query') {
+    $param{params}->{access_token} = $session_data->{$service}->{access_token};
+  } elsif ($server->{auth_scheme} eq 'token') {
+    $param{headers}->{Authorization} = 'token ' . $session_data->{$service}->{access_token};
+  } elsif ($server->{auth_scheme} eq 'oauth1') {
+    my $client_id = $app->config->get ($server->{name} . '.client_id.' . $args{sk_context}) //
+        $app->config->get ($server->{name} . '.client_id');
+    my $client_secret = $app->config->get ($server->{name} . '.client_secret.' . $args{sk_context}) //
+        $app->config->get ($server->{name} . '.client_secret');
+    
+    $param{oauth1} = [$client_id, $client_secret,
+                      @{$session_data->{$service}->{access_token}}];
+    $param{params}->{user_id} = $session_data->{$service}->{user_id}
+        if $server->{name} eq 'twitter';
+  }
+  
+  my $url = Web::URL->parse_string
+      ((($server->{url_scheme} // 'https') . '://' . ($server->{profile_host} // $server->{host}) . $server->{profile_endpoint}));
+  my $client = Web::Transport::BasicClient->new_from_url ($url);
+  return $client->request (
+    url => $url,
+    %param,
+    last_resort_timeout => $server->{timeout} || 30,
+  )->then (sub {
+    my $res = $_[0];
+    die $res unless $res->status == 200;
+    return json_bytes2perl $res->body_bytes;
   })->then (sub {
     my $json = $_[0];
     $session_data->{$service}->{profile_id} = $json->{$server->{profile_id_field}}
