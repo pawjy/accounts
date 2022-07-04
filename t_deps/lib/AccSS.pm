@@ -15,6 +15,8 @@ sub run ($%) {
   ##   mysqld_database_name_suffix Name's suffix used in mysql database.
   ##                  Optional.
   ##   signal         AbortSignal canceling the server set.  Optional.
+  ##   additional_app_config
+  ##   additional_app_servers
   my $class = shift;
   return ServerSet->run ({
     proxy => {
@@ -47,6 +49,10 @@ sub run ($%) {
           $args{receive_mysqld_data},
         ])->then (sub {
           my ($config, $servers, $storage_data, $mysqld_data) = @{$_[0]};
+
+          $config = {%$config, %{$args{additional_app_config} or {}}};
+          $servers = {%$servers, %{$args{additional_app_servers} or {}}};
+
           $data->{config} = $config;
 
           if ($args{use_xs_servers}) {
@@ -63,7 +69,7 @@ sub run ($%) {
             $config->{"oauth2server.client_id.sk2"} = $cid.".oauth2.SK2";
             $config->{"oauth2server.client_secret.sk2"} = $csc.".oauth2.SK2";
           }
-
+          
           $data->{app_docker_image} = $args{app_docker_image}; # or undef
           my $use_docker = defined $data->{app_docker_image};
 
@@ -298,6 +304,8 @@ sub run ($%) {
       app_config => {
         app_config_path => $args->{dont_run_xs} ? undef : $RootPath->child ('t_deps/app-config.json'),
         app_servers_path => $args->{dont_run_xs} ? undef : $RootPath->child ('t_deps/app-servers.json'),
+        additional_app_config => $args->{additional_app_config},
+        additional_app_servers => $args->{additional_app_servers},
         app_docker_image => $app_docker_image || undef,
         use_xs_servers => ! $args->{dont_run_xs},
       },
