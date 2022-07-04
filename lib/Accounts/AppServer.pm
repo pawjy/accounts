@@ -5,7 +5,8 @@ use Warabe::App;
 push our @ISA, qw(Warabe::App);
 use JSON::PS;
 use Promise;
-use Web::UserAgent::Functions qw(http_post);
+use Web::URL;
+use Web::Transport::BasicClient;
 use Dongry::Database;
 
 sub new_from_http_and_config ($$$) {
@@ -40,13 +41,18 @@ sub ikachan ($$$) {
   my $config = $self->config;
   my $prefix = $config->get ('ikachan.url_prefix');
   return unless defined $prefix;
-  http_post
-      url => $prefix . '/' . ($is_privmsg ? 'privmsg' : 'notice'),
-      params => {
-        channel => $config->get ('ikachan.channel'),
-        message => sprintf "%s[%s] %s", $AppName, $ThisHost, $msg,
-      },
-      anyevent => 1;
+  my $url = Web::URL->parse_string ($prefix . '/' . ($is_privmsg ? 'privmsg' : 'notice'));
+  my $client = Web::Transport::BasicClient->new_from_url ($url);
+  $client->request (
+    url => $url,
+    params => {
+      channel => $config->get ('ikachan.channel'),
+      message => sprintf "%s[%s] %s", $AppName, $ThisHost, $msg,
+    },
+  )->finally (sub {
+    return $client->close;
+  });
+  return undef;
 } # ikachan
 
 sub error_log ($$) {
