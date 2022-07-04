@@ -61,7 +61,8 @@ sub Test (&;%) {
 } # Test
 
 push @EXPORT, qw(RUN);
-sub RUN () {
+sub RUN (;%) {
+  my %args = @_;
   note "Servers...";
   my $ac = AbortController->new;
   my $v = AccSS->run (
@@ -69,6 +70,8 @@ sub RUN () {
     mysqld_database_name_suffix => '_test',
     need_browser => $NeedBrowser,
     browser_type => $ENV{TEST_WD_BROWSER}, # or undef
+    additional_app_config => $args{additional_app_config},
+    additional_app_servers => $args{additional_app_servers},
   )->to_cv->recv;
 
   note "Tests...";
