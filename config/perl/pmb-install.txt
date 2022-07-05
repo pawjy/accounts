@@ -2,9 +2,8 @@ AnyEvent~7.17
 AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.32
 AnyEvent::HTTP~2.25
-AnyEvent::Handle
 Canary::Stability~2013
-Carp~1.50
+Carp::Heavy~1.50
 Class::Accessor~0.51
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
@@ -21,7 +20,7 @@ Exporter::Tiny~1.002002
 File::Listing~6.15
 File::Path~2.18
 File::Temp~0.2311
-HTML::Entities~3.78
+HTML::HeadParser~3.78
 HTML::Tagset~3.20
 HTTP::Cookies~6.10
 HTTP::Date~6.05
@@ -54,7 +53,7 @@ Time::Local~1.30
 Time::Zone~2.24
 Try::Tiny~0.31
 UNIVERSAL::require~0.19
-URI~5.10
+URI~5.11
 WWW::RobotRules~6.02
 common::sense~3.75
 parent~0.238
