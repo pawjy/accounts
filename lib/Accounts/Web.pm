@@ -15,12 +15,12 @@ use Dongry::Type;
 use Dongry::Type::JSONPS;
 use Dongry::SQL;
 use Accounts::AppServer;
-use Web::UserAgent::Functions::OAuth;
 use Web::URL;
 use Web::DateTime::Clock;
 use Web::DOM::Document;
 use Web::XML::Parser;
 use Web::Transport::AWS;
+use Web::Transport::OAuth1;
 use Web::Transport::ConnectionClient;
 use Web::Transport::BasicClient;
 
@@ -380,31 +380,29 @@ sub main ($$) {
       my $client_secret = $app->config->get ($server->{name} . '.client_secret.' . $sk_context) //
                           $app->config->get ($server->{name} . '.client_secret');
 
-      return (defined $server->{temp_endpoint} ? Promise->new (sub {
-        my ($ok, $ng) = @_;
+      return (defined $server->{temp_endpoint} ? do {
         $cb .= $cb =~ /\?/ ? '&' : '?';
         $cb .= 'state=' . $state;
 
-        http_oauth1_request_temp_credentials
-            url_scheme => $server->{url_scheme},
-            host => $server->{host},
-            pathquery => $server->{temp_endpoint},
-            oauth_callback => $cb,
-            oauth_consumer_key => $client_id,
-            client_shared_secret => $client_secret,
-            params => {scope => $scope},
-            auth => {host => $server->{auth_host}, pathquery => $server->{auth_endpoint}},
-            timeout => $server->{timeout} || 10,
-            anyevent => 1,
-            cb => sub {
-              my ($temp_token, $temp_token_secret, $auth_url) = @_;
-              return $ng->("Temporary credentials request failed")
-                  unless defined $temp_token;
-              $session_data->{action}->{temp_credentials}
-                  = [$temp_token, $temp_token_secret];
-              $ok->($auth_url);
-            };
-      }) : defined $server->{auth_endpoint} ? Promise->new (sub {
+        Web::Transport::OAuth1->request_temp_credentials (
+          url_scheme => $server->{url_scheme},
+          host => $server->{host},
+          pathquery => $server->{temp_endpoint},
+          oauth_callback => $cb,
+          oauth_consumer_key => $client_id,
+          client_shared_secret => $client_secret,
+          params => {scope => $scope},
+          auth => {host => $server->{auth_host}, pathquery => $server->{auth_endpoint}},
+          timeout => $server->{timeout} || 10,
+        )->then (sub {
+          my $temp_token = $_[0]->{temp_token};
+          my $temp_token_secret = $_[0]->{temp_token_secret};
+          my $auth_url = $_[0]->{auth_url};
+          $session_data->{action}->{temp_credentials} 
+              = [$temp_token, $temp_token_secret];
+          return $auth_url;
+        });
+      } : defined $server->{auth_endpoint} ? Promise->new (sub {
         my ($ok, $ng) = @_;
         my $auth_url = ($server->{url_scheme} || 'https') . q<://> . ($server->{auth_host} // $server->{host}) . ($server->{auth_endpoint}) . '?' . join '&', map {
           (percent_encode_c $_->[0]) . '=' . (percent_encode_c $_->[1])
@@ -474,30 +472,25 @@ sub main ($$) {
         my $verifier = $app->bare_param ('oauth_verifier') // '';
         return $app->send_error_json ({reason => 'No |oauth_verifier|'})
             unless length $verifier;
-        $p = Promise->new (sub {
-          my ($ok, $ng) = @_;
-          http_oauth1_request_token # or die
-              url_scheme => $server->{url_scheme},
-              host => $server->{host},
-              pathquery => $server->{token_endpoint},
-              oauth_consumer_key => $client_id,
-              client_shared_secret => $client_secret,
-              temp_token => $session_data->{action}->{temp_credentials}->[0],
-              temp_token_secret => $session_data->{action}->{temp_credentials}->[1],
-              oauth_token => $token,
-              oauth_verifier => $verifier,
-              timeout => $server->{timeout} || 10,
-              anyevent => 1,
-              cb => sub {
-                my ($access_token, $access_token_secret, $params) = @_;
-                return $ng->("Access token request failed")
-                    unless defined $access_token;
-                $session_data->{$server->{name}}->{access_token} = [$access_token, $access_token_secret];
-                for (@{$server->{token_res_params} or []}) {
-                  $session_data->{$server->{name}}->{$_} = $params->{$_};
-                }
-                $ok->();
-              };
+        $p = Web::Transport::OAuth1->request_token (
+          url_scheme => $server->{url_scheme},
+          host => $server->{host},
+          pathquery => $server->{token_endpoint},
+          oauth_consumer_key => $client_id,
+          client_shared_secret => $client_secret,
+          temp_token => $session_data->{action}->{temp_credentials}->[0],
+          temp_token_secret => $session_data->{action}->{temp_credentials}->[1],
+          oauth_token => $token,
+          oauth_verifier => $verifier,
+          timeout => $server->{timeout} || 10,
+        )->then (sub {
+          my $access_token = $_[0]->{token};
+          my $access_token_secret = $_[0]->{token_secret};
+          my $params = $_[0]->{params};
+          $session_data->{$server->{name}}->{access_token} = [$access_token, $access_token_secret];
+          for (@{$server->{token_res_params} or []}) {
+            $session_data->{$server->{name}}->{$_} = $params->{$_};
+          }
         });
       } else { # OAuth 2.0
         my $code = $app->bare_param ('code') // '';
