@@ -2387,9 +2387,12 @@ sub invite ($$$) {
     ## /invite/list - Get invitations for owners
     ##
     ## Parameters
-    ##   context_key   An opaque string identifying the application.  Required.
-    ##   invitation_context_key An opaque string identifying the kind
-    ##                 or target of the invitation.  Required.
+    ##   context_key             An opaque string identifying the application.
+    ##                           Required.
+    ##   invitation_context_key  An opaque string identifying the kind
+    ##                           or target of the invitation.  Required.
+    ##   unused : Boolean        If specified, only invitations whose used is
+    ##                           false is returned.
     ##
     ## Returns
     ##   invitations   Object of (invitation_key, inivitation object)
@@ -2404,6 +2407,7 @@ sub invite ($$$) {
       context_key => $context_key,
       invitation_context_key => $inv_context_key,
       (defined $page->{value} ? (created => $page->{value}) : ()),
+      ($app->bare_param ('unused') ? (used => 0) : ()),
     }, fields => ['invitation_key', 'author_account_id', 'invitation_data',
                    'target_account_id', 'created', 'expires',
                    'used', 'used_data', 'user_account_id'],

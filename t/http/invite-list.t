@@ -81,7 +81,7 @@ Test {
       is $inv2->{invitation_data}, undef;
       is $inv2->{target_account_id}, 0;
       ok $inv2->{created};
-      ok $inv2->{expires} > $inv->{created};
+      ok $inv2->{expires} > $inv2->{created};
       is $inv2->{user_account_id}, 0;
       is $inv2->{used_data}, undef;
       is $inv2->{used}, 0;
@@ -89,8 +89,35 @@ Test {
       like $result->{res}->body_bytes, qr{"target_account_id"\s*:\s*"};
       like $result->{res}->body_bytes, qr{"user_account_id"\s*:\s*"};
     } $current->c;
+    return $current->post (['invite', 'use'], {
+      context_key => $current->o ('i1')->{context_key},
+      invitation_context_key => $current->o ('i1')->{invitation_context_key},
+      invitation_key => $current->o ('i1')->{invitation_key},
+      ignore_target => 1,
+    });
+  })->then (sub {
+    return $current->post (['invite', 'list'], {
+      context_key => $current->o ('i1')->{context_key},
+      invitation_context_key => $current->o ('i1')->{invitation_context_key},
+      unused => 1,
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+keys %{$result->{json}->{invitations}}, 1;
+      my $inv2 = $result->{json}->{invitations}->{$current->o ('i2')->{invitation_key}};
+      is $inv2->{invitation_key}, $current->o ('i2')->{invitation_key};
+      is $inv2->{author_account_id}, 5325252131111;
+      is $inv2->{invitation_data}, undef;
+      is $inv2->{target_account_id}, 0;
+      ok $inv2->{created};
+      ok $inv2->{expires} > $inv2->{created};
+      is $inv2->{user_account_id}, 0;
+      is $inv2->{used_data}, undef;
+      is $inv2->{used}, 0;
+    } $current->c;
   });
-} n => 22, name => '/invite/list';
+} n => 32, name => '/invite/list';
 
 Test {
   my $current = shift;
@@ -195,7 +222,7 @@ RUN;
 
 =head1 LICENSE
 
-Copyright 2017-2019 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2022 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
