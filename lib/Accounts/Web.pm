@@ -1139,6 +1139,7 @@ sub main ($$) {
         }, fields => ['group_id', 'created', 'updated', 'owner_status', 'admin_status'], source_name => 'master')->then (sub {
           my $g = $_[0]->first // return;
           $g->{group_id} .= '';
+          $group_id = $g->{group_id};
           $json->{group} = $g;
           return $class->load_data ($app, 'group_', 'group_data', 'group_id', undef, undef, [$json->{group}], 'data');
         });
@@ -1167,7 +1168,7 @@ sub main ($$) {
                 for my $name (@$add_group_data_names) {
                   if (defined $json->{group}->{data}->{$name} and
                       $json->{group}->{data}->{$name} =~ /\A[1-9][0-9]*\z/) {
-                    push @$add_group_ids, 0+$json->{group}->{data}->{$name};
+                    push @$add_group_ids, unpack 'Q', pack 'Q', $json->{group}->{data}->{$name};
                   }
                 }
               }
@@ -1223,7 +1224,8 @@ sub main ($$) {
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
-    my $account_ids = $app->bare_param_list ('account_id');
+    my $account_ids = $app->bare_param_list ('account_id')->to_a;
+    $_ = unpack 'Q', pack 'Q', $_ for @$account_ids;
     return ((@$account_ids ? $app->db->select ('account', {
       account_id => {-in => $account_ids},
       (status_filter $app, '', 'user_status', 'admin_status', 'terms_version'),
@@ -1919,7 +1921,8 @@ sub group ($$$) {
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
-    my $group_ids = $app->bare_param_list ('group_id');
+    my $group_ids = $app->bare_param_list ('group_id')->to_a;
+    $_ = unpack 'Q', pack 'Q', $_ for @$group_ids;
     return Promise->resolve->then (sub {
       return [] unless @$group_ids;
       return $app->db->select ('group', {
@@ -2054,6 +2057,9 @@ sub group ($$$) {
     ## With
     ##   context_key   An opaque string identifying the application.  Required.
     ##   group_id      A group ID.  Required.
+    ##   account_id    An account ID.  Zero or more parameters can be
+    ##                 specified.  If specified, only the members with
+    ##                 ones of the specified account IDs are returned.
     ##   with_data
     ##
     ## Returns
@@ -2067,9 +2073,12 @@ sub group ($$$) {
     $app->requires_api_key;
     my $page = this_page ($app, limit => 100, max_limit => 100);
     my $group_id = $app->bare_param ('group_id');
+    my $aids = $app->bare_param_list ('account_id')->to_a;
+    $_ = unpack 'Q', pack 'Q', $_ for @$aids;
     return $app->db->select ('group_member', {
       context_key => $app->bare_param ('context_key'),
       group_id => $group_id,
+      (@$aids ? (account_id => {-in => $aids}) : ()),
       (defined $page->{value} ? (created => $page->{value}) : ()),
       (status_filter $app, '', 'user_status', 'owner_status'),
     }, fields => ['account_id', 'created', 'updated',
@@ -2299,6 +2308,7 @@ sub invite ($$$) {
     my $user_account_id = $app->bare_param ('account_id')
         or $ignore_target
         or return $app->throw_error (400, reason_phrase => 'No |account_id|');
+    $user_account_id = unpack 'Q', pack 'Q', $user_account_id if defined $user_account_id;
     my $data = Dongry::Type->parse ('json', $app->bare_param ('data'));
     my $time = time;
     return $app->db->update ('invitation', {
@@ -2361,7 +2371,7 @@ sub invite ($$$) {
     my $context_key = $app->bare_param ('context_key');
     my $inv_context_key = $app->bare_param ('invitation_context_key');
     my $invitation_key = $app->bare_param ('invitation_key');
-    my $user_account_id = $app->bare_param ('account_id') || 0;
+    my $user_account_id = unpack 'Q', pack 'Q', ($app->bare_param ('account_id') || 0);
     my $wud = $app->bare_param ('with_used_data');
     return $app->db->select ('invitation', {
       context_key => $context_key,
