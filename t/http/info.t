@@ -180,6 +180,9 @@ for (
   [[[1,2], [1], [1]] => 0, "bad version"],
   [[[2], [1], [0]] => 0, "bad user status"],
   [[[1], [4], [0]] => 0, "bad admin status"],
+  [[[1], [4, rand], [0]] => 0, "bad value"],
+  [[[257, rand], [1], [0]] => 0, "bad value"],
+  [[[1], [1025], [0]] => 0, "bad value"],
 ) {
   my ($input, $expected, $name) = @$_;
   Test {

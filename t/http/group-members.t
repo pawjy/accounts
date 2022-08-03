@@ -287,6 +287,18 @@ Test {
     return $current->post (['group', 'members'], {
       context_key => $current->o ('g1')->{context_key},
       group_id => $current->o ('g1')->{group_id},
+      account_id => [$current->o ('a1')->{account_id},
+                     2**64],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+keys %{$result->{json}->{memberships}}, 1;
+      ok $result->{json}->{memberships}->{$current->o ('a1')->{account_id}};
+    } $current->c;
+    return $current->post (['group', 'members'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
       account_id => [rand],
     });
   })->then (sub {
@@ -295,7 +307,7 @@ Test {
       is 0+keys %{$result->{json}->{memberships}}, 0;
     } $current->c;
   });
-} n => 5, name => 'account_id';
+} n => 7, name => 'account_id';
 
 RUN;
 

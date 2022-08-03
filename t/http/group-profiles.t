@@ -99,8 +99,18 @@ Test {
       my $g2 = $result->{json}->{groups}->{$current->o ('g2')->{group_id}};
       is $g2->{group_id}, $current->o ('g2')->{group_id};
     } $current->c;
+    return $current->post (['group', 'profiles'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => [$current->o ('g1')->{group_id},
+                   rand],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+keys %{$result->{json}->{groups}}, 1;
+    } $current->c;
   });
-} n => 4, name => '/group/profiles multiple groups';
+} n => 5, name => '/group/profiles multiple groups';
 
 Test {
   my $current = shift;

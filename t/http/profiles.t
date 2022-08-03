@@ -73,8 +73,17 @@ Test {
       ok ! $res->{json}->{accounts}->{$current->o ('id1')};
       like $res->{res}->body_bytes, qr{"account_id"\s*:\s*"};
     } $current->c;
+    return $current->post (['profiles'], {
+      account_id => [$current->o ('a1')->{account_id},
+                     rand],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+keys %{$result->{json}->{accounts}}, 1;
+    } $current->c;
   });
-} n => 6, name => '/profiles with account_id, multiple';
+} n => 7, name => '/profiles with account_id, multiple';
 
 Test {
   my $current = shift;
