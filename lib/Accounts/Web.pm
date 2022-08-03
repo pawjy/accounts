@@ -2054,6 +2054,9 @@ sub group ($$$) {
     ## With
     ##   context_key   An opaque string identifying the application.  Required.
     ##   group_id      A group ID.  Required.
+    ##   account_id    An account ID.  Zero or more parameters can be
+    ##                 specified.  If specified, only the members with
+    ##                 ones of the specified account IDs are returned.
     ##   with_data
     ##
     ## Returns
@@ -2067,9 +2070,12 @@ sub group ($$$) {
     $app->requires_api_key;
     my $page = this_page ($app, limit => 100, max_limit => 100);
     my $group_id = $app->bare_param ('group_id');
+    my $aids = $app->bare_param_list ('account_id')->to_a;
+    $_ = int $_ for @$aids;
     return $app->db->select ('group_member', {
       context_key => $app->bare_param ('context_key'),
       group_id => $group_id,
+      (@$aids ? (account_id => {-in => $aids}) : ()),
       (defined $page->{value} ? (created => $page->{value}) : ()),
       (status_filter $app, '', 'user_status', 'owner_status'),
     }, fields => ['account_id', 'created', 'updated',

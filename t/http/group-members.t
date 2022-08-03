@@ -251,11 +251,57 @@ Test {
   });
 } n => 5, name => '/group/members with data';
 
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {})->then (sub {
+    return $current->create_account (a2 => {});
+  })->then (sub {
+    return $current->create_account (a3 => {});
+  })->then (sub {
+    return $current->create_group (g1 => {members => ['a1', 'a2', 'a3']});
+  })->then (sub {
+    return $current->post (['group', 'members'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      account_id => $current->o ('a1')->{account_id},
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+keys %{$result->{json}->{memberships}}, 1;
+      ok $result->{json}->{memberships}->{$current->o ('a1')->{account_id}};
+    } $current->c;
+    return $current->post (['group', 'members'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      account_id => [0,
+                     $current->o ('a1')->{account_id},
+                     rand],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+keys %{$result->{json}->{memberships}}, 1;
+      ok $result->{json}->{memberships}->{$current->o ('a1')->{account_id}};
+    } $current->c;
+    return $current->post (['group', 'members'], {
+      context_key => $current->o ('g1')->{context_key},
+      group_id => $current->o ('g1')->{group_id},
+      account_id => [rand],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+keys %{$result->{json}->{memberships}}, 0;
+    } $current->c;
+  });
+} n => 5, name => 'account_id';
+
 RUN;
 
 =head1 LICENSE
 
-Copyright 2017-2019 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2022 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
