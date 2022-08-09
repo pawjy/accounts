@@ -3,7 +3,7 @@ AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.32
 AnyEvent::HTTP~2.25
 Canary::Stability~2013
-Carp::Heavy~1.50
+Carp~1.50
 Class::Accessor~0.51
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
@@ -12,7 +12,7 @@ Crypt::OpenSSL::RSA~0.33
 Crypt::OpenSSL::Random~0.15
 Cwd~3.75
 Data::Dumper~2.183
-Digest::SHA~6.02
+Digest::SHA~6.03
 Encode~3.19
 Encode::Locale~1.05
 Exporter::Lite~0.09
@@ -44,16 +44,16 @@ Path::Tiny~0.122
 Pod::Usage~2.03
 Proc::FastSpawn~1.2
 Proc::Wait3~0.05
-Scalar::Util~1.62
+Scalar::Util~1.63
 Socket~2.035
 Term::ANSIColor~5.01
-Test::More~1.302191
+Test::Builder~1.302191
 Time::HiRes~1.9764
 Time::Local~1.30
 Time::Zone~2.24
 Try::Tiny~0.31
 UNIVERSAL::require~0.19
-URI::URL~5.12
+URI~5.12
 WWW::RobotRules~6.02
 common::sense~3.75
 parent~0.238
