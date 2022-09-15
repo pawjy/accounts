@@ -55,6 +55,7 @@ Test {
       is $result->{status}, 200;
       is $result->{json}->{context_key}, $k1;
       is $result->{json}->{invitation_context_key}, $k2;
+      ok $result->{json}->{timestamp};
       ok $key = $result->{json}->{invitation_key};
     } $current->c;
     return $current->post (['invite', 'list'], {
@@ -79,7 +80,7 @@ Test {
       like $result->{res}->body_bytes, qr{"user_account_id"\s*:\s*"};
     } $current->c;
   });
-} n => 17, name => '/invite/create';
+} n => 18, name => '/invite/create';
 
 Test {
   my $current = shift;

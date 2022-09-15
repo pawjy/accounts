@@ -1121,7 +1121,8 @@ sub main ($$) {
     ##   terms_version The terms version of the account, if there is.
     ##   group        The group object, if available.
     ##   group_membership The group membership object, if available.
-    ##   additional_groups[group_id] Additional group's membership object.
+    ##   additional_group_memberships : Object?
+    ##     /group_id/  Additional group's membership object, if available.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
@@ -2238,8 +2239,10 @@ sub invite ($$$) {
     ##   context_key   Same as parameter, echoed just for convenience.
     ##   invitation_context_key Same as parameter, echoed just for convenience.
     ##   invitation_key An opaque string identifying the invitation.
-    ##   expires       The expiration date of the invitation, in Unix time
-    ##                 number.
+    ##
+    ##   expires : Timestamp     The invitation's expiration time.
+    ##
+    ##   timestamp : Timestamp   The invitation's created time.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
     my $context_key = $app->bare_param ('context_key')
@@ -2270,6 +2273,7 @@ sub invite ($$$) {
         context_key => $context_key,
         invitation_context_key => $inv_context_key,
         invitation_key => $invitation_key,
+        timestamp => $time,
         expires => $expires,
       });
     });
