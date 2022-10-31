@@ -2,7 +2,6 @@ AnyEvent~7.17
 AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.32
 AnyEvent::HTTP~2.25
-AnyEvent::Socket
 Canary::Stability~2013
 Carp::Heavy~1.50
 Class::Accessor~0.51
@@ -41,7 +40,7 @@ Math::BigInt~1.999837
 Method::WeakCallback~0.04
 Net::HTTP~6.22
 Net::SSLeay~1.92
-OAuth::Lite::Token
+OAuth::Lite::AuthMethod
 Path::Class~0.37
 Path::Tiny~0.130
 Pod::Usage~2.03
@@ -50,14 +49,14 @@ Proc::Wait3~0.05
 Scalar::Util~1.63
 Socket~2.036
 Term::ANSIColor~5.01
-Test::Builder~1.302191
+Test::More~1.302191
 Time::HiRes~1.9764
 Time::Local~1.30
 Time::Zone~2.24
 Try::Tiny~0.31
 UNIVERSAL::require~0.19
 URI~5.16
-URI::Escape~5.16
+URI::URL~5.16
 WWW::RobotRules~6.02
 common::sense~3.75
 parent~0.238
