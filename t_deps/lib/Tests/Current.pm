@@ -52,7 +52,14 @@ sub generate_text ($$$) {
   return $self->{objects}->{$name} = $bytes;
 } # generate_text
 
-*generate_key = \&generate_text;
+my $KeyChars = [0x20..0x7E];
+sub generate_key ($$$) {
+  my ($self, $name, $opts) = @_;
+  my $length = $opts->{length} || int rand 30 || 1;
+  my $bytes = '';
+  $bytes .= chr $KeyChars->[rand @$KeyChars] for 1..$length;
+  return $self->{objects}->{$name} = $bytes;
+} # generate_key
 
 sub generate_id ($$$) {
   my ($self, $name, $opts) = @_;

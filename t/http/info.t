@@ -512,11 +512,71 @@ Test {
   });
 } n => 7, name => 'additional_group_ids has group_id';
 
+Test {
+  my $current = shift;
+  return $current->create (
+    [a1 => account => {}],
+    [g1 => group => {members => [
+      {account => 'a1', member_type => 3, user_status => 4, owner_status => 5},
+    ], context_key => $current->generate_context_key (k1 => {})}],
+    [g2 => group => {data => {
+      $current->generate_key (x1 => {length => 10}) => $current->generate_key (v1 => {}),
+      $current->generate_key (x2 => {length => 10}) => $current->generate_key (v2 => {}),
+    }, members => [
+      {account => 'a1', member_type => 6, user_status => 7, owner_status => 8},
+    ], context_key => $current->o ('k1')}],
+    [g3 => group => {data => {
+      $current->o ('x1') => $current->generate_text (v3 => {}),
+    }, members => [
+      {account => 'a1', member_type => 9, user_status => 10, owner_status => 11},
+    ], context_key => $current->o ('k1')}],
+    [g4 => group => {}],
+    [g5 => group => {data => {
+      $current->o ('x1') => $current->generate_text (v4 => {}),
+    }, members => [
+      {account => 'a1', member_type => 9, user_status => 10, owner_status => 11},
+    ], context_key => $current->generate_context_key ('k2' => {})}],
+    [g6 => group => {members => [
+      {account => 'a1', member_type => 6, user_status => 7, owner_status => 8},
+    ], context_key => $current->o ('k1')}],
+  )->then (sub {
+    return $current->post (['info'], {
+      sk => $current->o ('a1')->{session}->{sk},
+      context_key => $current->o ('k1'),
+      group_id => $current->o ('g1')->{group_id},
+      additional_group_id => [
+        $current->o ('g2')->{group_id},
+        $current->o ('g3')->{group_id},
+        rand,
+        $current->o ('g4')->{group_id},
+        $current->o ('g5')->{group_id},
+        $current->o ('g6')->{group_id},
+      ],
+      with_agm_group_data => [$current->o ('x1'), rand, $current->o ('x2')],
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      my $m1 = $result->{json}->{group_membership};
+      is 0+keys %{$result->{json}->{additional_group_memberships}}, 3;
+      my $m2 = $result->{json}->{additional_group_memberships}->{$current->o ('g2')->{group_id}};
+      is 0+keys %{$m2->{group_data}}, 2;
+      is $m2->{group_data}->{$current->o ('x1')}, $current->o ('v1');
+      is $m2->{group_data}->{$current->o ('x2')}, $current->o ('v2');
+      my $m3 = $result->{json}->{additional_group_memberships}->{$current->o ('g3')->{group_id}};
+      is 0+keys %{$m3->{group_data}}, 1;
+      is $m3->{group_data}->{$current->o ('x1')}, $current->o ('v3');
+      my $m4 = $result->{json}->{additional_group_memberships}->{$current->o ('g6')->{group_id}};
+      is 0+keys %{$m4->{group_data}}, 0;
+    } $current->c;
+  });
+} n => 7, name => 'additional_group_group_data';
+
 RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2023 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
