@@ -1101,6 +1101,8 @@ sub main ($$) {
     ##                groups.
     ##   with_group_member_data Data of the group's membership.  Not
     ##                applicable to additional groups.
+    ##   with_agm_group_data Data of the additional group members' group's
+    ##                data.
     ##
     ## Also, status filters |user_status|, |admin_status|,
     ## |terms_version| with empty prefix are available for account
@@ -1123,6 +1125,7 @@ sub main ($$) {
     ##   group_membership The group membership object, if available.
     ##   additional_group_memberships : Object?
     ##     /group_id/  Additional group's membership object, if available.
+    ##       group_data  Group data of the membership's group, if applicable.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
@@ -1205,6 +1208,8 @@ sub main ($$) {
         delete $json->{group_membership} if not defined $json->{group};
         return unless defined $json->{group_membership};
         return $class->load_data ($app, 'group_member_', 'group_member_data', 'group_id', 'account_id', $json->{account_id}, [$json->{group_membership}], 'data');
+      })->then (sub {
+        return $class->load_data ($app, 'agm_group_', 'group_data', 'group_id', undef, undef, [values %{$json->{additional_group_memberships} or {}}], 'group_data');
       })->then (sub {
         return $app->send_json ($json);
       });
@@ -2634,7 +2639,7 @@ sub icon ($$$) {
 
 =head1 LICENSE
 
-Copyright 2007-2021 Wakaba <wakaba@suikawiki.org>.
+Copyright 2007-2023 Wakaba <wakaba@suikawiki.org>.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
