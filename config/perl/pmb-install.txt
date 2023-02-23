@@ -2,7 +2,6 @@ AnyEvent~7.17
 AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.32
 AnyEvent::HTTP~2.25
-AnyEvent::Util
 Canary::Stability~2013
 Carp::Heavy~1.50
 Class::Accessor~0.51
@@ -27,8 +26,7 @@ HTML::Tagset~3.20
 HTTP::Cookies~6.10
 HTTP::Date~6.05
 HTTP::Negotiate~6.01
-HTTP::Request~6.44
-HTTP::Status~6.44
+HTTP::Request::Common~6.44
 IO::FDPass~1.3
 IO::HTML~1.004
 IO::Handle~1.51
@@ -41,7 +39,7 @@ Math::BigInt~1.999837
 Method::WeakCallback~0.04
 Net::HTTP~6.22
 Net::SSLeay~1.92
-OAuth::Lite::Consumer
+OAuth::Lite::Token
 Path::Class~0.37
 Path::Tiny~0.144
 Pod::Usage~2.03
@@ -50,7 +48,7 @@ Proc::Wait3~0.05
 Scalar::Util~1.63
 Socket~2.036
 Term::ANSIColor~5.01
-Test::More~1.302192
+Test::Builder~1.302192
 Time::HiRes~1.9764
 Time::Local~1.30
 Time::Zone~2.24
