@@ -21,7 +21,7 @@ Exporter::Tiny~1.006000
 File::Listing~6.15
 File::Path~2.18
 File::Temp~0.2311
-HTML::HeadParser~3.81
+HTML::Entities~3.81
 HTML::Tagset~3.20
 HTTP::Cookies~6.10
 HTTP::Date~6.05
