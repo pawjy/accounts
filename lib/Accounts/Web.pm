@@ -193,6 +193,7 @@ sub main ($$) {
   my ($class, $app) = @_;
   my $path = $app->path_segments;
 
+  $app->http->response_timing_enabled (1);
   $app->db->connect ('master'); # preconnect
 
   if ($path->[0] eq 'group') {
@@ -1152,11 +1153,14 @@ sub main ($$) {
         $account_id = $session_row->get ('data')->{account_id}
             if defined $session_row;
         if (defined $account_id) {
+          my $st = $app->http->response_timing ("acc");
           return $app->db->select ('account', {
             account_id => Dongry::Type->serialize ('text', $account_id),
             (status_filter $app, '', 'user_status', 'admin_status', 'terms_version'),
           }, source_name => 'master', fields => ['name', 'user_status', 'admin_status', 'terms_version'])->then (sub {
-            my $r = $_[0]->first_as_row // return;
+            my $r = $_[0]->first_as_row;
+            $st->add;
+            return unless defined $r;
             $json->{account_id} = format_id $account_id;
             $json->{name} = $r->get ('name');
             $json->{user_status} = $r->get ('user_status');
@@ -1176,6 +1180,7 @@ sub main ($$) {
                   }
                 }
               }
+              my $st = $app->http->response_timing ("gr");
               return $app->db->select ('group_member', {
                 context_key => $context_key,
                 group_id => {-in => [$group_id, @$add_group_ids]},
@@ -1189,6 +1194,7 @@ sub main ($$) {
                   $group_id_to_data->{$_->{group_id}} = $_;
                   $_->{group_id} .= '';
                 }
+                $st->add;
                 if (defined $group_id_to_data->{$group_id}) {
                   $json->{group_membership} = $group_id_to_data->{$group_id};
                 }
@@ -1203,13 +1209,22 @@ sub main ($$) {
       })->then (sub {
         return $class->load_linked ($app => [$json]);
       })->then (sub {
-        return $class->load_data ($app, '', 'account_data', 'account_id', undef, undef, [$json], 'data');
+        my $st = $app->http->response_timing ("accd");
+        return $class->load_data ($app, '', 'account_data', 'account_id', undef, undef, [$json], 'data')->then (sub {
+          $st->add;
+        });
       })->then (sub {
         delete $json->{group_membership} if not defined $json->{group};
         return unless defined $json->{group_membership};
-        return $class->load_data ($app, 'group_member_', 'group_member_data', 'group_id', 'account_id', $json->{account_id}, [$json->{group_membership}], 'data');
+        my $st = $app->http->response_timing ("grmd");
+        return $class->load_data ($app, 'group_member_', 'group_member_data', 'group_id', 'account_id', $json->{account_id}, [$json->{group_membership}], 'data')->then (sub {
+          $st->add;
+        });
       })->then (sub {
-        return $class->load_data ($app, 'agm_group_', 'group_data', 'group_id', undef, undef, [values %{$json->{additional_group_memberships} or {}}], 'group_data');
+        my $st = $app->http->response_timing ("grd");
+        return $class->load_data ($app, 'agm_group_', 'group_data', 'group_id', undef, undef, [values %{$json->{additional_group_memberships} or {}}], 'group_data')->then (sub {
+          $st->add;
+        });
       })->then (sub {
         return $app->send_json ($json);
       });
@@ -1691,10 +1706,10 @@ sub load_data ($$$$$$$$$) {
     $id_to_json->{$_->{$id_key}} = $_;
     Dongry::Type->serialize ('text', $_->{$id_key});
   } grep { defined $_->{$id_key} } @$items;
-  return $items unless @id;
+  return Promise->resolve ($items) unless @id;
 
   my @field = map { Dongry::Type->serialize ('text', $_) } $app->text_param_list ('with_'.$prefix.'data')->to_list;
-  return $items unless @field;
+  return Promise->resolve ($items) unless @field;
 
   return $app->db->select ($table_name, {
     $id_key => {-in => \@id},
