@@ -193,7 +193,8 @@ sub main ($$) {
   my ($class, $app) = @_;
   my $path = $app->path_segments;
 
-  $app->http->response_timing_enabled (1);
+  $app->http->response_timing_enabled
+      ($app->http->get_request_header ('x-timing'));
   $app->db->connect ('master'); # preconnect
 
   if ($path->[0] eq 'group') {

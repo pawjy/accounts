@@ -29,9 +29,10 @@ Test {
       is $result->{json}->{account_id}, $current->o ('a1')->{account_id};
       like $result->{res}->body_bytes, qr{"account_id"\s*:\s*"};
       is $result->{json}->{name}, $name;
+      is $result->{res}->header ('server-timing'), undef;
     } $current->c;
   });
-} n => 5, name => '/info with accounted session';
+} n => 6, name => '/info with accounted session';
 
 Test {
   my $current = shift;
@@ -571,6 +572,27 @@ Test {
     } $current->c;
   });
 } n => 7, name => 'additional_group_group_data';
+
+Test {
+  my $current = shift;
+  my $name = "\x{53533}" . rand;
+  return $current->create_account (a1 => {name => $name})->then (sub {
+    return $current->post (['info'], {
+      sk => $current->o ('a1')->{session}->{sk},
+    }, headers => {
+      'x-timing' => 1,
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is $result->{json}->{account_id}, $current->o ('a1')->{account_id};
+      like $result->{res}->body_bytes, qr{"account_id"\s*:\s*"};
+      is $result->{json}->{name}, $name;
+      ok $result->{res}->header ('server-timing');
+    } $current->c;
+  });
+} n => 5, name => 'with server-timing';
 
 RUN;
 
