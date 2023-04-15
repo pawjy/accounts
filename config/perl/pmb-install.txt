@@ -2,6 +2,7 @@ AnyEvent~7.17
 AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.32
 AnyEvent::HTTP~2.25
+AnyEvent::Socket
 Canary::Stability~2013
 Carp::Heavy~1.50
 Class::Accessor~0.51
@@ -54,7 +55,7 @@ Time::Local~1.30
 Time::Zone~2.24
 Try::Tiny~0.31
 UNIVERSAL::require~0.19
-URI~5.17
+URI::Escape~5.17
 WWW::RobotRules~6.02
 common::sense~3.75
 parent~0.241
