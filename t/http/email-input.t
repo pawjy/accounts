@@ -88,11 +88,45 @@ Test {
   });
 } n => 3, name => '/email/input already associated';
 
+Test {
+  my $current = shift;
+  return $current->create (
+    [s1 => session => {}],
+    [u2 => account => {login_time => time - 10000}],
+  )->then (sub {
+    return $current->are_errors (
+      [['email', 'input'], {
+        addr => q<foo@hoge.test>,
+        sk_max_age => 30000000,
+      }, session => 's1'],
+      [{status => 400}],
+    );
+  })->then (sub {
+    return $current->are_errors (
+      [['email', 'input'], {
+        addr => q<foo@hoge.test>,
+        sk_max_age => 3000,
+      }, account => 'u2'],
+      [{status => 400}],
+    );
+  })->then (sub {
+    return $current->post (['email', 'input'], {
+      addr => q<foo2@hoge.test>,
+      sk_max_age => 20000,
+    }, account => 'u2');
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      ok $result->{json}->{key};
+    } $current->c;
+  });
+} n => 3, name => 'input and sk_max_age';
+
 RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2019 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2023 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

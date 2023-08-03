@@ -1394,7 +1394,17 @@ sub resume_session ($$) {
     sk_context => $app->bare_param ('sk_context') // '',
     created => {'>', time - $MaxSessionTimeout},
   }, source_name => 'master')->then (sub {
-    return $_[0]->first_as_row; # or undef
+    my $acc = $_[0]->first_as_row; # or undef
+
+    my $ma = $app->bare_param ('sk_max_age');
+    if ($ma) {
+      my $data = $acc->get ('data');
+      unless (($data->{login_time} || 0) + $ma > time) {
+        return undef;
+      }
+    }
+    
+    return $acc;
   }) : Promise->resolve (undef));
 } # resume_session
 
