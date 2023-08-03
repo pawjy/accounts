@@ -30,9 +30,10 @@ Test {
       like $result->{res}->body_bytes, qr{"account_id"\s*:\s*"};
       is $result->{json}->{name}, $name;
       is $result->{res}->header ('server-timing'), undef;
+      ok $result->{json}->{login_time};
     } $current->c;
   });
-} n => 6, name => '/info with accounted session';
+} n => 7, name => '/info with accounted session';
 
 Test {
   my $current = shift;
@@ -44,9 +45,10 @@ Test {
       is $result->{status}, 200;
       is $result->{json}->{account_id}, undef;
       is $result->{json}->{name}, undef;
+      is $result->{json}->{login_time}, undef;
     } $current->c;
   });
-} n => 3, name => '/info no session';
+} n => 4, name => '/info no session';
 
 Test {
   my $current = shift;

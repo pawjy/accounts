@@ -29,8 +29,10 @@ Test {
   my $cb_url = 'http://haoa/' . rand;
   my $account_id;
   return $current->create_session (1)->then (sub {
+    $current->set_o (time1 => time);
     return $current->post (['create'], {}, session => 1);
   })->then (sub {
+    $current->set_o (time2 => time);
     return $current->post (['info'], {}, session => 1);
   })->then (sub {
     my $result = $_[0];
@@ -73,9 +75,11 @@ Test {
       ok $l->{created};
       ok $l->{updated};
       ok $l->{account_link_id};
-    } $current->c;
+      ok $current->o ('time1') < $result->{json}->{login_time}, $current->o ('time1');
+      ok $result->{json}->{login_time} < $current->o ('time2'), $current->o ('time2');
+    } $current->c, name => $result->{json}->{login_time};
   });
-} n => 10, name => '/link then auth then /cb - oauth1';
+} n => 12, name => '/link then auth then /cb - oauth1';
 
 Test {
   my $current = shift;

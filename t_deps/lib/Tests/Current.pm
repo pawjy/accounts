@@ -106,6 +106,7 @@ sub post ($$$;%) {
     ),
     bearer => $self->{servers_data}->{app_bearer},
     params => {%$p, %$params},
+    headers => $args{headers},
   )->then (sub {
     my $res = $_[0];
     if ($res->status == 200 or $res->status == 400) {

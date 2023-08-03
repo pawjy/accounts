@@ -67,9 +67,10 @@ Test {
       is $result->{json}->{user_status}, 1;
       is $result->{json}->{admin_status}, 1;
       is $result->{json}->{terms_version}, 0;
+      ok $result->{json}->{login_time};
     } $current->c;
   });
-} n => 8, name => '/create has anon session';
+} n => 9, name => '/create has anon session';
 
 Test {
   my $current = shift;
@@ -154,7 +155,7 @@ RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2019 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2023 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

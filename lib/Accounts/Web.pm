@@ -288,6 +288,7 @@ sub main ($$) {
           terms_version => $ver,
         }], source_name => 'master')->then (sub {
           $session_data->{account_id} = $account_id;
+          $session_data->{login_time} = time;
           return $session_row->update ({data => $session_data}, source_name => 'master');
         })->then (sub {
           return $app->send_json ({account_id => $account_id});
@@ -579,6 +580,9 @@ sub main ($$) {
           }
         })->then (sub {
           my $app_data = $session_data->{action}->{app_data}; # or undef
+          if ($session_data->{action}->{operation} eq 'login') {
+            $session_data->{login_time} = time;
+          }
           delete $session_data->{action};
           return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
             return $app->send_json ({app_data => $app_data});
@@ -1125,6 +1129,8 @@ sub main ($$) {
     ##   terms_version The terms version of the account, if there is.
     ##   group        The group object, if available.
     ##   group_membership The group membership object, if available.
+    ##   login_time : Timestamp? : The last login time of the session,
+    ##                             if applicable.
     ##   additional_group_memberships : Object?
     ##     /group_id/  Additional group's membership object, if available.
     ##       group_data  Group data of the membership's group, if applicable.
@@ -1151,24 +1157,29 @@ sub main ($$) {
         });
       })->then (sub {
         my $account_id;
-        $account_id = $session_row->get ('data')->{account_id}
-            if defined $session_row;
-        if (defined $account_id) {
-          my $st = $app->http->response_timing ("acc");
-          return $app->db->select ('account', {
-            account_id => Dongry::Type->serialize ('text', $account_id),
-            (status_filter $app, '', 'user_status', 'admin_status', 'terms_version'),
-          }, source_name => 'master', fields => ['name', 'user_status', 'admin_status', 'terms_version'])->then (sub {
-            my $r = $_[0]->first_as_row;
-            $st->add;
-            return unless defined $r;
-            $json->{account_id} = format_id $account_id;
-            $json->{name} = $r->get ('name');
-            $json->{user_status} = $r->get ('user_status');
-            $json->{admin_status} = $r->get ('admin_status');
-            $json->{terms_version} = $r->get ('terms_version');
-            
-            if (defined $context_key and defined $group_id) {
+        my $session_data;
+        if (defined $session_row) {
+          $session_data = $session_row->get ('data');
+          $account_id = $session_data->{account_id};
+        }
+        return unless defined $account_id;
+        
+        my $st = $app->http->response_timing ("acc");
+        return $app->db->select ('account', {
+          account_id => Dongry::Type->serialize ('text', $account_id),
+          (status_filter $app, '', 'user_status', 'admin_status', 'terms_version'),
+        }, source_name => 'master', fields => ['name', 'user_status', 'admin_status', 'terms_version'])->then (sub {
+          my $r = $_[0]->first_as_row;
+          $st->add;
+          return unless defined $r;
+          $json->{account_id} = format_id $account_id;
+          $json->{name} = $r->get ('name');
+          $json->{user_status} = $r->get ('user_status');
+          $json->{admin_status} = $r->get ('admin_status');
+          $json->{terms_version} = $r->get ('terms_version');
+          $json->{login_time} = $session_data->{login_time};
+          
+          if (defined $context_key and defined $group_id) {
               my $add_group_ids = $app->bare_param_list
                   ('additional_group_id');
               if (defined $json->{group}) {
@@ -1206,7 +1217,6 @@ sub main ($$) {
               });
             }
           });
-        } # $account_id
       })->then (sub {
         return $class->load_linked ($app => [$json]);
       })->then (sub {
