@@ -298,6 +298,7 @@ sub create_account ($$$) {
     return $self->post (['create'], {
       sk => $session->{sk},
       name => $opts->{name},
+      login_time => $opts->{login_time},
     });
   })->then (sub {
     my $result = $_[0];
