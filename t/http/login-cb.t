@@ -129,6 +129,7 @@ Test {
     my $result = $_[0];
     my $location = $result->header ('Location');
     my ($base, $query) = split /\?/, $location, 2;
+    $current->set_o (time1 => time);
     return $current->post ("/cb?$query", {}, session => 2);
   })->then (sub {
     my $result = $_[0];
@@ -146,9 +147,10 @@ Test {
       my $ls = [grep { $_->{service_name} eq 'oauth2server' } values %$links];
       is $ls->[0]->{id}, $x_account_id;
       is $result->{json}->{account_id}, $account_id, 'existing account';
+      ok $current->o ('time1') < $result->{json}->{login_time}, $result->{json}->{login_time};
     } $current->c;
   });
-} n => 15, name => '/login then auth then /cb - oauth2';
+} n => 16, name => '/login then auth then /cb - oauth2';
 
 Test {
   my $current = shift;
@@ -178,7 +180,7 @@ RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2021 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2023 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

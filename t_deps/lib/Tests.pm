@@ -11,6 +11,7 @@ use Web::URL;
 use Web::URL::Encoding;
 use Test::X1;
 use Test::More;
+use Time::HiRes qw(time);
 
 use AccSS;
 use Tests::Current;
@@ -20,6 +21,7 @@ our @EXPORT = (@JSON::PS::EXPORT,
                @Web::URL::Encoding::EXPORT,
                @Promised::Flow::EXPORT,
                @Test::X1::EXPORT,
+               'time',
                grep { not /^\$/ } @Test::More::EXPORT);
 
 sub import ($;@) {
