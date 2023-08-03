@@ -257,7 +257,11 @@ sub main ($$) {
 
   if (@$path == 1 and $path->[0] eq 'create') {
     ## /create - Create an account (without link)
+    ##
     ##   |sk_context|, |sk|
+    ##   login_time : Timestamp? :  The value of the account's session's
+    ##                              login time.  If missing, defaulted to
+    ##                              the current time.
     ##
     ##   Create an account and associate the session with it.
     ##
@@ -288,7 +292,7 @@ sub main ($$) {
           terms_version => $ver,
         }], source_name => 'master')->then (sub {
           $session_data->{account_id} = $account_id;
-          $session_data->{login_time} = time;
+          $session_data->{login_time} = 0+($app->bare_param ('login_time') || time);
           return $session_row->update ({data => $session_data}, source_name => 'master');
         })->then (sub {
           return $app->send_json ({account_id => $account_id});

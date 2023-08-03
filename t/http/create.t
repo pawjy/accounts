@@ -151,6 +151,24 @@ Test {
   });
 } n => 6, name => '/create with associated session';
 
+Test {
+  my $current = shift;
+  my $account_id;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['create'], {
+      name => "hoge",
+      login_time => 12456,
+    }, session => 1);
+  })->then (sub {
+    return $current->post (['info'], {}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{json}->{login_time}, 12456;
+    } $current->c;
+  });
+} n => 1, name => '/create with login_time';
+
 RUN;
 
 =head1 LICENSE
