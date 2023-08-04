@@ -78,6 +78,9 @@
   "ssh": {
     "name": "ssh"
   },
+  "email": {
+    "name": "email"
+  },
   "linktest1":{
     "name": "linktest1"
   },

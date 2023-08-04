@@ -66,6 +66,17 @@ sub generate_id ($$$) {
   return $self->{objects}->{$name} = int rand 100000000;
 } # generate_id
 
+sub generate_domain ($$$) {
+  my ($self, $name, $opts) = @_;
+  my $v = rand . '.test';
+  return $self->{objects}->{$name // ''} = $v;
+} # generate_domain
+
+sub generate_email_addr ($$$) {
+  my ($self, $name, $opts) = @_;
+  return $self->{objects}->{$name // ''} = ($opts->{prefix} // '') . rand . '@' . $self->generate_domain (rand, {});
+} # generate_email_addr
+
 sub generate_bytes ($$$) {
   my ($self, $name, $opts) = @_;
   my $length = $opts->{length} || int rand 10000 || 1;
