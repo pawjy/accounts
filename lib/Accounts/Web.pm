@@ -986,6 +986,9 @@ sub main ($$) {
     ##   |all|               - If true, all account links with same account
     ##                         ID and server name are removed.  Either
     ##                         |account_link_id| or |all| is required.
+    ##   |nolast| : Boolean  - If true, the account link is not deleted
+    ##                         when it is the last account link with same
+    ##                         server name.
     ##
     ## Returns nothing.
     ##
@@ -1012,18 +1015,39 @@ sub main ($$) {
       return $app->send_error (400, reason_phrase => 'Bad |account_link_id|')
           if not defined $link_id and not $all or
              $all and defined $link_id;
-      if ($all) {
-        return $app->db->delete ('account_link', {
-          account_id => Dongry::Type->serialize ('text', $id),
-          service_name => Dongry::Type->serialize ('text', $server->{name}),
-        }, source_name => 'master');
-      } else {
-        return $app->db->delete ('account_link', {
-          account_id => Dongry::Type->serialize ('text', $id),
-          account_link_id => Dongry::Type->serialize ('text', $link_id),
-          service_name => Dongry::Type->serialize ('text', $server->{name}),
-        }, source_name => 'master');
-      }
+      return $app->db->transaction->then (sub {
+        my $tr = $_[0];
+        return Promise->resolve->then (sub {
+          return unless $app->bare_param ('nolast');
+
+          return $tr->select ('account_link', {
+            account_id => Dongry::Type->serialize ('text', $id),
+            service_name => Dongry::Type->serialize ('text', $server->{name}),
+          }, fields => [{-count => undef, as => 'c'}], lock => 'update')->then (sub {
+            my $c = ($_[0]->first || {})->{c} || 0;
+            if ($c < 2) {
+              return $tr->rollback->then (sub {
+                return $app->throw_error_json ({reason => 'Last account link'});
+              });
+            }
+          });
+        })->then (sub {
+          if ($all) {
+            return $tr->delete ('account_link', {
+              account_id => Dongry::Type->serialize ('text', $id),
+              service_name => Dongry::Type->serialize ('text', $server->{name}),
+            }, source_name => 'master');
+          } else {
+            return $tr->delete ('account_link', {
+              account_id => Dongry::Type->serialize ('text', $id),
+              account_link_id => Dongry::Type->serialize ('text', $link_id),
+              service_name => Dongry::Type->serialize ('text', $server->{name}),
+            }, source_name => 'master');
+          }
+        })->then (sub {
+          return $tr->commit;
+        });
+      });
     })->then (sub {
       return $app->send_json ({});
     }));

@@ -401,11 +401,134 @@ Test {
   });
 } n => 21, name => '/link/delete?all';
 
+Test {
+  my $current = shift;
+  my $cb_url = 'http://haoa/' . rand;
+  my $account_id;
+  my $x_account_id1 = int rand 100000;
+  my $x_account_id2 = int rand 100000;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['create'], {}, session => 1);
+  })->then (sub {
+    return $current->post (['info'], {}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    $account_id = $result->{json}->{account_id};
+    return $current->post (['link'], {
+      server => 'oauth2server',
+      callback_url => $cb_url,
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
+    my $con = $current->client_for ($url);
+    return $con->request (url => $url, method => 'POST', params => {
+      account_id => $x_account_id1,
+    }); # user accepted!
+  })->then (sub {
+    my $result = $_[0];
+    my $location = $result->header ('Location');
+    my ($base, $query) = split /\?/, $location, 2;
+    return $current->post ("/cb?$query", {}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    return $current->post (['link'], {
+      server => 'oauth2server',
+      callback_url => $cb_url,
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
+    my $con = $current->client_for ($url);
+    return $con->request (url => $url, method => 'POST', params => {
+      account_id => $x_account_id2,
+    }); # user accepted!
+  })->then (sub {
+    my $result = $_[0];
+    my $location = $result->header ('Location');
+    my ($base, $query) = split /\?/, $location, 2;
+    return $current->post ("/cb?$query", {}, session => 1);
+  })->then (sub {
+    return $current->post (['info'], {with_linked => 'id'}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    my $links = $result->{json}->{links};
+    my $ls = [grep { $_->{service_name} eq 'oauth2server' } values %$links];
+    $current->set_o (ls1 => $ls);
+    test {
+      is 0+@$ls, 2;
+    } $current->c;
+    return $current->post (['link', 'delete'], {
+      account_id => $account_id,
+      account_link_id => [map { $_->{account_link_id} } grep { $_->{id} eq $x_account_id2 } @{$current->o ('ls1')}],
+      server => 'oauth2server',
+      nolast => 1,
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+    } $current->c;
+    return $current->post (['info'], {with_linked => 'id'}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    my $links = $result->{json}->{links};
+    my $ls = [grep { $_->{service_name} eq 'oauth2server' } values %$links];
+    test {
+      is 0+@$ls, 1;
+    } $current->c;
+    return $current->post (['link', 'delete'], {
+      account_id => $account_id,
+      account_link_id => [map { $_->{account_link_id} } grep { $_->{id} eq $x_account_id1 } @{$current->o ('ls1')}],
+      server => 'oauth2server',
+      nolast => 1,
+    });
+  })->then (sub { test { ok 0 } $current->c }, sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 400;
+    } $current->c;
+    return $current->post (['info'], {with_linked => 'id'}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    my $links = $result->{json}->{links};
+    my $ls = [grep { $_->{service_name} eq 'oauth2server' } values %$links];
+    test {
+      is 0+@$ls, 1;
+    } $current->c;
+    return $current->post (['link', 'delete'], {
+      account_id => $account_id,
+      account_link_id => [map { $_->{account_link_id} } grep { $_->{id} eq $x_account_id1 } @{$current->o ('ls1')}],
+      server => 'oauth2server',
+    }); # deleted!
+  })->then (sub {
+    return $current->post (['link', 'delete'], {
+      account_id => $account_id,
+      account_link_id => [map { $_->{account_link_id} } grep { $_->{id} eq $x_account_id1 } @{$current->o ('ls1')}],
+      server => 'oauth2server',
+      nolast => 1,
+    });
+  })->then (sub { test { ok 0 } $current->c }, sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 400;
+    } $current->c;
+    return $current->post (['info'], {with_linked => 'id'}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    my $links = $result->{json}->{links};
+    my $ls = [grep { $_->{service_name} eq 'oauth2server' } values %$links];
+    test {
+      is 0+@$ls, 0;
+    } $current->c;
+  });
+} n => 7, name => 'delete nolast';
+
 RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2021 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2023 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
