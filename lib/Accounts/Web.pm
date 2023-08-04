@@ -1001,7 +1001,7 @@ sub main ($$) {
 
     my $server_name = $app->bare_param ('server') // '';
     my $server = $app->config->get_oauth_server ($server_name)
-        or return $app->send_error (400, reason_phrase => 'Bad |server|');
+        or return $app->throw_error_json ({reason => 'Bad |server|'});
 
     my $id = $app->bare_param ('account_id');
     my $session_row;
@@ -1012,11 +1012,11 @@ sub main ($$) {
       return undef;
     }))->then (sub {
       my $id = $_[0];
-      return $app->send_error (400, reason_phrase => 'Bad |account_id|')
+      return $app->throw_error_json ({reason => 'Bad |account_id|'})
           unless defined $id;
       my $link_id = $app->bare_param ('account_link_id');
       my $all = $app->bare_param ('all');
-      return $app->send_error (400, reason_phrase => 'Bad |account_link_id|')
+      return $app->throw_error_json ({reason => 'Bad |account_link_id|'})
           if not defined $link_id and not $all or
              $all and defined $link_id;
       return $app->db->transaction->then (sub {
