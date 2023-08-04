@@ -993,8 +993,15 @@ sub main ($$) {
     ##                         for the purpose of |nolast|'s testing, in
     ##                         addition to |server|.  Zero or more parameters
     ##                         can be specified.
+    ##   |with_links| : Boolean - If true, linked email addresses from
+    ##                         account links with server |email| (before
+    ##                         the deletion) is returned.
     ##
-    ## Returns nothing.
+    ## Returns:
+    ##
+    ##   |links|
+    ##     |account_link_id|
+    ##     |linked_email|
     ##
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
@@ -1004,6 +1011,7 @@ sub main ($$) {
         or return $app->throw_error_json ({reason => 'Bad |server|'});
 
     my $id = $app->bare_param ('account_id');
+    my $result = {};
     my $session_row;
     return ((defined $id ? Promise->resolve ($id) : $class->resume_session ($app)->then (sub {
       $session_row = $_[0];
@@ -1022,6 +1030,20 @@ sub main ($$) {
       return $app->db->transaction->then (sub {
         my $tr = $_[0];
         return Promise->resolve->then (sub {
+          return unless $app->bare_param ('with_emails');
+          return $tr->select ('account_link', {
+            account_id => Dongry::Type->serialize ('text', $id),
+            service_name => 'email',
+          }, fields => ['account_link_id', 'linked_email']);
+        })->then (sub {
+          my $v = $_[0];
+          if (defined $v) {
+            $result->{links} = [map {
+              $_->{account_link_id} .= '';
+              $_->{linked_email} = Dongry::Type->parse ('text', $_->{linked_email});
+              $_;
+            } @{$v->all}];
+          }
           return unless $app->bare_param ('nolast');
           my $found = {};
           my $nolast_names = [grep { not $found->{$_}++ } @{$app->bare_param_list ('nolast_server')}, Dongry::Type->serialize ('text', $server->{name})];
@@ -1055,7 +1077,7 @@ sub main ($$) {
         });
       });
     })->then (sub {
-      return $app->send_json ({});
+      return $app->send_json ($result);
     }));
   } elsif (@$path == 2 and $path->[0] eq 'link' and $path->[1] eq 'search') {
     ## /link/search - Search account links

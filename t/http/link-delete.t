@@ -502,6 +502,10 @@ Test {
       server => 'oauth2server',
     }); # deleted!
   })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{json}->{links}, undef;
+    } $current->c;
     return $current->post (['link', 'delete'], {
       account_id => $account_id,
       account_link_id => [map { $_->{account_link_id} } grep { $_->{id} eq $x_account_id1 } @{$current->o ('ls1')}],
@@ -522,7 +526,7 @@ Test {
       is 0+@$ls, 0;
     } $current->c;
   });
-} n => 7, name => 'delete nolast';
+} n => 8, name => 'delete nolast';
 
 Test {
   my $current = shift;
@@ -625,8 +629,14 @@ Test {
       account_id => $account_id,
       account_link_id => [map { $_->{account_link_id} } grep { $_->{id} eq $x_account_id1 } @{$current->o ('ls1')}],
       server => 'oauth2server',
+      with_emails => 1,
     }); # deleted!
   })->then (sub {
+    my $result = $_[0];
+    test {
+      my $items = $result->{json}->{links};
+      is 0+@$items, 0;
+    } $current->c;
     return $current->post (['link', 'delete'], {
       account_id => $account_id,
       account_link_id => [map { $_->{account_link_id} } grep { $_->{id} eq $x_account_id1 } @{$current->o ('ls1')}],
@@ -648,7 +658,76 @@ Test {
       is 0+@$ls, 0;
     } $current->c;
   });
-} n => 7, name => 'delete nolast_server';
+} n => 8, name => 'delete nolast_server';
+
+Test {
+  my $current = shift;
+  my $account_id;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['create'], {}, session => 1);
+  })->then (sub {
+    return $current->post (['info'], {}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    $account_id = $result->{json}->{account_id};
+    return $current->post (['email', 'input'], {
+      addr => $current->generate_email_addr (e1 => {}),
+    }, session => 1);
+  })->then (sub {
+    return $current->post (['email', 'verify'], {
+      key => $_[0]->{json}->{key},
+    }, session => 1);
+  })->then (sub {
+    return $current->post (['email', 'input'], {
+      addr => $current->generate_email_addr (e2 => {}),
+    }, session => 1);
+  })->then (sub {
+    return $current->post (['email', 'verify'], {
+      key => $_[0]->{json}->{key},
+    }, session => 1);
+  })->then (sub {
+    return $current->post (['info'], {with_linked => 'email'}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    my $links = $result->{json}->{links};
+    my $ls = [grep { $_->{service_name} eq 'email' } values %$links];
+    $current->set_o (ls1 => $ls);
+    test {
+      is 0+@$ls, 2;
+    } $current->c;
+    return $current->post (['link', 'delete'], {
+      account_id => $account_id,
+      account_link_id => [map { $_->{account_link_id} } grep { $_->{email} eq $current->o ('e1') } @{$current->o ('ls1')}],
+      server => 'email',
+      with_emails => 1,
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      my $items = $result->{json}->{links};
+      is 0+@$items, 2;
+      my $ls1 = [sort { $a->{account_link_id} cmp $b->{account_link_id} } @{$current->o ('ls1')}];
+      $items = [sort { $a->{account_link_id} cmp $b->{account_link_id} } @$items];
+      is $items->[0]->{account_link_id}, $ls1->[0]->{account_link_id};
+      is $items->[0]->{linked_email}, $ls1->[0]->{email};
+      is $items->[1]->{account_link_id}, $ls1->[1]->{account_link_id};
+      is $items->[1]->{linked_email}, $ls1->[1]->{email};
+      ok (
+        $items->[0]->{linked_email} eq $current->o ('e1') or
+        $items->[0]->{linked_email} eq $current->o ('e2')
+      );
+    } $current->c;
+    return $current->post (['info'], {with_linked => 'email'}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    my $links = $result->{json}->{links};
+    my $ls = [grep { $_->{service_name} eq 'email' } values %$links];
+    test {
+      is 0+@$ls, 1;
+      is $ls->[0]->{email}, $current->o ('e2');
+    } $current->c;
+  });
+} n => 9, name => 'with_emails';
 
 RUN;
 
