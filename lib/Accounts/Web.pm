@@ -989,6 +989,10 @@ sub main ($$) {
     ##   |nolast| : Boolean  - If true, the account link is not deleted
     ##                         when it is the last account link with same
     ##                         server name.
+    ##   |nolast_server|     - The list of the account link's server names
+    ##                         for the purpose of |nolast|'s testing, in
+    ##                         addition to |server|.  Zero or more parameters
+    ##                         can be specified.
     ##
     ## Returns nothing.
     ##
@@ -1019,10 +1023,12 @@ sub main ($$) {
         my $tr = $_[0];
         return Promise->resolve->then (sub {
           return unless $app->bare_param ('nolast');
+          my $found = {};
+          my $nolast_names = [grep { not $found->{$_}++ } @{$app->bare_param_list ('nolast_server')}, Dongry::Type->serialize ('text', $server->{name})];
 
           return $tr->select ('account_link', {
             account_id => Dongry::Type->serialize ('text', $id),
-            service_name => Dongry::Type->serialize ('text', $server->{name}),
+            service_name => {-in => $nolast_names},
           }, fields => [{-count => undef, as => 'c'}], lock => 'update')->then (sub {
             my $c = ($_[0]->first || {})->{c} || 0;
             if ($c < 2) {
