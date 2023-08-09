@@ -138,7 +138,7 @@ Test {
       is $result->{json}->{app_data}, undef;
       ok ! $result->{json}->{need_reload};
     } $current->c;
-    return $current->post (['info'], {with_linked => 'id'}, session => 2);
+    return $current->post (['info'], {with_linked => ['id', 'email']}, session => 2);
   })->then (sub {
     my $result = $_[0];
     test {
@@ -146,11 +146,161 @@ Test {
       my $links = $result->{json}->{links};
       my $ls = [grep { $_->{service_name} eq 'oauth2server' } values %$links];
       is $ls->[0]->{id}, $x_account_id;
+      ok $ls->[0]->{email};
       is $result->{json}->{account_id}, $account_id, 'existing account';
       ok $current->o ('time1') < $result->{json}->{login_time}, $result->{json}->{login_time};
+      ok $result->{json}->{no_email}, 'no create_email_link';
     } $current->c;
   });
-} n => 16, name => '/login then auth then /cb - oauth2';
+} n => 18, name => '/login then auth then /cb - oauth2';
+
+Test {
+  my $current = shift;
+  my $cb_url = 'http://haoa/' . rand;
+  my $x_account_id = int rand 1000000;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['login'], {
+      server => 'oauth2server',
+      callback_url => $cb_url,
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+    } $current->c;
+    my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
+    my $con = $current->client_for ($url);
+    return $con->request (url => $url, method => 'POST', params => {
+      account_id => $x_account_id,
+      account_email => '', # no email
+    }); # user accepted!
+  })->then (sub {
+    my $result = $_[0];
+    return test {
+      is $result->status, 302;
+      my $location = $result->header ('Location');
+      my ($base, $query) = split /\?/, $location, 2;
+      is $base, $cb_url;
+      return $current->post ("/cb?$query", {}, session => 1);
+    } $current->c;
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is $result->{json}->{app_data}, undef;
+      ok ! $result->{json}->{need_reload};
+    } $current->c;
+    return $current->post (['info'], {with_linked => ['id', 'email']}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      my $links = $result->{json}->{links};
+      my $ls = [grep { $_->{service_name} eq 'oauth2server' } values %$links];
+      is $ls->[0]->{id}, $x_account_id;
+      ok $result->{json}->{no_email};
+    } $current->c;
+  });
+} n => 9, name => '/login then auth then /cb - oauth2, no email';
+
+Test {
+  my $current = shift;
+  my $cb_url = 'http://haoa/' . rand;
+  my $x_account_id = int rand 1000000;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['login'], {
+      server => 'oauth2server',
+      callback_url => $cb_url,
+      create_email_link => 1,
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+    } $current->c;
+    my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
+    my $con = $current->client_for ($url);
+    return $con->request (url => $url, method => 'POST', params => {
+      account_id => $x_account_id,
+    }); # user accepted!
+  })->then (sub {
+    my $result = $_[0];
+    return test {
+      is $result->status, 302;
+      my $location = $result->header ('Location');
+      my ($base, $query) = split /\?/, $location, 2;
+      is $base, $cb_url;
+      return $current->post ("/cb?$query", {}, session => 1);
+    } $current->c;
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is $result->{json}->{app_data}, undef;
+      ok ! $result->{json}->{need_reload};
+    } $current->c;
+    return $current->post (['info'], {with_linked => ['id', 'email']}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      my $links = $result->{json}->{links};
+      my $ls = [grep { $_->{service_name} eq 'oauth2server' } values %$links];
+      is $ls->[0]->{id}, $x_account_id;
+      ok ! $result->{json}->{no_email};
+    } $current->c;
+  });
+} n => 9, name => 'create_email_link with email';
+
+Test {
+  my $current = shift;
+  my $cb_url = 'http://haoa/' . rand;
+  my $x_account_id = int rand 1000000;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['login'], {
+      server => 'oauth2server',
+      callback_url => $cb_url,
+      create_email_link => 1,
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+    } $current->c;
+    my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
+    my $con = $current->client_for ($url);
+    return $con->request (url => $url, method => 'POST', params => {
+      account_id => $x_account_id,
+      account_email => '', # no email
+    }); # user accepted!
+  })->then (sub {
+    my $result = $_[0];
+    return test {
+      is $result->status, 302;
+      my $location = $result->header ('Location');
+      my ($base, $query) = split /\?/, $location, 2;
+      is $base, $cb_url;
+      return $current->post ("/cb?$query", {}, session => 1);
+    } $current->c;
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is $result->{json}->{app_data}, undef;
+      ok ! $result->{json}->{need_reload};
+    } $current->c;
+    return $current->post (['info'], {with_linked => ['id', 'email']}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      my $links = $result->{json}->{links};
+      my $ls = [grep { $_->{service_name} eq 'oauth2server' } values %$links];
+      is $ls->[0]->{id}, $x_account_id;
+      ok $result->{json}->{no_email};
+    } $current->c;
+  });
+} n => 9, name => 'create_email_link without email';
 
 Test {
   my $current = shift;

@@ -68,9 +68,10 @@ Test {
       is $result->{json}->{admin_status}, 1;
       is $result->{json}->{terms_version}, 0;
       ok $result->{json}->{login_time};
+      ok $result->{json}->{no_email};
     } $current->c;
   });
-} n => 9, name => '/create has anon session';
+} n => 10, name => '/create has anon session';
 
 Test {
   my $current = shift;
