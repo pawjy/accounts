@@ -293,6 +293,7 @@ sub main ($$) {
         }], source_name => 'master')->then (sub {
           $session_data->{account_id} = $account_id;
           $session_data->{login_time} = 0+($app->bare_param ('login_time') || time);
+          $session_data->{no_email} = 1;
           return $session_row->update ({data => $session_data}, source_name => 'master');
         })->then (sub {
           return $app->send_json ({account_id => $account_id});
@@ -691,6 +692,7 @@ sub main ($$) {
           });
         })->then (sub {
           delete $session_data->{email_verifications}->{$key};
+          delete $session_data->{no_email};
           return $session_row->update ({data => $session_data}, source_name => 'master'); # XXX transaction
         })->then (sub {
           return $app->send_json ({});
@@ -1187,6 +1189,9 @@ sub main ($$) {
     ##   group_membership The group membership object, if available.
     ##   login_time : Timestamp? : The last login time of the session,
     ##                             if applicable.
+    ##   no_email : Boolean : If true, there is an account but no account
+    ##                        link with service name |email|.  Note that
+    ##                        the value might be out of sync when modified.
     ##   additional_group_memberships : Object?
     ##     /group_id/  Additional group's membership object, if available.
     ##       group_data  Group data of the membership's group, if applicable.
@@ -1234,6 +1239,7 @@ sub main ($$) {
           $json->{admin_status} = $r->get ('admin_status');
           $json->{terms_version} = $r->get ('terms_version');
           $json->{login_time} = $session_data->{login_time};
+          $json->{no_email} = 1 if $session_data->{no_email};
           
           if (defined $context_key and defined $group_id) {
               my $add_group_ids = $app->bare_param_list
@@ -1562,6 +1568,7 @@ sub login_account ($$$) {
           ($service_data->{refresh_token} // '');
     }
     if (@$links == 0) { # new account
+      $session_data->{no_email} = 1;
       return $app->db->execute ('SELECT UUID_SHORT() AS account_id, UUID_SHORT() AS link_id', undef, source_name => 'master')->then (sub {
         my $uuids = $_[0]->first;
         $uuids->{account_id} = format_id $uuids->{account_id};
@@ -1602,6 +1609,7 @@ sub login_account ($$$) {
           my $email_id = sha1_hex $addr;
           return $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master')->then (sub {
             my $time = time;
+            delete $session_data->{no_email};
             return $app->db->insert ('account_link', [{
               account_link_id => $_[0]->first->{uuid},
               account_id => Dongry::Type->serialize ('text', $account->{account_id}),
@@ -1645,6 +1653,13 @@ sub login_account ($$$) {
           linked_data => Dongry::Type->serialize ('json', $link->{data}),
           updated => time,
         }, source_name => 'master'),
+        $app->db->select ('account_link', {
+          account_id => $account_id,
+          service_name => 'email',
+        }, limit => 1, fields => ['account_link_id'], source_name => 'master')->then (sub {
+          delete $session_data->{no_email};
+          $session_data->{no_email} = 1 if not defined $_[0]->first;
+        }),
       ])->then (sub {
         return [$_[0]->[0]->first, {account_link_id => $links->[0]->{account_link_id}}];
       });

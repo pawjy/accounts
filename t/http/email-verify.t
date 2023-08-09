@@ -56,9 +56,10 @@ Test {
       is $link->{email}, q<foo@bar.test>;
       is $link->{key}, undef;
       is $link->{name}, undef;
+      ok ! $result->{json}->{no_email};
     } $current->c;
   });
-} n => 9, name => '/email/verify associated';
+} n => 10, name => '/email/verify associated';
 
 Test {
   my $current = shift;
@@ -101,7 +102,7 @@ RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2019 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2023 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

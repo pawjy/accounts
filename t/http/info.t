@@ -31,9 +31,10 @@ Test {
       is $result->{json}->{name}, $name;
       is $result->{res}->header ('server-timing'), undef;
       ok $result->{json}->{login_time};
+      ok $result->{json}->{no_email};
     } $current->c;
   });
-} n => 7, name => '/info with accounted session';
+} n => 8, name => '/info with accounted session';
 
 Test {
   my $current = shift;
@@ -46,9 +47,10 @@ Test {
       is $result->{json}->{account_id}, undef;
       is $result->{json}->{name}, undef;
       is $result->{json}->{login_time}, undef;
+      ok ! $result->{json}->{no_email};
     } $current->c;
   });
-} n => 4, name => '/info no session';
+} n => 5, name => '/info no session';
 
 Test {
   my $current = shift;
@@ -62,9 +64,10 @@ Test {
       is $result->{status}, 200;
       is $result->{json}->{account_id}, undef;
       is $result->{json}->{name}, undef;
+      ok ! $result->{json}->{no_email};
     } $current->c;
   });
-} n => 3, name => '/info has anon session';
+} n => 4, name => '/info has anon session';
 
 Test {
   my $current = shift;
@@ -80,9 +83,10 @@ Test {
       is $result->{json}->{account_id}, undef;
       is $result->{json}->{name}, undef;
       is $result->{linked}, undef;
+      ok ! $result->{json}->{no_email};
     } $current->c;
   });
-} n => 4, name => '/info with linked (no match)';
+} n => 5, name => '/info with linked (no match)';
 
 Test {
   my $current = shift;
@@ -92,9 +96,10 @@ Test {
       is $result->{status}, 200;
       is $result->{json}->{account_id}, undef;
       is $result->{json}->{name}, undef;
+      ok ! $result->{json}->{no_email};
     } $current->c;
   });
-} n => 3, name => '/info bad session';
+} n => 4, name => '/info bad session';
 
 Test {
   my $current = shift;
