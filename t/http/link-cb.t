@@ -120,7 +120,10 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is $result->{app_data}, undef;
+      is $result->{json}->{app_data}, undef;
+      is $result->{json}->{is_new}, undef;
+      is $result->{json}->{lk}, undef;
+      is $result->{json}->{lk_expires}, undef;
     } $current->c;
     return $current->post (['info'], {with_linked => 'id'}, session => 1);
   })->then (sub {
@@ -155,7 +158,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is $result->{app_data}, undef;
+      is $result->{json}->{app_data}, undef;
     } $current->c;
     return $current->post (['info'], {with_linked => 'id'}, session => 2);
   })->then (sub {
@@ -171,7 +174,7 @@ Test {
       ok $ls->[0]->{account_link_id};
     } $current->c;
   });
-} n => 16, name => '/link then auth then /cb - oauth2';
+} n => 19, name => '/link then auth then /cb - oauth2';
 
 Test {
   my $current = shift;
@@ -206,7 +209,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is $result->{app_data}, undef;
+      is $result->{json}->{app_data}, undef;
     } $current->c;
     return $current->post (['info'], {with_linked => 'id'}, session => 1);
   })->then (sub {
@@ -239,7 +242,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is $result->{app_data}, undef;
+      is $result->{json}->{app_data}, undef;
     } $current->c;
     return $current->post (['info'], {with_linked => ['id', 'name']}, session => 1);
   })->then (sub {
@@ -293,7 +296,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is $result->{app_data}, undef;
+      is $result->{json}->{app_data}, undef;
     } $current->c;
     return $current->post (['info'], {with_linked => 'id'}, session => 1);
   })->then (sub {
@@ -326,7 +329,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is $result->{app_data}, undef;
+      is $result->{json}->{app_data}, undef;
     } $current->c;
     return $current->post (['info'], {with_linked => ['id', 'name']}, session => 1);
   })->then (sub {
@@ -383,7 +386,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is $result->{app_data}, undef;
+      is $result->{json}->{app_data}, undef;
     } $current->c;
     return $current->post (['info'], {with_linked => 'id'}, session => 1);
   })->then (sub {
@@ -419,7 +422,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is $result->{app_data}, undef;
+      is $result->{json}->{app_data}, undef;
     } $current->c;
     return $current->post (['info'], {with_linked => ['id', 'name']}, session => 1);
   })->then (sub {
@@ -480,7 +483,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is $result->{app_data}, undef;
+      is $result->{json}->{app_data}, undef;
     } $current->c;
     return $current->post (['info'], {with_linked => ['id', 'name']}, session => 1);
   })->then (sub {
@@ -516,7 +519,7 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is $result->{app_data}, undef;
+      is $result->{json}->{app_data}, undef;
     } $current->c;
     return $current->post (['info'], {with_linked => ['id', 'name']}, session => 1);
   })->then (sub {

@@ -4,6 +4,7 @@ use warnings;
 use Path::Tiny;
 use Promise;
 use ServerSet;
+use Web::Transport::Base64;
 
 my $RootPath = path (__FILE__)->parent->parent->parent->absolute;
 
@@ -89,6 +90,9 @@ sub run ($%) {
           $config->{s3_image_url_prefix} = $storage_data->{file_root_client_url}->stringify;
           $config->{"s3_key_prefix.prefixed"} = "image/key/prefix";
 
+          $config->{lk_public_key} = [map { ord $_ } split //, substr decode_web_base64 ('MCowBQYDK2VwAyEAoon0mASJGWXI1WeC9INL7J/4SBeRmbzSfNIJx9pmUDo='), -32];
+          $config->{lk_private_key} = [map { ord $_ } split //, substr decode_web_base64 ('MC4CAQAwBQYDK2VwBCIEIPkcEcaEZwLr79ZKOXNknFAT2SCJvOIC5bK94ivDmKOV'), -32];
+          
           $data->{envs} = my $envs = {};
           if ($use_docker) {
             $self->set_docker_envs ('proxy' => $envs);

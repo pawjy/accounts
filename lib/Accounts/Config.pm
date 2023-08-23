@@ -37,6 +37,17 @@ sub get ($$) {
   return $_[0]->{json}->{$_[1]};
 } # get
 
+sub get_binary ($$) {
+  return $_[0]->{binary}->{$_[1]} if exists $_[0]->{binary}->{$_[1]};
+  return $_[0]->{binary}->{$_[1]} = do {
+    if ($_[0]->{json}->{$_[1]}) {
+      join '', map { pack 'C', $_ } @{$_[0]->{json}->{$_[1]}};
+    } else {
+      undef;
+    }
+  };
+} # get_binary
+
 sub get_oauth_server ($$) {
   my ($self, $server_name) = @_;
   return $self->{servers}->{$server_name // ''}; # or undef

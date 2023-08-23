@@ -9,6 +9,7 @@ use Promised::File;
 use Promised::Command;
 use JSON::PS;
 use Digest::SHA qw(sha1_hex);
+use Crypt::PK::Ed25519;
 use Wanage::URL;
 use Wanage::HTTP;
 use Dongry::Type;
@@ -16,6 +17,7 @@ use Dongry::Type::JSONPS;
 use Dongry::SQL;
 use Accounts::AppServer;
 use Web::URL;
+use Web::Encoding;
 use Web::DateTime::Clock;
 use Web::DOM::Document;
 use Web::XML::Parser;
@@ -23,6 +25,7 @@ use Web::Transport::AWS;
 use Web::Transport::OAuth1;
 use Web::Transport::ConnectionClient;
 use Web::Transport::BasicClient;
+use Web::Transport::Base64;
 
 sub format_id ($) {
   return sprintf '%llu', $_[0];
@@ -187,6 +190,39 @@ sub next_page ($$$) {
   } # id
 }
 
+sub create_lk ($$) {
+  my ($config, $origin) = @_;
+
+  return unless defined $config->get ('lk_private_key');
+  
+  my $x = '' . time;
+  my $m = (encode_web_utf8 $origin) . ':' . $x;
+
+  my $key = Crypt::PK::Ed25519->new;
+  $key->import_key_raw ($config->get_binary ('lk_private_key'), 'private');
+  my $sig = $key->sign_message ($m);
+
+  $x .= ':' . encode_web_base64 $sig;
+  return $x;
+} # create_lk
+
+sub verify_lk ($$$$) {
+  my ($config, $lk, $origin, $lk_expires) = @_;
+
+  return 0 unless defined $config->get ('lk_public_key');
+  return 0 unless $lk =~ /\A([0-9]+\.[0-9]+):([^:]+)\z/;
+  return 0 if $1 > $lk_expires;
+  my $sig = decode_web_base64 $2;
+
+  my $m = (encode_web_utf8 $origin) . ':' . $1;
+
+  my $key = Crypt::PK::Ed25519->new;
+  $key->import_key_raw ($config->get_binary ('lk_public_key'), 'public');
+  my $result = $key->verify_message ($sig, $m);
+
+  return $result;
+} # verify_lk
+
 my $MaxSessionTimeout = 60*60*24*10;
 
 sub main ($$) {
@@ -231,7 +267,7 @@ sub main ($$) {
         $sk = id 100;
         my $time = time;
         my $age = $MaxSessionTimeout;
-        my $ma = $app->config->{session_max_age} || 'Infinity';
+        my $ma = $app->config->get ('session_max_age') || 'Infinity';
         $age = $ma if $ma < $age;
         return $app->db->insert ('session', [{
           sk => $sk,
@@ -310,6 +346,8 @@ sub main ($$) {
     ##   |server|       - The server name.  Required.
     ##   |callback_url| - An absolute URL, used as the OAuth redirect URL.
     ##                    Required.
+    ##   |lk|           - The |lk| cookie value, if any.
+    ##   |origin|       - The origin of the server.  Required if |lk|.
     ##
     ##   Initiate the OAuth flow.  Then:
     ##
@@ -338,6 +376,12 @@ sub main ($$) {
     ##   placeholders in |cb_wrapper_url| by percent-encoded variant
     ##   of |callback_url| is used as the callback URL sent to the
     ##   server.
+    ##
+    ## Returns:
+    ##
+    ##   |is_new| : Boolean :  Whether it is a new login to the account or not.
+    ##   |lk|  : cookie-value string? :  The |lk| cookie value, if necessary.
+    ##   |lk_expires| : Timestamp? :     The expiration timestamp of |lk|.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
     return $class->resume_session ($app)->then (sub {
@@ -585,12 +629,26 @@ sub main ($$) {
           }
         })->then (sub {
           my $app_data = $session_data->{action}->{app_data}; # or undef
+          my $json = {app_data => $app_data};
           if ($session_data->{action}->{operation} eq 'login') {
             $session_data->{login_time} = time;
+
+            my $lk = $app->bare_param ('lk') // '';
+            my $origin = $app->bare_param ('origin') // '';
+            my $lk_expires = time + 60*60*24*400;
+            if (verify_lk ($app->config, $lk, $origin, $lk_expires)) {
+              #
+            } else {
+              $json->{lk} = create_lk ($app->config, $origin);
+              if (defined $json->{lk}) {
+                $json->{lk_expires} = $lk_expires;
+                $json->{is_new} = 1;
+              }
+            }
           }
           delete $session_data->{action};
           return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
-            return $app->send_json ({app_data => $app_data});
+            return $app->send_json ($json);
           });
         });
       }, sub {

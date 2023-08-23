@@ -2,7 +2,6 @@ AnyEvent~7.17
 AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.32
 AnyEvent::HTTP~2.25
-AnyEvent::IO
 Canary::Stability~2013
 Carp~1.50
 Class::Accessor~0.51
@@ -12,6 +11,7 @@ Clone~0.46
 Crypt::OpenSSL::Guess~0.15
 Crypt::OpenSSL::RSA~0.33
 Crypt::OpenSSL::Random~0.15
+Crypt::PK::Ed25519~0.078
 Cwd~3.75
 Data::Dumper~2.183
 Digest::SHA~6.04
@@ -22,7 +22,7 @@ Exporter::Tiny~1.006002
 File::Listing~6.16
 File::Path~2.18
 File::Temp~0.2311
-HTML::HeadParser~3.81
+HTML::Entities~3.81
 HTML::Tagset~3.20
 HTTP::CookieJar::LWP~0.014
 HTTP::Cookies~6.10
@@ -41,7 +41,7 @@ Math::BigInt~1.999839
 Method::WeakCallback~0.04
 Net::HTTP~6.23
 Net::SSLeay~1.92
-OAuth::Lite::AuthMethod
+OAuth::Lite::Consumer
 Path::Class~0.37
 Path::Tiny~0.144
 Pod::Usage~2.03

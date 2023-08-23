@@ -54,6 +54,9 @@ sub Test (&;%) {
       my $error = $_[0];
       test {
         ok 0, 'No exception';
+        if (ref $error eq 'HASH') {
+          warn perl2json_bytes $error;
+        }
         is $error, undef, 'No exception';
       } $current->c;
     })->finally (sub {
