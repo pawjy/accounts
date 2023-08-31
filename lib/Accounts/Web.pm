@@ -1475,11 +1475,31 @@ sub main ($$) {
       my $version = 0+($app->bare_param ('version') || 0);
       $version = 255 if $version > 255;
       my $dg = $app->bare_param ('downgrade');
-      return $app->db->execute ('UPDATE `account` SET `terms_version` = :version WHERE `account_id` = :account_id'.($dg?'':' AND `terms_version` < :version'), {
-        account_id => Dongry::Type->serialize ('text', $account_id),
-        version => $version,
-      }, source_name => 'master')->then (sub {
-        die "UPDATE failed" unless $_[0]->row_count <= 1;
+      return Promise->all ([
+        $app->db->execute ('UPDATE `account` SET `terms_version` = :version WHERE `account_id` = :account_id'.($dg?'':' AND `terms_version` < :version'), {
+          account_id => $account_id,
+          version => $version,
+        }, source_name => 'master'),
+        $app->db->uuid_short (1),
+      ])->then (sub {
+        die "UPDATE failed" unless $_[0]->[0]->row_count <= 1;
+        my $data = {
+          source_operation => 'agree',
+          version => $version,
+        };
+        my $app_obj = $app->bare_param ('source_data');
+        $data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
+        return $app->db->insert ('account_log', [{
+          log_id => $_[0]->[1]->[0],
+          account_id => $account_id,
+          operator_account_id => $account_id,
+          timestamp => time,
+          action => 'agree',
+          ua => $app->bare_param ('source_ua') // '',
+          ipaddr => $app->bare_param ('source_ipaddr') // '',
+          data => Dongry::Type->serialize ('json', $data),
+        }]);
+      })->then (sub {
         return $app->send_json ({});
       });
     });
