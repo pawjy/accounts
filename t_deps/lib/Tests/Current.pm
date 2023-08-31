@@ -295,6 +295,8 @@ sub create_session ($$$) {
         name => $self->generate_text (rand, {}),
         #user_status
         #admin_status
+      })->then (sub {
+        $session->{account} = $_[0]->{json};
       });
     }
   });
