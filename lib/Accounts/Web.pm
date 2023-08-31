@@ -1522,12 +1522,13 @@ sub main ($$) {
     ##
     ## Parameters
     ##
+    ##   |sk|, |sk_context|
     ##   |log_id|            - The log ID of the log.
     ##   |account_id|        - The account ID of the logs.
     ##   |operator_account_id| - The operator account ID of the logs.
     ##   |ipaddr|            - The IP address of the logs.
     ##   |action|            - The action of the logs.
-    ##   At least one of these five parameters is required.
+    ##   At least one of these six groups of parameters is required.
     ##
     ## Returns
     ##   |items|             - An array of logs.
@@ -1536,26 +1537,38 @@ sub main ($$) {
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
     my $page = this_page ($app, limit => 50, max_limit => 100);
-
     my $where = {};
-    for my $key (qw(account_id operator_account_id ipaddr
-                    action log_id)) {
-      $where->{$key} = $app->bare_param ($key);
-      delete $where->{$key} if not defined $where->{$key};
-    }
-    return $app->throw_error (400, reason_phrase => 'No params')
-        unless keys %$where;
+    return Promise->resolve->then (sub {
+      for my $key (qw(account_id operator_account_id ipaddr
+                      action log_id)) {
+        $where->{$key} = $app->bare_param ($key);
+        delete $where->{$key} if not defined $where->{$key};
+      }
+      if (defined $app->bare_param ('sk')) {
+        return $app->throw_error
+            (400, reason_phrase => 'Both |sk| and |account_id| is specified')
+            if defined $app->bare_param ('account_id');
+        return $class->resume_session ($app)->then (sub {
+          my $session_row = $_[0];
+          $where->{account_id} = $session_row->get ('data')->{account_id} # or undef
+              if defined $session_row;
+        });
+      }
+    })->then (sub {
+      return $app->throw_error (400, reason_phrase => 'No params')
+          unless keys %$where;
 
-    $where->{timestamp} = $page->{value} if defined $page->{value};
+      $where->{timestamp} = $page->{value} if defined $page->{value};
 
-    return $app->db->select (
-      'account_log', $where,
-      fields => ['account_id', 'operator_account_id', 'ipaddr',
-                 'action', 'log_id', 'ua', 'timestamp', 'data'],
-      source_name => 'master',
-      offset => $page->{offset}, limit => $page->{limit},
-      order => ['timestamp', $page->{order_direction}],
-    )->then (sub {
+      return $app->db->select (
+        'account_log', $where,
+        fields => ['account_id', 'operator_account_id', 'ipaddr',
+                   'action', 'log_id', 'ua', 'timestamp', 'data'],
+        source_name => 'master',
+        offset => $page->{offset}, limit => $page->{limit},
+        order => ['timestamp', $page->{order_direction}],
+      );
+    })->then (sub {
       my $v = $_[0];
       my $items = [map {
         $_->{account_id} .= '';
