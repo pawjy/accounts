@@ -298,6 +298,9 @@ sub main ($$) {
     ##   login_time : Timestamp? :  The value of the account's session's
     ##                              login time.  If missing, defaulted to
     ##                              the current time.
+    ##   |source_ua| : Bytes :      The source |User-Agent| header, if any.
+    ##   |source_ipaddr| : Bytes :  The source IP address, if any.
+    ##   |source_data| : JSON :     Application-dependent source data, if any.
     ##
     ##   Create an account and associate the session with it.
     ##
@@ -314,8 +317,9 @@ sub main ($$) {
         return $app->send_error_json ({reason => 'Account-associated session'});
       }
 
-      return $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master')->then (sub {
-        my $account_id = format_id ($_[0]->first->{uuid});
+      return $app->db->uuid_short (2, source_name => 'master')->then (sub {
+        my $ids = $_[0];
+        my $account_id = '' . $ids->[0];
         my $time = time;
         my $ver = 0+($app->bare_param ('terms_version') // 0);
         $ver = 255 if $ver > 255;
@@ -332,7 +336,26 @@ sub main ($$) {
           $session_data->{no_email} = 1;
           return $session_row->update ({data => $session_data}, source_name => 'master');
         })->then (sub {
-          return $app->send_json ({account_id => $account_id});
+          my $data = {
+            source_operation => 'create',
+          };
+          my $app_obj = $app->bare_param ('source_data');
+          $data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
+          return $app->db->insert ('account_log', [{
+            log_id => $ids->[1],
+            account_id => $account_id,
+            operator_account_id => $account_id,
+            timestamp => $time,
+            action => 'create',
+            ua => $app->bare_param ('source_ua') // '',
+            ipaddr => $app->bare_param ('source_ipaddr') // '',
+            data => Dongry::Type->serialize ('json', $data),
+          }]);
+        })->then (sub {
+          return $app->send_json ({
+            account_id => $account_id,
+            account_log_id => '' . $ids->[1],
+          });
         });
       });
     });
@@ -1493,6 +1516,61 @@ sub main ($$) {
       return $app->send_json ({accounts => $accounts});
     }));
   } # /search
+
+  if (@$path == 2 and $path->[0] eq 'log' and $path->[1] eq 'get') {
+    ## /log/get - Get account logs
+    ##
+    ## Parameters
+    ##
+    ##   |log_id|            - The log ID of the log.
+    ##   |account_id|        - The account ID of the logs.
+    ##   |operator_account_id| - The operator account ID of the logs.
+    ##   |ipaddr|            - The IP address of the logs.
+    ##   |action|            - The action of the logs.
+    ##   At least one of these five parameters is required.
+    ##
+    ## Returns
+    ##   |items|             - An array of logs.
+    ##
+    ## Supports paging.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $page = this_page ($app, limit => 50, max_limit => 100);
+
+    my $where = {};
+    for my $key (qw(account_id operator_account_id ipaddr
+                    action log_id)) {
+      $where->{$key} = $app->bare_param ($key);
+      delete $where->{$key} if not defined $where->{$key};
+    }
+    return $app->throw_error (400, reason_phrase => 'No params')
+        unless keys %$where;
+
+    $where->{timestamp} = $page->{value} if defined $page->{value};
+
+    return $app->db->select (
+      'account_log', $where,
+      fields => ['account_id', 'operator_account_id', 'ipaddr',
+                 'action', 'log_id', 'ua', 'timestamp', 'data'],
+      source_name => 'master',
+      offset => $page->{offset}, limit => $page->{limit},
+      order => ['timestamp', $page->{order_direction}],
+    )->then (sub {
+      my $v = $_[0];
+      my $items = [map {
+        $_->{account_id} .= '';
+        $_->{operator_account_id} .= '';
+        $_->{log_id} .= "";
+        $_->{data} = Dongry::Type->parse ('json', $_->{data});
+        $_;
+      } $v->all->to_list];
+      my $next_page = next_page $page, $items, 'timestamp';
+      return $app->send_json ({
+        items => $items,
+        %$next_page,
+      });
+    });
+  } # /log/get
 
   if (@$path == 1 and $path->[0] eq 'robots.txt') {
     # /robots.txt

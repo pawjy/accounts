@@ -90,8 +90,10 @@ sub run ($%) {
           $config->{s3_image_url_prefix} = $storage_data->{file_root_client_url}->stringify;
           $config->{"s3_key_prefix.prefixed"} = "image/key/prefix";
 
-          $config->{lk_public_key} = [map { ord $_ } split //, substr decode_web_base64 ('MCowBQYDK2VwAyEAoon0mASJGWXI1WeC9INL7J/4SBeRmbzSfNIJx9pmUDo='), -32];
-          $config->{lk_private_key} = [map { ord $_ } split //, substr decode_web_base64 ('MC4CAQAwBQYDK2VwBCIEIPkcEcaEZwLr79ZKOXNknFAT2SCJvOIC5bK94ivDmKOV'), -32];
+          #$config->{lk_public_key} = [map { ord $_ } split //, substr decode_web_base64 ('MCowBQYDK2VwAyEAoon0mASJGWXI1WeC9INL7J/4SBeRmbzSfNIJx9pmUDo='), -32];
+          #$config->{lk_private_key} = [map { ord $_ } split //, substr decode_web_base64 ('MC4CAQAwBQYDK2VwBCIEIPkcEcaEZwLr79ZKOXNknFAT2SCJvOIC5bK94ivDmKOV'), -32];
+          $config->{lk_public_key} = [76,201,85,13,139,115,65,221,94,230,0,62,0,227,138,146,170,234,187,58,70,14,188,48,185,175,148,179,83,190,66,180];
+          $config->{lk_private_key} = [169,37,4,122,159,94,217,98,123,215,23,187,141,111,240,64,147,209,70,206,137,74,192,112,139,188,140,81,232,192,250,57];
           
           $data->{envs} = my $envs = {};
           if ($use_docker) {

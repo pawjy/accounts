@@ -6,48 +6,6 @@ use Tests;
 
 Test {
   my $current = shift;
-  return $current->client->request (path => ['create'])->then (sub {
-    my $result = $_[0];
-    test {
-      is $result->{status}, 405;
-    } $current->c;
-  });
-} n => 1, name => '/create GET';
-
-Test {
-  my $current = shift;
-  return $current->client->request (path => ['create'], method => 'POST')->then (sub {
-    my $result = $_[0];
-    test {
-      is $result->{status}, 401;
-    } $current->c;
-  });
-} n => 1, name => '/create no auth';
-
-Test {
-  my $current = shift;
-  return $current->post (['create'], {
-    sk_context => undef,
-  })->then (sub { test { ok 0 } $current->c }, sub {
-    my $result = $_[0];
-    test {
-      is $result->{status}, 400;
-    } $current->c;
-  });
-} n => 1, name => '/create no session';
-
-Test {
-  my $current = shift;
-  return $current->post (['create'], {})->then (sub { test { ok 0 } $current->c }, sub {
-    my $result = $_[0];
-    test {
-      is $result->{status}, 400;
-    } $current->c;
-  });
-} n => 1, name => '/create no session';
-
-Test {
-  my $current = shift;
   my $account_id;
   return $current->create_session (1)->then (sub {
     return $current->post (['create'], {}, session => 1);
@@ -57,6 +15,16 @@ Test {
       is $result->{status}, 200;
       ok $account_id = $result->{json}->{account_id};
     } $current->c;
+    return $current->are_errors (
+      [['create'], {}, session => 1],
+      [
+        {method => 'GET', status => 405},
+        {bearer => undef, status => 401},
+        {session => undef, status => 400},
+        {params => {source_data => 'abc'}, status => 400},
+      ],
+    );
+  })->then (sub {
     return $current->post (['info'], {}, session => 1);
   })->then (sub {
     my $result = $_[0];
@@ -70,8 +38,28 @@ Test {
       ok $result->{json}->{login_time};
       ok $result->{json}->{no_email};
     } $current->c;
+    $current->set_o (a1 => $result->{json});
+    return $current->post (['log', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+      action => 'create',
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+@{$result->{json}->{items}}, 1;
+      my $item = $result->{json}->{items}->[0];
+      ok $item->{log_id};
+      is $item->{account_id}, $current->o ('a1')->{account_id};
+      is $item->{operator_account_id}, $current->o ('a1')->{account_id};
+      ok $item->{timestamp};
+      ok $item->{timestamp} < time;
+      is $item->{action}, 'create';
+      is $item->{ua}, '';
+      is $item->{ipaddr}, '';
+      ok $item->{data};
+    } $current->c;
   });
-} n => 10, name => '/create has anon session';
+} n => 21, name => '/create has anon session';
 
 Test {
   my $current = shift;
@@ -96,6 +84,8 @@ Test {
       user_status => 2,
       admin_status => 6,
       terms_version => 5244,
+      source_ipaddr => $current->generate_key (k1 => {}),
+      source_ua => $current->generate_key (k2 => {}),
     }, session => 1);
   })->then (sub {
     my $result = $_[0];
@@ -114,8 +104,28 @@ Test {
       is $result->{json}->{admin_status}, 6;
       is $result->{json}->{terms_version}, 255;
     } $current->c;
+    $current->set_o (a1 => $result->{json});
+    return $current->post (['log', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+      action => 'create',
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+@{$result->{json}->{items}}, 1;
+      my $item = $result->{json}->{items}->[0];
+      ok $item->{log_id};
+      is $item->{account_id}, $current->o ('a1')->{account_id};
+      is $item->{operator_account_id}, $current->o ('a1')->{account_id};
+      ok $item->{timestamp};
+      ok $item->{timestamp} < time;
+      is $item->{action}, 'create';
+      is $item->{ua}, $current->o ('k2');
+      is $item->{ipaddr}, $current->o ('k1');
+      ok $item->{data};
+    } $current->c;
   });
-} n => 8, name => '/create with options';
+} n => 18, name => '/create with options';
 
 Test {
   my $current = shift;
