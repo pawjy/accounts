@@ -130,6 +130,33 @@ Test {
   });
 } n => 20, name => '/agree updated';
 
+Test {
+  my $current = shift;
+  return $current->create (
+    [s1 => session => {}],
+  )->then (sub {
+    return $current->post (['login'], {
+      server => 'oauth1server',
+      callback_url => 'http://haoa/',
+      app_data => $current->generate_text (t1 => {}),
+    }, session => 's1');
+  })->then (sub {
+    return $current->post (['create'], {
+    }, session => 's1');
+  })->then (sub {
+    return $current->post (['agree'], {
+      version => 10,
+    }, session => 's1');
+  })->then (sub {
+    return $current->post (['info'], {}, session => 's1');
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{json}->{terms_version}, 10;
+    } $current->c;
+  });
+} n => 1, name => '/agree with utf8 flagged info';
+
 RUN;
 
 =head1 LICENSE

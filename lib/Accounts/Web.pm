@@ -1468,7 +1468,7 @@ sub main ($$) {
 
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0];
-      my $account_id = defined $session_row ? $session_row->get ('data')->{account_id} : undef;
+      my $account_id = defined $session_row ? Dongry::Type->serialize ('text', $session_row->get ('data')->{account_id}) : undef;
       return $app->send_error_json ({reason => 'Not a login user'})
           unless defined $account_id;
 
