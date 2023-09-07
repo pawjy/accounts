@@ -1572,6 +1572,8 @@ sub main ($$) {
           my $session_row = $_[0];
           $where->{account_id} = $session_row->get ('data')->{account_id} # or undef
               if defined $session_row;
+          $where->{account_id} = Dongry::Type->serialize ('text', $where->{account_id})
+              if defined $where->{account_id};
         });
       }
     })->then (sub {
