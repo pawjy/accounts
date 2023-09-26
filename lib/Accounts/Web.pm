@@ -225,6 +225,12 @@ sub verify_lk ($$$$) {
 
 my $MaxSessionTimeout = 60*60*24*10;
 
+## Operation source parameters.
+##
+##   |source_ua|     : Bytes :  The source |User-Agent| header, if any.
+##   |source_ipaddr| : Bytes :  The source IP address, if any.
+##   |source_data|   : JSON :   Application-dependent source data, if any.
+
 sub main ($$) {
   my ($class, $app) = @_;
   my $path = $app->path_segments;
@@ -298,9 +304,7 @@ sub main ($$) {
     ##   login_time : Timestamp? :  The value of the account's session's
     ##                              login time.  If missing, defaulted to
     ##                              the current time.
-    ##   |source_ua| : Bytes :      The source |User-Agent| header, if any.
-    ##   |source_ipaddr| : Bytes :  The source IP address, if any.
-    ##   |source_data| : JSON :     Application-dependent source data, if any.
+    ##   Operation source parameters.
     ##
     ##   Create an account and associate the session with it.
     ##
@@ -350,7 +354,7 @@ sub main ($$) {
             ua => $app->bare_param ('source_ua') // '',
             ipaddr => $app->bare_param ('source_ipaddr') // '',
             data => Dongry::Type->serialize ('json', $data),
-          }]);
+          }]); # since R5.9
         })->then (sub {
           return $app->send_json ({
             account_id => $account_id,
@@ -742,10 +746,7 @@ sub main ($$) {
       ##
       ## Parameters
       ##
-      ##   |source_ua| : Bytes :      The source |User-Agent| header, if any.
-      ##   |source_ipaddr| : Bytes :  The source IP address, if any.
-      ##   |source_data| : JSON :     Application-dependent source data,
-      ##                              if any.
+      ##   Operation source parameters.
       $app->requires_request_method ({POST => 1});
       $app->requires_api_key;
 
@@ -811,7 +812,7 @@ sub main ($$) {
               ua => $app->bare_param ('source_ua') // '',
               ipaddr => $app->bare_param ('source_ipaddr') // '',
               data => Dongry::Type->serialize ('json', $data),
-            }]);
+            }]); # since R5.9
           });
         })->then (sub {
           return $tr->commit;
@@ -944,6 +945,10 @@ sub main ($$) {
 
   if (@$path == 1 and $path->[0] eq 'keygen') {
     ## /keygen - Generate SSH key pair
+    ##
+    ## Parameters
+    ##
+    ##   Operation source parameters.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
@@ -957,6 +962,7 @@ sub main ($$) {
       return $app->send_error_json ({reason => 'Not a login user'})
           unless defined $account_id;
 
+      my $key_type = 'rsa';
       return Promise->all ([
         do {
           my $temp = File::Temp->newdir;
@@ -966,7 +972,7 @@ sub main ($$) {
           $dir->mkpath->then (sub {
             my $cmd = Promised::Command->new ([
               'ssh-keygen',
-              '-t' => 'rsa',
+              '-t' => $key_type,
               '-N' => '',
               '-C' => $app->bare_param ('comment') // '',
               '-f' => $private_file_name,
@@ -988,10 +994,11 @@ sub main ($$) {
             return $dir->remove_tree->then (sub { die $error });
           });
         },
-        $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master'),
+        $app->db->uuid_short (2),
       ])->then (sub {
         my $key = $_[0]->[0];
-        my $link_id = $_[0]->[1]->first->{uuid};
+        my $link_id = $_[0]->[1]->[0];
+        my $log_id = $_[0]->[1]->[1];
         my $time = time;
         #      public private
         # dsa     590     668
@@ -1013,6 +1020,24 @@ sub main ($$) {
           linked_token1 => $app->db->bare_sql_fragment ('VALUES(linked_token1)'),
           linked_token2 => $app->db->bare_sql_fragment ('VALUES(linked_token2)'),
           updated => $app->db->bare_sql_fragment ('VALUES(updated)'),
+        })->then (sub {
+          my $data = {
+            source_operation => 'keygen',
+            service_name => $server->{name},
+            key_type => $key_type,
+          };
+          my $app_obj = $app->bare_param ('source_data');
+          $data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
+          return $app->db->insert ('account_log', [{
+            log_id => $log_id,
+            account_id => Dongry::Type->serialize ('text', $account_id),
+            operator_account_id => Dongry::Type->serialize ('text', $account_id),
+            timestamp => $time,
+            action => 'link',
+            ua => $app->bare_param ('source_ua') // '',
+            ipaddr => $app->bare_param ('source_ipaddr') // '',
+            data => Dongry::Type->serialize ('json', $data),
+          }]); # since R5.9
         });
       });
     })->then (sub {
