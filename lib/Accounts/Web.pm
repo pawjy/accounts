@@ -739,46 +739,90 @@ sub main ($$) {
 
     if ($path->[1] eq 'verify') {
       ## /email/verify - Save the email address association to the account
+      ##
+      ## Parameters
+      ##
+      ##   |source_ua| : Bytes :      The source |User-Agent| header, if any.
+      ##   |source_ipaddr| : Bytes :  The source IP address, if any.
+      ##   |source_data| : JSON :     Application-dependent source data,
+      ##                              if any.
       $app->requires_request_method ({POST => 1});
       $app->requires_api_key;
 
       my $key = $app->bare_param ('key') // '';
-      return $class->resume_session ($app)->then (sub {
-        my $session_row = $_[0]
-            // return $app->throw_error_json ({reason => 'Bad session',
-                                               error_for_dev => "/email/verify bad session"});
-        my $session_data = $session_row->get ('data');
-        my $account_id = $session_data->{account_id}
-            // return $app->throw_error_json ({reason => 'Not a login user'});
-        my $def = $session_data->{email_verifications}->{$key}
-            // return $app->throw_error_json ({reason => 'Bad key'});
+      return $app->db->transaction->then (sub {
+        my $tr = $_[0];
+        return Promise->resolve->then (sub {
+          return $class->resume_session ($app, $tr);
+        })->then (sub {
+          my $session_row = $_[0]
+              // return $app->throw_error_json ({reason => 'Bad session',
+                                                 error_for_dev => "/email/verify bad session"});
+          my $session_data = $session_row->get ('data');
+          my $account_id = $session_data->{account_id}
+              // return $app->throw_error_json ({reason => 'Not a login user'});
+          my $def = $session_data->{email_verifications}->{$key}
+              // return $app->throw_error_json ({reason => 'Bad key'});
 
-        return $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master')->then (sub {
+          my $log_id;
           my $time = time;
-          return $app->db->insert ('account_link', [{
-            account_link_id => $_[0]->first->{uuid},
-            account_id => Dongry::Type->serialize ('text', $account_id),
-            service_name => 'email',
-            created => $time,
-            updated => $time,
-            linked_name => '',
-            linked_id => Dongry::Type->serialize ('text', $def->{id}), # or undef
-            linked_key => undef,
-            linked_email => Dongry::Type->serialize ('text', $def->{addr}),
-            linked_token1 => '',
-            linked_token2 => '',
-            linked_data => '{}',
-          }], source_name => 'master', duplicate => {
-            updated => $app->db->bare_sql_fragment ('VALUES(updated)'),
+          return $tr->execute ('SELECT UUID_SHORT() AS uuid, UUID_SHORT() AS uuid2', undef, source_name => 'master')->then (sub {
+            my $v = $_[0]->first;
+            $log_id = $v->{uuid2};
+            return $tr->insert ('account_link', [{
+              account_link_id => $v->{uuid},
+              account_id => Dongry::Type->serialize ('text', $account_id),
+              service_name => 'email',
+              created => $time,
+              updated => $time,
+              linked_name => '',
+              linked_id => Dongry::Type->serialize ('text', $def->{id}), # or undef
+              linked_key => undef,
+              linked_email => Dongry::Type->serialize ('text', $def->{addr}),
+              linked_token1 => '',
+              linked_token2 => '',
+              linked_data => '{}',
+            }], source_name => 'master', duplicate => {
+              updated => $app->db->bare_sql_fragment ('VALUES(updated)'),
+            });
+          })->then (sub {
+            delete $session_data->{email_verifications}->{$key};
+            delete $session_data->{no_email};
+            return $tr->update ('session', {
+              data => Dongry::Type->serialize ('json', $session_data),
+            }, where => {
+              sk => $session_row->get ('sk'),
+            }, source_name => 'master');
+          })->then (sub {
+            my $data = {
+              source_operation => 'email/verify',
+              service_name => 'email',
+              linked_id => $def->{id}, # or undef
+              linked_email => $def->{addr},
+            };
+            my $app_obj = $app->bare_param ('source_data');
+            $data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
+            return $tr->insert ('account_log', [{
+              log_id => $log_id,
+              account_id => Dongry::Type->serialize ('text', $account_id),
+              operator_account_id => Dongry::Type->serialize ('text', $account_id),
+              timestamp => $time,
+              action => 'link',
+              ua => $app->bare_param ('source_ua') // '',
+              ipaddr => $app->bare_param ('source_ipaddr') // '',
+              data => Dongry::Type->serialize ('json', $data),
+            }]);
           });
         })->then (sub {
-          delete $session_data->{email_verifications}->{$key};
-          delete $session_data->{no_email};
-          return $session_row->update ({data => $session_data}, source_name => 'master'); # XXX transaction
+          return $tr->commit;
+        }, sub {
+          my $e = shift;
+          return $tr->rollback->then (sub {
+            die $e;
+          });
         })->then (sub {
           return $app->send_json ({});
         });
-        # XXX account_log
       });
     }
   }
@@ -1615,14 +1659,14 @@ sub main ($$) {
   return $app->send_error (404);
 } # main
 
-sub resume_session ($$) {
-  my ($class, $app) = @_;
+sub resume_session ($$;$) {
+  my ($class, $app, $tr) = @_;
   my $sk = $app->bare_param ('sk') // '';
-  return (length $sk ? $app->db->select ('session', {
+  return (length $sk ? ($tr // $app->db)->select ('session', {
     sk => $sk,
     sk_context => $app->bare_param ('sk_context') // '',
     created => {'>', time - $MaxSessionTimeout},
-  }, source_name => 'master')->then (sub {
+  }, source_name => 'master', lock => (defined $tr ? 'update' : undef))->then (sub {
     my $acc = $_[0]->first_as_row; # or undef
 
     my $ma = $app->bare_param ('sk_max_age');

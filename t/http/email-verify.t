@@ -32,6 +32,9 @@ Test {
   })->then (sub {
     return $current->post (['email', 'verify'], {
       key => $current->o ('key1'),
+      source_ipaddr => $current->generate_key (k1 => {}),
+      source_ua => $current->generate_key (k2 => {}),
+      source_data => perl2json_chars ({foo => $current->generate_text (t1 => {})}),
     }, session => 's1'); # done
   })->then (sub {
     return $current->post (['email', 'verify'], {
@@ -58,8 +61,32 @@ Test {
       is $link->{name}, undef;
       ok ! $result->{json}->{no_email};
     } $current->c;
+    return $current->post (['log', 'get'], {
+      account_id => $current->o ('s1')->{account}->{account_id},
+      action => 'link',
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+@{$result->{json}->{items}}, 1;
+      my $item = $result->{json}->{items}->[0];
+      ok $item->{log_id};
+      is $item->{account_id}, $current->o ('s1')->{account}->{account_id};
+      is $item->{operator_account_id}, $current->o ('s1')->{account}->{account_id};
+      ok $item->{timestamp};
+      ok $item->{timestamp} < time;
+      is $item->{action}, 'link';
+      is $item->{ua}, $current->o ('k2');
+      is $item->{ipaddr}, $current->o ('k1');
+      ok $item->{data};
+      is $item->{data}->{source_operation}, 'email/verify';
+      is $item->{data}->{service_name}, 'email';
+      ok $item->{data}->{linked_id};
+      is $item->{data}->{linked_email}, q<foo@bar.test>;
+      is $item->{data}->{source_data}->{foo}, $current->o ('t1');
+    } $current->c;
   });
-} n => 10, name => '/email/verify associated';
+} n => 25, name => '/email/verify associated';
 
 Test {
   my $current = shift;
