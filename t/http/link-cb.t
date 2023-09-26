@@ -37,6 +37,7 @@ Test {
   })->then (sub {
     my $result = $_[0];
     $account_id = $result->{json}->{account_id};
+    $current->set_o (a1 => {account_id => $account_id});
     return $current->post (['link'], {
       server => 'oauth1server',
       callback_url => $cb_url,
@@ -56,7 +57,11 @@ Test {
       my $location = $result->header ('Location');
       my ($base, $query) = split /\?/, $location, 2;
       is $base, $cb_url;
-      return $current->post ("/cb?$query", {}, session => 1);
+      return $current->post ("/cb?$query", {
+        'source_ipaddr' => $current->generate_key (k1 => {}),
+        'source_ua' => $current->generate_key (k2 => {}),
+        'source_data' => perl2json_chars ({foo => $current->generate_text (t1 => {})}),
+      }, session => '1');
     } $current->c;
   })->then (sub {
     my $result = $_[0];
@@ -78,8 +83,34 @@ Test {
       ok $current->o ('time1') < $result->{json}->{login_time}, $current->o ('time1');
       ok $result->{json}->{login_time} < $current->o ('time2'), $current->o ('time2');
     } $current->c, name => $result->{json}->{login_time};
+    return $current->post (['log', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+      action => 'link',
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+@{$result->{json}->{items}}, 1;
+      my $item = $result->{json}->{items}->[0];
+      ok $item->{log_id};
+      is $item->{account_id}, $current->o ('a1')->{account_id};
+      is $item->{operator_account_id}, $current->o ('a1')->{account_id};
+      ok $item->{timestamp};
+      ok $item->{timestamp} < time;
+      is $item->{action}, 'link';
+      is $item->{ua}, $current->o ('k2');
+      is $item->{ipaddr}, $current->o ('k1');
+      ok $item->{data};
+      is $item->{data}->{source_operation}, 'link';
+      is $item->{data}->{service_name}, 'oauth1server';
+      is $item->{data}->{source_data}->{foo}, $current->o ('t1');
+      ok $item->{data}->{linked_id};
+      is $item->{data}->{linked_key}, undef;
+      ok $item->{data}->{linked_email};
+      ok $item->{data}->{linked_name};
+    } $current->c;
   });
-} n => 12, name => '/link then auth then /cb - oauth1';
+} n => 29, name => '/link then auth then /cb - oauth1';
 
 Test {
   my $current = shift;
@@ -570,7 +601,7 @@ RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2019 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2023 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

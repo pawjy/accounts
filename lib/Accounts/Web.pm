@@ -506,6 +506,10 @@ sub main ($$) {
 
   if (@$path == 1 and $path->[0] eq 'cb') {
     ## /cb - Process OAuth callback
+    ##
+    ## Parameters
+    ##
+    ##   Operation source parameters.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
@@ -1941,8 +1945,9 @@ sub link_account ($$$) {
         ($service_data->{refresh_token} // '');
   }
 
-  return $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master')->then (sub {
-    my $link_id = $_[0]->first->{uuid};
+  return $app->db->uuid_short (2)->then (sub {
+    my $link_id = $_[0]->[0];
+    my $log_id = $_[0]->[1];
     my $time = time;
     return $app->db->insert ('account_link', [{
       account_link_id => $link_id,
@@ -1966,6 +1971,27 @@ sub link_account ($$$) {
       linked_token1 => $app->db->bare_sql_fragment ('VALUES(linked_token1)'),
       linked_token2 => $app->db->bare_sql_fragment ('VALUES(linked_token2)'),
       linked_data => $app->db->bare_sql_fragment ('VALUES(linked_data)'),
+    })->then (sub {
+      my $data = {
+        source_operation => $session_data->{action}->{operation},
+        service_name => $server->{name},
+        linked_name => $link->{name}, # or undef
+        linked_id => $link->{id}, # or undef
+        linked_key => $link->{key}, # or undef
+        linked_email => $link->{email}, # or undef
+      };
+      my $app_obj = $app->bare_param ('source_data');
+      $data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
+      return $app->db->insert ('account_log', [{
+        log_id => $log_id,
+        account_id => Dongry::Type->serialize ('text', $session_data->{account_id}),
+        operator_account_id => Dongry::Type->serialize ('text', $session_data->{account_id}),
+        timestamp => $time,
+        action => 'link',
+        ua => $app->bare_param ('source_ua') // '',
+        ipaddr => $app->bare_param ('source_ipaddr') // '',
+        data => Dongry::Type->serialize ('json', $data),
+      }]); # since R5.9
     });
   });
 } # link_account
