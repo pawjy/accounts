@@ -66,17 +66,20 @@ sub {
         url => qq<http://$host/cb>,
         header_fields => {Authorization => 'Bearer ' . $api_token},
         params => {
-              sk => $http->request_cookies->{sk},
-              sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
-              oauth_token => $http->query_params->{oauth_token},
-              oauth_verifier => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{oauth_verifier},
-              code => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{code},
-              state => $http->query_params->{bad_state} ? 'aaa' : $http->query_params->{state},
-            },
-            timeout => 60*10,
-            anyevent => 1,
-            cb => sub {
-              my $res = $_[1];
+          sk => $http->request_cookies->{sk},
+          sk_context => $http->query_params->{sk_context}->[0] // 'app.cookie',
+          oauth_token => $http->query_params->{oauth_token},
+          oauth_verifier => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{oauth_verifier},
+          code => $http->query_params->{bad_code} ? 'bee' : $http->query_params->{code},
+          state => $http->query_params->{bad_state} ? 'aaa' : $http->query_params->{state},
+          source_ua => $http->get_request_header ('x-source-ua'),
+          source_ipaddr => $http->get_request_header ('x-source-ipaddr'),
+          source_data => $http->get_request_header ('x-source-data'),
+        },
+        timeout => 60*10,
+        anyevent => 1,
+        cb => sub {
+          my $res = $_[1];
         if ($res->code == 200) {
           my $json = json_bytes2perl $res->content;
           $http->set_status (200);

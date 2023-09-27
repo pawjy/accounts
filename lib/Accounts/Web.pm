@@ -1813,24 +1813,46 @@ sub login_account ($$$) {
     }
     if (@$links == 0) { # new account
       $session_data->{no_email} = 1;
-      return $app->db->execute ('SELECT UUID_SHORT() AS account_id, UUID_SHORT() AS link_id', undef, source_name => 'master')->then (sub {
-        my $uuids = $_[0]->first;
-        $uuids->{account_id} = format_id $uuids->{account_id};
-        $uuids->{account_link_id} = format_id $uuids->{account_link_id};
+      my @log;
+      my $log_data = {
+        source_operation => $session_data->{action}->{operation},
+      };
+      my $app_obj = $app->bare_param ('source_data');
+      $log_data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
+      my $log_cols = {
+        ua => $app->bare_param ('source_ua') // '',
+        ipaddr => $app->bare_param ('source_ipaddr') // '',
+      };
+      return $app->db->uuid_short (6)->then (sub {
+        my $account_id = '' . $_[0]->[0];
+        my $link_id1 = '' . $_[0]->[1];
+        my $link_id2 = '' . $_[0]->[2];
+        my $log_id1 = '' . $_[0]->[1];
+        my $log_id2 = '' . $_[0]->[2];
+        my $log_id3 = '' . $_[0]->[3];
         my $time = time;
-        my $account = {account_id => $uuids->{account_id},
+        my $account = {account_id => $account_id,
                        user_status => 1, admin_status => 1,
                        terms_version => 0};
         my $name = $link->{name};
-        $name = $account->{account_id} unless defined $name and length $name;
+        $name = $account_id unless defined $name and length $name;
         return $app->db->execute ('INSERT INTO account (account_id, created, user_status, admin_status, terms_version, name) VALUES (:account_id, :created, :user_status, :admin_status, :terms_version, :name)', {
           created => $time,
           %$account,
           name => Dongry::Type->serialize ('text', $name),
         }, source_name => 'master', table_name => 'account')->then (sub {
+          push @log, {
+            log_id => $log_id1,
+            account_id => $account_id,
+            operator_account_id => $account_id,
+            timestamp => $time,
+            action => 'create',
+            %$log_cols,
+            data => Dongry::Type->serialize ('json', $log_data),
+          };
           return $app->db->execute ('INSERT INTO account_link (account_link_id, account_id, service_name, created, updated, linked_name, linked_id, linked_key, linked_token1, linked_token2, linked_email, linked_data) VALUES (:account_link_id, :account_id, :service_name, :created, :updated, :linked_name, :linked_id, :linked_key:nullable, :linked_token1, :linked_token2, :linked_email, :linked_data)', {
-            account_link_id => $uuids->{link_id},
-            account_id => $uuids->{account_id},
+            account_link_id => $link_id1,
+            account_id => $account_id,
             service_name => Dongry::Type->serialize ('text', $server->{name}),
             created => $time,
             updated => $time,
@@ -1842,7 +1864,23 @@ sub login_account ($$$) {
             linked_token2 => Dongry::Type->serialize ('text', $token2),
             linked_data => Dongry::Type->serialize ('json', $link->{data}),
           }, source_name => 'master', table_name => 'account_link')->then (sub {
-            my $account_link = {account_link_id => $uuids->{link_id}};
+            push @log, {
+              log_id => $log_id2,
+              account_id => $account_id,
+              operator_account_id => $account_id,
+              timestamp => $time,
+              action => 'link',
+              %$log_cols,
+              data => Dongry::Type->serialize ('json', {
+                service_name => $server->{name},
+                linked_name => $link->{name}, # or undef
+                linked_id => $link->{id}, # or undef
+                linked_key => $link->{key}, # or undef
+                linked_email => $link->{email}, # or undef
+                %$log_data,
+              }),
+            };
+            my $account_link = {account_link_id => $link_id1};
             return [$account, $account_link];
           });
         })->then (sub {
@@ -1851,25 +1889,41 @@ sub login_account ($$$) {
           my $addr = $link->{email} // '';
           return $return unless $addr =~ /\A[\x21-\x3F\x41-\x7E]+\@[\x21-\x3F\x41-\x7E]+\z/;
           my $email_id = sha1_hex $addr;
-          return $app->db->execute ('SELECT UUID_SHORT() AS uuid', undef, source_name => 'master')->then (sub {
-            my $time = time;
-            delete $session_data->{no_email};
-            return $app->db->insert ('account_link', [{
-              account_link_id => $_[0]->first->{uuid},
-              account_id => Dongry::Type->serialize ('text', $account->{account_id}),
-              service_name => 'email',
-              created => $time,
-              updated => $time,
-              linked_name => '',
-              linked_id => $email_id,
-              linked_key => undef,
-              linked_email => Dongry::Type->serialize ('text', $addr),
-              linked_token1 => '',
-              linked_token2 => '',
-              linked_data => '{}',
-            }], source_name => 'master', duplicate => 'replace');
-          })->then (sub { return $return });
+          delete $session_data->{no_email};
+          return $app->db->insert ('account_link', [{
+            account_link_id => $link_id2,
+            account_id => $account_id,
+            service_name => 'email',
+            created => $time,
+            updated => $time,
+            linked_name => '',
+            linked_id => $email_id,
+            linked_key => undef,
+            linked_email => Dongry::Type->serialize ('text', $addr),
+            linked_token1 => '',
+            linked_token2 => '',
+            linked_data => '{}',
+          }], source_name => 'master', duplicate => 'replace')->then (sub {
+            push @log, {
+              log_id => $log_id3,
+              account_id => $account_id,
+              operator_account_id => $account_id,
+              timestamp => $time,
+              action => 'link',
+              %$log_cols,
+              data => Dongry::Type->serialize ('json', {
+                service_name => 'email',
+                linked_id => $email_id,
+                linked_email => $addr,
+                %$log_data,
+              }),
+            };
+            return $return;
+          });
         });
+      })->then (sub {
+        my $return = $_[0];
+        return $app->db->insert ('account_log', \@log)->then (sub { $return });
       });
     } elsif (@$links == 1) { # existing account
       my $time = time;
@@ -1895,7 +1949,9 @@ sub login_account ($$$) {
           linked_token2 => Dongry::Type->serialize ('text', $token2),
           linked_email => Dongry::Type->serialize ('text', $link->{email} // ''),
           linked_data => Dongry::Type->serialize ('json', $link->{data}),
-          updated => time,
+          updated => $time,
+          ## Note that no `account_log` is inserted when linked_* is
+          ## updated here.
         }, source_name => 'master'),
         $app->db->select ('account_link', {
           account_id => $account_id,

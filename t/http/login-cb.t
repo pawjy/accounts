@@ -93,7 +93,11 @@ Test {
       my $location = $result->header ('Location');
       my ($base, $query) = split /\?/, $location, 2;
       is $base, $cb_url;
-      return $current->post ("/cb?$query", {}, session => 1);
+      return $current->post ("/cb?$query", {
+        'source_ipaddr' => $current->generate_key (k1 => {}),
+        'source_ua' => $current->generate_key (k2 => {}),
+        'source_data' => perl2json_chars ({foo => $current->generate_text (t1 => {})}),
+      }, session => 1);
     } $current->c;
   })->then (sub {
     my $result = $_[0];
@@ -151,8 +155,50 @@ Test {
       ok $current->o ('time1') < $result->{json}->{login_time}, $result->{json}->{login_time};
       ok $result->{json}->{no_email}, 'no create_email_link';
     } $current->c;
+    $current->set_o (a1 => {account_id => $account_id});
+    return $current->post (['log', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+@{$result->{json}->{items}}, 2;
+      $result->{json}->{items} = [sort { $a->{action} cmp $b->{action} || $a->{data}->{service_name} cmp $b->{data}->{service_name} } @{$result->{json}->{items}}];
+      {
+        my $item = $result->{json}->{items}->[0];
+        ok $item->{log_id};
+        is $item->{account_id}, $current->o ('a1')->{account_id};
+        is $item->{operator_account_id}, $current->o ('a1')->{account_id};
+        ok $item->{timestamp};
+        ok $item->{timestamp} < time;
+        is $item->{action}, 'create';
+        is $item->{ua}, $current->o ('k2');
+        is $item->{ipaddr}, $current->o ('k1');
+        ok $item->{data};
+        is $item->{data}->{source_operation}, 'login';
+      }
+      {
+        my $item = $result->{json}->{items}->[1];
+        ok $item->{log_id};
+        is $item->{account_id}, $current->o ('a1')->{account_id};
+        is $item->{operator_account_id}, $current->o ('a1')->{account_id};
+        ok $item->{timestamp};
+        ok $item->{timestamp} < time;
+        is $item->{action}, 'link';
+        is $item->{ua}, $current->o ('k2');
+        is $item->{ipaddr}, $current->o ('k1');
+        ok $item->{data};
+        is $item->{data}->{source_operation}, 'login';
+        is $item->{data}->{service_name}, 'oauth2server';
+        is $item->{data}->{source_data}->{foo}, $current->o ('t1');
+        ok $item->{data}->{linked_id};
+        is $item->{data}->{linked_key}, undef;
+        ok $item->{data}->{linked_email};
+        ok $item->{data}->{linked_name};
+      }
+    } $current->c;
   });
-} n => 18, name => '/login then auth then /cb - oauth2';
+} n => 45, name => '/login then auth then /cb - oauth2';
 
 Test {
   my $current = shift;
@@ -230,7 +276,11 @@ Test {
       my $location = $result->header ('Location');
       my ($base, $query) = split /\?/, $location, 2;
       is $base, $cb_url;
-      return $current->post ("/cb?$query", {}, session => 1);
+      return $current->post ("/cb?$query", {
+        'source_ipaddr' => $current->generate_key (k1 => {}),
+        'source_ua' => $current->generate_key (k2 => {}),
+        'source_data' => perl2json_chars ({foo => $current->generate_text (t1 => {})}),
+      }, session => 1);
     } $current->c;
   })->then (sub {
     my $result = $_[0];
@@ -248,9 +298,70 @@ Test {
       my $ls = [grep { $_->{service_name} eq 'oauth2server' } values %$links];
       is $ls->[0]->{id}, $x_account_id;
       ok ! $result->{json}->{no_email};
+      $current->set_o (a1 => {account_id => $result->{json}->{account_id}});
+    } $current->c;
+    return $current->post (['log', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+@{$result->{json}->{items}}, 3;
+      $result->{json}->{items} = [sort { $a->{action} cmp $b->{action} || $a->{data}->{service_name} cmp $b->{data}->{service_name} } @{$result->{json}->{items}}];
+      {
+        my $item = $result->{json}->{items}->[0];
+        ok $item->{log_id};
+        is $item->{account_id}, $current->o ('a1')->{account_id};
+        is $item->{operator_account_id}, $current->o ('a1')->{account_id};
+        ok $item->{timestamp};
+        ok $item->{timestamp} < time;
+        is $item->{action}, 'create';
+        is $item->{ua}, $current->o ('k2');
+        is $item->{ipaddr}, $current->o ('k1');
+        ok $item->{data};
+        is $item->{data}->{source_operation}, 'login';
+      }
+      {
+        my $item = $result->{json}->{items}->[1];
+        ok $item->{log_id};
+        is $item->{account_id}, $current->o ('a1')->{account_id};
+        is $item->{operator_account_id}, $current->o ('a1')->{account_id};
+        ok $item->{timestamp};
+        ok $item->{timestamp} < time;
+        is $item->{action}, 'link';
+        is $item->{ua}, $current->o ('k2');
+        is $item->{ipaddr}, $current->o ('k1');
+        ok $item->{data};
+        is $item->{data}->{source_operation}, 'login';
+        is $item->{data}->{service_name}, 'email';
+        is $item->{data}->{source_data}->{foo}, $current->o ('t1');
+        ok $item->{data}->{linked_id};
+        is $item->{data}->{linked_key}, undef;
+        ok $item->{data}->{linked_email};
+        is $item->{data}->{linked_name}, undef;
+      }
+      {
+        my $item = $result->{json}->{items}->[2];
+        ok $item->{log_id};
+        is $item->{account_id}, $current->o ('a1')->{account_id};
+        is $item->{operator_account_id}, $current->o ('a1')->{account_id};
+        ok $item->{timestamp};
+        ok $item->{timestamp} < time;
+        is $item->{action}, 'link';
+        is $item->{ua}, $current->o ('k2');
+        is $item->{ipaddr}, $current->o ('k1');
+        ok $item->{data};
+        is $item->{data}->{source_operation}, 'login';
+        is $item->{data}->{service_name}, 'oauth2server';
+        is $item->{data}->{source_data}->{foo}, $current->o ('t1');
+        is $item->{data}->{linked_id}, $x_account_id;
+        is $item->{data}->{linked_key}, undef;
+        ok $item->{data}->{linked_email};
+        ok $item->{data}->{linked_name};
+      }
     } $current->c;
   });
-} n => 9, name => 'create_email_link with email';
+} n => 52, name => 'create_email_link with email';
 
 Test {
   my $current = shift;
