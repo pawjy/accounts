@@ -108,6 +108,7 @@ Test {
     } $current->c;
     return $current->post (['log', 'get'], {
       action => 'agree',
+      use_sk => 1,
     }, session => 's1');
   })->then (sub {
     my $result = $_[0];
