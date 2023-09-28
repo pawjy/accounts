@@ -15,9 +15,11 @@ Test {
         {method => 'GET', status => 405},
         {bearer => undef, status => 401},
         {params => {}, status => 400, name => 'no param'},
+        {params => {}, session => "s1", status => 400, name => 'no param'},
         {params => {sk_context => rand}, status => 400},
         {params => {sk_context => rand, sk => rand}, status => 400},
-        {params => {account_id => 123}, session => 's1', status => 400},
+        {params => {account_id => 123, use_sk => 1}, session => 's1',
+         status => 400, name => 'session and account_id'},
       ],
     );
   })->then (sub {
@@ -27,14 +29,42 @@ Test {
     test {
       is 0+@{$result->{json}->{items}}, 0;
     } $current->c;
-    return $current->post (['log', 'get'], {}, session => 's1');
+    return $current->post (['log', 'get'], {
+      use_sk => 1,
+    }, session => 's1');
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+@{$result->{json}->{items}}, 0;
+    } $current->c;
+    return $current->post (['log', 'get'], {account_id => 424},
+                           session => 's1');
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+@{$result->{json}->{items}}, 0;
+    } $current->c, name => "session ignored";
+    return $current->post (['log', 'get'], {use_sk => 1});
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+@{$result->{json}->{items}}, 0;
+    } $current->c, name => 'use_sk';
+    return $current->post (['log', 'get'], {use_sk => 1, sk_context => rand});
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+@{$result->{json}->{items}}, 0;
+    } $current->c;
+    return $current->post (['log', 'get'], {use_sk => 1, sk_context => rand,
+                                            sk => rand});
   })->then (sub {
     my $result = $_[0];
     test {
       is 0+@{$result->{json}->{items}}, 0;
     } $current->c;
   });
-} n => 3, name => 'empty';
+} n => 7, name => 'empty';
 
 Test {
   my $current = shift;
@@ -75,6 +105,7 @@ Test {
       is 0+@{$result->{json}->{items}}, 1;
     } $current->c;
     return $current->post (['log', 'get'], {
+      use_sk => 1,
     }, session => 's1');
   })->then (sub {
     my $result = $_[0];
@@ -84,6 +115,7 @@ Test {
     return $current->are_errors (
       [['log', 'get'], {
         account_id => $current->o ('a1')->{account_id},
+        use_sk => 1,
       }, session => 's1'],
       [
         {status => 400},
@@ -92,6 +124,7 @@ Test {
   })->then (sub {
     return $current->post (['log', 'get'], {
       log_id => $current->o ('log1')->{log_id},
+      use_sk => 1,
     }, session => 's1');
   })->then (sub {
     my $result = $_[0];
@@ -100,6 +133,7 @@ Test {
     } $current->c;
     return $current->post (['log', 'get'], {
       log_id => $current->o ('log1')->{log_id},
+      use_sk => 1,
     }, session => 's2');
   })->then (sub {
     my $result = $_[0];
@@ -132,6 +166,7 @@ Test {
       my $session = shift;
       return $current->post (['create'], {
         source_ipaddr => $current->o ('k1'),
+        use_sk => 1,
       }, session => $session)->then (sub {
         $current->set_o ('a' . $session => $_[0]->{json});
       });

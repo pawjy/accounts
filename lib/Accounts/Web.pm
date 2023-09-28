@@ -1615,13 +1615,16 @@ sub main ($$) {
     ##
     ## Parameters
     ##
-    ##   |sk|, |sk_context|
+    ##   |use_sk|            - If true, |sk| is used to specify the account
+    ##                         ID of the logs.
     ##   |log_id|            - The log ID of the log.
     ##   |account_id|        - The account ID of the logs.
     ##   |operator_account_id| - The operator account ID of the logs.
     ##   |ipaddr|            - The IP address of the logs.
     ##   |action|            - The action of the logs.
     ##   At least one of these six groups of parameters is required.
+    ##
+    ##   |sk|, |sk_context|, |sk_max_age|
     ##
     ## Returns
     ##   |items|             - An array of logs.
@@ -1637,7 +1640,7 @@ sub main ($$) {
         $where->{$key} = $app->bare_param ($key);
         delete $where->{$key} if not defined $where->{$key};
       }
-      if (defined $app->bare_param ('sk')) {
+      if ($app->bare_param ('use_sk')) {
         return $app->throw_error
             (400, reason_phrase => 'Both |sk| and |account_id| is specified')
             if defined $app->bare_param ('account_id');
@@ -1650,6 +1653,8 @@ sub main ($$) {
         });
       }
     })->then (sub {
+      return [] if not defined $where->{account_id} and
+          $app->bare_param ('use_sk');
       return $app->throw_error (400, reason_phrase => 'No params')
           unless keys %$where;
 
@@ -1662,16 +1667,19 @@ sub main ($$) {
         source_name => 'master',
         offset => $page->{offset}, limit => $page->{limit},
         order => ['timestamp', $page->{order_direction}],
-      );
+      )->then (sub {
+        my $v = $_[0];
+        my $items = [map {
+          $_->{account_id} .= '';
+          $_->{operator_account_id} .= '';
+          $_->{log_id} .= "";
+          $_->{data} = Dongry::Type->parse ('json', $_->{data});
+          $_;
+        } $v->all->to_list];
+        return $items;
+      });
     })->then (sub {
-      my $v = $_[0];
-      my $items = [map {
-        $_->{account_id} .= '';
-        $_->{operator_account_id} .= '';
-        $_->{log_id} .= "";
-        $_->{data} = Dongry::Type->parse ('json', $_->{data});
-        $_;
-      } $v->all->to_list];
+      my $items = $_[0];
       my $next_page = next_page $page, $items, 'timestamp';
       return $app->send_json ({
         items => $items,
