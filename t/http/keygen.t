@@ -79,9 +79,11 @@ Test {
       is $item->{data}->{source_operation}, 'keygen';
       is $item->{data}->{key_type}, 'rsa';
       is $item->{data}->{source_data}->{foo}, $current->o ('t1');
+      like $result->{res}->body_bytes, qr{"account_link_id":"};
+      ok $item->{data}->{account_link_id};
     } $current->c;
   });
-} n => 22, name => '/keygen has account session', timeout => 60;
+} n => 24, name => '/keygen has account session', timeout => 60;
 
 RUN;
 

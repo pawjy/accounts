@@ -267,6 +267,9 @@ Test {
       return $current->post (['link', 'delete'], {
         account_link_id => [map { $_->{account_link_id} } grep { $_->{id} eq $x_account_id } @$ls],
         server => 'oauth1server',
+        source_ipaddr => $current->generate_key (k1 => {}),
+        source_ua => $current->generate_key (k2 => {}),
+        source_data => perl2json_chars ({foo => $current->generate_text (t1 => {})}),
       }, session => 1);
     })->then (sub {
       my $result = $_[0];
@@ -284,8 +287,35 @@ Test {
         is $ls2->[0]->{id}, $x_account_id;
       } $current->c, name => 'wrong server cant remove account link';
     });
+  })->then (sub {
+    $current->set_o (a1 => {account_id => $account_id});
+    return $current->post (['log', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+      action => 'unlink',
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      ok 0+@{$result->{json}->{items}};
+      my $item = $result->{json}->{items}->[0];
+      ok $item->{log_id};
+      is $item->{account_id}, $current->o ('a1')->{account_id};
+      is $item->{operator_account_id}, $current->o ('a1')->{account_id};
+      ok $item->{timestamp};
+      ok $item->{timestamp} < time;
+      is $item->{action}, 'unlink';
+      is $item->{ua}, $current->o ('k2');
+      is $item->{ipaddr}, $current->o ('k1');
+      ok $item->{data};
+      is $item->{data}->{source_operation}, 'link/delete';
+      is $item->{data}->{service_name}, 'oauth1server';
+      is $item->{data}->{all}, undef;
+      is $item->{data}->{source_data}->{foo}, $current->o ('t1');
+      like $result->{res}->body_bytes, qr{"account_link_id":"};
+      ok $item->{data}->{account_link_id};
+    } $current->c;
   });
-} n => 20, name => '/link/delete with session';
+} n => 36, name => '/link/delete with session';
 
 Test {
   my $current = shift;
@@ -377,6 +407,9 @@ Test {
       sk => $current->o ('a1')->{session}->{sk},
       #sk_context is implied
       all => 1,
+      source_ipaddr => $current->generate_key (k1 => {}),
+      source_ua => $current->generate_key (k2 => {}),
+      source_data => perl2json_chars ({foo => $current->generate_text (t1 => {})}),
     }); # nop
   })->then (sub {
     return $current->post (['info'], {
@@ -398,8 +431,31 @@ Test {
       is $link->{email}, undef;
       is $link->{foo}, undef;
     } $current->c;
+    return $current->post (['log', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+      action => 'unlink',
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      ok 0+@{$result->{json}->{items}};
+      my $item = $result->{json}->{items}->[0];
+      ok $item->{log_id};
+      is $item->{account_id}, $current->o ('a1')->{account_id};
+      is $item->{operator_account_id}, $current->o ('a1')->{account_id};
+      ok $item->{timestamp};
+      ok $item->{timestamp} < time;
+      is $item->{action}, 'unlink';
+      is $item->{ua}, $current->o ('k2');
+      is $item->{ipaddr}, $current->o ('k1');
+      ok $item->{data};
+      is $item->{data}->{source_operation}, 'link/delete';
+      is $item->{data}->{service_name}, 'linktest1';
+      ok $item->{data}->{all};
+      is $item->{data}->{source_data}->{foo}, $current->o ('t1');
+    } $current->c;
   });
-} n => 21, name => '/link/delete?all';
+} n => 35, name => '/link/delete?all';
 
 Test {
   my $current = shift;
