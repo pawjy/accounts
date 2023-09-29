@@ -195,10 +195,12 @@ Test {
         is $item->{data}->{linked_key}, undef;
         ok $item->{data}->{linked_email};
         ok $item->{data}->{linked_name};
+        like $result->{res}->body_bytes, qr{"account_link_id":"};
+        ok $item->{data}->{account_link_id};
       }
     } $current->c;
   });
-} n => 45, name => '/login then auth then /cb - oauth2';
+} n => 47, name => '/login then auth then /cb - oauth2';
 
 Test {
   my $current = shift;

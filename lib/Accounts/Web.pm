@@ -773,7 +773,7 @@ sub main ($$) {
           my $time = time;
           return $tr->execute ('SELECT UUID_SHORT() AS uuid, UUID_SHORT() AS uuid2', undef, source_name => 'master')->then (sub {
             my $v = $_[0]->first;
-            $log_id = $v->{uuid2};
+            $log_id = '' . $v->{uuid2};
             return $tr->insert ('account_link', [{
               account_link_id => $v->{uuid},
               account_id => Dongry::Type->serialize ('text', $account_id),
@@ -802,9 +802,10 @@ sub main ($$) {
             my $data = {
               source_operation => 'email/verify',
               service_name => 'email',
-              linked_id => $def->{id}, # or undef
               linked_email => $def->{addr},
+              account_link_id => $log_id,
             };
+            $data->{linked_id} = '' . $def->{id} if defined $def->{id};
             my $app_obj = $app->bare_param ('source_data');
             $data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
             return $tr->insert ('account_log', [{
@@ -1001,8 +1002,8 @@ sub main ($$) {
         $app->db->uuid_short (2),
       ])->then (sub {
         my $key = $_[0]->[0];
-        my $link_id = $_[0]->[1]->[0];
-        my $log_id = $_[0]->[1]->[1];
+        my $link_id = '' . $_[0]->[1]->[0];
+        my $log_id = '' . $_[0]->[1]->[1];
         my $time = time;
         #      public private
         # dsa     590     668
@@ -1029,6 +1030,7 @@ sub main ($$) {
             source_operation => 'keygen',
             service_name => $server->{name},
             key_type => $key_type,
+            account_link_id => $link_id,
           };
           my $app_obj = $app->bare_param ('source_data');
           $data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
@@ -1066,6 +1068,7 @@ sub main ($$) {
     ##                         required.
     ##   Other linked_* fields are not supported yet (might be added
     ##   later if necessary).
+    ##   Operation source parameters.
     ##
     ## Returns nothing.
     ##
@@ -1096,8 +1099,9 @@ sub main ($$) {
       my $linked_key = $app->text_param ('linked_key'); # or undef
       return $app->throw_error (400, reason_phrase => 'Bad |linked_key|')
           unless (defined $linked_id or defined $linked_key);
-      return $app->db->uuid_short (1, source_name => 'master')->then (sub {
-        my $link_id = $_[0]->[0];
+      return $app->db->uuid_short (2)->then (sub {
+        my $link_id = '' . $_[0]->[0];
+        my $log_id = '' . $_[0]->[1];
         my $time = time;
         return $app->db->transaction->then (sub {
           my $tr = $_[0];
@@ -1121,6 +1125,27 @@ sub main ($$) {
               linked_token2 => '',
               linked_data => '{}',
             }], source_name => 'master', duplicate => 'replace');
+          })->then (sub {
+            my $data = {
+              source_operation => 'link/add',
+              service_name => $server->{name},
+              linked_id => $linked_id,
+              linked_key => $linked_key,
+              account_link_id => $link_id,
+            };
+            $data->{replace} = 1 if $replace;
+            my $app_obj = $app->bare_param ('source_data');
+            $data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
+            return $tr->insert ('account_log', [{
+              log_id => $log_id,
+              account_id => Dongry::Type->serialize ('text', $account_id),
+              operator_account_id => Dongry::Type->serialize ('text', $account_id),
+              timestamp => $time,
+              action => 'link',
+              ua => $app->bare_param ('source_ua') // '',
+              ipaddr => $app->bare_param ('source_ipaddr') // '',
+              data => Dongry::Type->serialize ('json', $data),
+            }]); # since R5.9
           })->then (sub {
             return $tr->commit;
           });
@@ -1152,6 +1177,7 @@ sub main ($$) {
     ##   |with_links| : Boolean - If true, linked email addresses from
     ##                         account links with server |email| (before
     ##                         the deletion) is returned.
+    ##   Operation source parameters.
     ##
     ## Returns:
     ##
@@ -1180,6 +1206,7 @@ sub main ($$) {
           unless defined $id;
       my $link_id = $app->bare_param ('account_link_id');
       my $all = $app->bare_param ('all');
+      my $time = time;
       return $app->throw_error_json ({reason => 'Bad |account_link_id|'})
           if not defined $link_id and not $all or
              $all and defined $link_id;
@@ -1216,17 +1243,50 @@ sub main ($$) {
             }
           });
         })->then (sub {
+          return $tr->execute ('select uuid_short() as `1`', {}, source_name => 'master');
+        })->then (sub {
+          my $log_id = '' . $_[0]->first->{1};
+          my $data = {
+            source_operation => 'link/delete',
+            service_name => $server->{name},
+          };
+          my $app_obj = $app->bare_param ('source_data');
+          $data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
           if ($all) {
+            $data->{all} = 1;
             return $tr->delete ('account_link', {
               account_id => Dongry::Type->serialize ('text', $id),
               service_name => Dongry::Type->serialize ('text', $server->{name}),
-            }, source_name => 'master');
+            }, source_name => 'master')->then (sub {
+              return $tr->insert ('account_log', [{
+                log_id => $log_id,
+                account_id => Dongry::Type->serialize ('text', $id),
+                operator_account_id => Dongry::Type->serialize ('text', $id),
+                timestamp => $time,
+                action => 'unlink',
+                ua => $app->bare_param ('source_ua') // '',
+                ipaddr => $app->bare_param ('source_ipaddr') // '',
+                data => Dongry::Type->serialize ('json', $data),
+              }]); # since R5.9
+            });
           } else {
+            $data->{account_link_id} = '' . $link_id;
             return $tr->delete ('account_link', {
               account_id => Dongry::Type->serialize ('text', $id),
               account_link_id => Dongry::Type->serialize ('text', $link_id),
               service_name => Dongry::Type->serialize ('text', $server->{name}),
-            }, source_name => 'master');
+            }, source_name => 'master')->then (sub {
+              return $tr->insert ('account_log', [{
+                log_id => $log_id,
+                account_id => Dongry::Type->serialize ('text', $id),
+                operator_account_id => Dongry::Type->serialize ('text', $id),
+                timestamp => $time,
+                action => 'unlink',
+                ua => $app->bare_param ('source_ua') // '',
+                ipaddr => $app->bare_param ('source_ipaddr') // '',
+                data => Dongry::Type->serialize ('json', $data),
+              }]); # since R5.9
+            });
           }
         })->then (sub {
           return $tr->commit;
@@ -1885,6 +1945,7 @@ sub login_account ($$$) {
                 linked_id => $link->{id}, # or undef
                 linked_key => $link->{key}, # or undef
                 linked_email => $link->{email}, # or undef
+                account_link_id => $link_id1,
                 %$log_data,
               }),
             };
@@ -1923,6 +1984,7 @@ sub login_account ($$$) {
                 service_name => 'email',
                 linked_id => $email_id,
                 linked_email => $addr,
+                account_link_id => $link_id2,
                 %$log_data,
               }),
             };
@@ -2010,8 +2072,8 @@ sub link_account ($$$) {
   }
 
   return $app->db->uuid_short (2)->then (sub {
-    my $link_id = $_[0]->[0];
-    my $log_id = $_[0]->[1];
+    my $link_id = ''. $_[0]->[0];
+    my $log_id = ''. $_[0]->[1];
     my $time = time;
     return $app->db->insert ('account_link', [{
       account_link_id => $link_id,
@@ -2040,10 +2102,11 @@ sub link_account ($$$) {
         source_operation => $session_data->{action}->{operation},
         service_name => $server->{name},
         linked_name => $link->{name}, # or undef
-        linked_id => $link->{id}, # or undef
         linked_key => $link->{key}, # or undef
         linked_email => $link->{email}, # or undef
+        account_link_id => $link_id,
       };
+      $data->{linked_id} = '' . $link->{id} if defined $link->{id};
       my $app_obj = $app->bare_param ('source_data');
       $data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
       return $app->db->insert ('account_log', [{

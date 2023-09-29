@@ -212,6 +212,9 @@ Test {
       account_id => $current->o ('a1')->{account_id},
       linked_id => $current->generate_id (i5 => {}),
       replace => 1,
+      source_ipaddr => $current->generate_key (k1 => {}),
+      source_ua => $current->generate_key (k2 => {}),
+      source_data => perl2json_chars ({foo => $current->generate_text (t1 => {})}),
     });
   })->then (sub {
     return $current->post (['info'], {
@@ -244,14 +247,42 @@ Test {
       is $link3->{email}, undef;
       is $link3->{foo}, undef;
     } $current->c;
+    return $current->post (['log', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+      action => 'link',
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      ok 0+@{$result->{json}->{items}};
+      my $item = $result->{json}->{items}->[0];
+      ok $item->{log_id};
+      is $item->{account_id}, $current->o ('a1')->{account_id};
+      is $item->{operator_account_id}, $current->o ('a1')->{account_id};
+      ok $item->{timestamp};
+      ok $item->{timestamp} < time;
+      is $item->{action}, 'link';
+      is $item->{ua}, $current->o ('k2');
+      is $item->{ipaddr}, $current->o ('k1');
+      ok $item->{data};
+      is $item->{data}->{source_operation}, 'link/add';
+      is $item->{data}->{service_name}, 'linktest1';
+      is $item->{data}->{linked_id}, $current->o ('i5');
+      is $item->{data}->{linked_key}, undef;
+      is $item->{data}->{linked_email}, undef;
+      is $item->{data}->{source_data}->{foo}, $current->o ('t1');
+      like $result->{res}->body_bytes, qr{"account_link_id":"};
+      ok $item->{data}->{account_link_id};
+      ok $item->{data}->{replace};
+    } $current->c;
   });
-} n => 106, name => '/link/add';
+} n => 125, name => '/link/add';
 
 RUN;
 
 =head1 LICENSE
 
-Copyright 2021 Wakaba <wakaba@suikawiki.org>.
+Copyright 2021-2023 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

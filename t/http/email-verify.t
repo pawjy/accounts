@@ -84,9 +84,11 @@ Test {
       ok $item->{data}->{linked_id};
       is $item->{data}->{linked_email}, q<foo@bar.test>;
       is $item->{data}->{source_data}->{foo}, $current->o ('t1');
+      like $result->{res}->body_bytes, qr{"account_link_id":"};
+      ok $item->{data}->{account_link_id};
     } $current->c;
   });
-} n => 25, name => '/email/verify associated';
+} n => 27, name => '/email/verify associated';
 
 Test {
   my $current = shift;
