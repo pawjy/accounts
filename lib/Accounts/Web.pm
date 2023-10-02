@@ -1762,7 +1762,7 @@ sub resume_session ($$;$) {
   return (length $sk ? ($tr // $app->db)->select ('session', {
     sk => $sk,
     sk_context => $app->bare_param ('sk_context') // '',
-    created => {'>', time - $MaxSessionTimeout},
+    expires => {'>', time},
   }, source_name => 'master', lock => (defined $tr ? 'update' : undef))->then (sub {
     my $acc = $_[0]->first_as_row; # or undef
 
@@ -1779,8 +1779,8 @@ sub resume_session ($$;$) {
 } # resume_session
 
 sub delete_old_sessions ($$) {
-  return $_[1]->db->execute ('DELETE FROM `session` WHERE created < ?', {
-    created => time - $MaxSessionTimeout,
+  return $_[1]->db->delete ('session', {
+    expires => {'<', time},
   });
 } # delete_old_sessions
 
