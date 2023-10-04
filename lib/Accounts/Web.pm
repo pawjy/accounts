@@ -253,49 +253,103 @@ sub main ($$) {
 
   if (@$path == 1 and $path->[0] eq 'session') {
     ## /session - Ensure that there is a session
+    ##
+    ## Parameters
+    ##
+    ##   Operation source parameters.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
     my $sk = $app->bare_param ('sk') // '';
     my $sk_context = $app->bare_param ('sk_context')
         // return $app->throw_error_json ({reason => 'No |sk_context|'});
+    my $time = time;
     return ((length $sk ? $app->db->select ('session', {
       sk => $sk,
       sk_context => $sk_context,
       expires => {'>', time},
-    }, fields => ['sk', 'expires'], source_name => 'master')->then (sub {
+    }, fields => ['sk', 'sk_context', 'expires', 'data'], source_name => 'master')->then (sub {
       return $_[0]->first_as_row; # or undef
     }) : Promise->resolve (undef))->then (sub {
       my $session_row = $_[0];
       if (defined $session_row) {
-        return [$session_row, 0];
-      } else {
-        $sk = id 100;
-        my $time = time;
-        my $age = $MaxSessionTimeout;
-        my $ma = $app->config->get ('session_max_age') || 'Infinity';
-        $age = $ma if $ma < $age;
+        my $session_data = $session_row->get ('data');
+        if (defined $session_data->{session_id}) { # sessions before R5.10.3 does not have |session_id|
+          return [$session_row, 0];
+        }
+      }
+
+      $sk = id 100;
+      my $age = $MaxSessionTimeout;
+      my $ma = $app->config->get ('session_max_age') || 'Infinity';
+      $age = $ma if $ma < $age;
+      return $app->db->uuid_short (1)->then (sub {
+        my $session_id = $_[0]->[0];
+        my $data = {session_id => '' . $session_id};
         return $app->db->insert ('session', [{
           sk => $sk,
           sk_context => $sk_context,
           created => $time,
           expires => $time + $age,
-          data => '{}',
-        }], source_name => 'master')->then (sub {
-          $session_row = $_[0]->first_as_row;
-          return [$session_row, 1];
-        });
-      }
+          data => Dongry::Type->serialize ('json', $data),
+        }], source_name => 'master');
+      })->then (sub {
+        $session_row = $_[0]->first_as_row;
+        return [$session_row, 1];
+      });
     })->then (sub {
       my ($session_row, $new) = @{$_[0]};
       my $json = {sk => $session_row->get ('sk'),
                   sk_expires => $session_row->get ('expires'),
                   set_sk => $new?1:0};
-      return $app->send_json ($json);
+      $app->send_json ($json);
+      return $class->write_session_log ($app, $session_row, $time, force => 1);
     })->then (sub {
       return $class->delete_old_sessions ($app);
     }));
-  } # /session
+  } elsif (@$path == 2 and $path->[0] eq 'session' and $path->[1] eq 'get') {
+    ## /session/get - Get a list of sessions
+    ##
+    ## Parameters
+    ##
+    ##   |account_id| : ID      : The sessions' account's ID.
+    ##   |sk_context| : String* : The sessions' |sk_context|.  Zero or more
+    ##                            parameters can be specified.
+    ##
+    ## Returns
+    ##
+    ##   |items| : Array<Session> : An array of sessions.
+    ##
+    ## Supports paging.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $page = this_page ($app, limit => 50, max_limit => 100);
+    my $where = {};
+    $where->{account_id} = 0+($app->bare_param ('account_id') || 0);
+    return $app->throw_error_json ({reason => 'No |account_id|'})
+        unless $where->{account_id};
+    my $sk_contexts = $app->bare_param_list ('sk_context')->to_a;
+    $where->{sk_context} = {-in => $sk_contexts} if @$sk_contexts;
+    $where->{timestamp} = $page->{value} if defined $page->{value};
+    return $app->db->select ('session_recent_log', $where,
+      fields => ['session_id', 'timestamp', 'expires', 'data'],
+      source_name => 'master',
+      offset => $page->{offset}, limit => $page->{limit},
+      order => ['timestamp', $page->{order_direction}],
+    )->then (sub {
+      my $v = $_[0];
+      my $items = [map {
+        $_->{session_id} .= '';
+        $_->{log_data} = Dongry::Type->parse ('json', delete $_->{data});
+        $_;
+      } defined $v ? $v->all->to_list : ()];
+      my $next_page = next_page $page, $items, 'timestamp';
+      return $app->send_json ({
+        items => $items,
+        %$next_page,
+      });
+    });
+   } # /session/get
 
   if (@$path == 1 and $path->[0] eq 'create') {
     ## /create - Create an account (without link)
@@ -321,10 +375,10 @@ sub main ($$) {
         return $app->send_error_json ({reason => 'Account-associated session'});
       }
 
+      my $time = time;
       return $app->db->uuid_short (2, source_name => 'master')->then (sub {
         my $ids = $_[0];
         my $account_id = '' . $ids->[0];
-        my $time = time;
         my $ver = 0+($app->bare_param ('terms_version') // 0);
         $ver = 255 if $ver > 255;
         return $app->db->insert ('account', [{
@@ -361,6 +415,8 @@ sub main ($$) {
             account_log_id => '' . $ids->[1],
           });
         });
+      })->then (sub {
+        return $class->write_session_log ($app, $session_row, $time, force => 1);
       });
     });
   } # /create
@@ -652,7 +708,10 @@ sub main ($$) {
           }
         })->then (sub {
           if ($session_data->{action}->{operation} eq 'login') {
-            return $class->login_account ($app, $server, $session_data);
+            my $time = time;
+            return $class->login_account ($app, $server, $session_data, $time)->then (sub {
+              return $class->write_session_log ($app, $session_row, $time, force => 1);
+            });
           } elsif ($session_data->{action}->{operation} eq 'link') {
             return $class->link_account ($app, $server, $session_data);
           } else {
@@ -1764,23 +1823,56 @@ sub resume_session ($$;$) {
     sk_context => $app->bare_param ('sk_context') // '',
     expires => {'>', time},
   }, source_name => 'master', lock => (defined $tr ? 'update' : undef))->then (sub {
-    my $acc = $_[0]->first_as_row; # or undef
+    my $session_row = $_[0]->first_as_row;
+    return undef unless defined $session_row;
+
+    my $session_data = $session_row->get ('data');
+    return undef if not defined $session_data->{session_id}; # sessions before R5.10.3 does not have |session_id|
 
     my $ma = $app->bare_param ('sk_max_age');
     if ($ma) {
-      my $data = $acc->get ('data');
-      unless (($data->{login_time} || 0) + $ma > time) {
+      unless (($session_data->{login_time} || 0) + $ma > time) {
         return undef;
       }
     }
     
-    return $acc;
+    return $session_row;
   }) : Promise->resolve (undef));
 } # resume_session
 
+sub write_session_log ($$$$;%) {
+  my ($class, $app, $session_row, $now, %args) = @_;
+  my $data = {
+    ua => $app->bare_param ('source_ua') // '',
+    ipaddr => $app->bare_param ('source_ipaddr') // '',
+  };
+  my $app_obj = $app->bare_param ('source_data');
+  $data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
+  if ($args{force} or length $data->{ipaddr} or length $data->{ua} or
+      defined $data->{source_data}) {
+    my $session_data = $session_row->get ('data');
+    return $app->db->insert ('session_recent_log', [{
+      sk => $session_row->get ('sk'),
+      sk_context => $session_row->get ('sk_context'),
+      account_id => 0+($session_data->{account_id} || 0),
+      session_id => 0+$session_data->{session_id},
+      timestamp => $now,
+      expires => $session_row->get ('expires'),
+      data => Dongry::Type->serialize ('json', $data),
+    }], duplicate => 'replace');
+  } else {
+    return Promise->resolve;
+  }
+} # write_session_log
+
 sub delete_old_sessions ($$) {
-  return $_[1]->db->delete ('session', {
+  my $db = $_[1]->db;
+  return $db->delete ('session', {
     expires => {'<', time},
+  })->then (sub {
+    return $db->delete ('session_recent_log', {
+      expires => {'<', time},
+    });
   });
 } # delete_old_sessions
 
@@ -1844,8 +1936,8 @@ sub get_resource_owner_profile ($$%) {
   });
 } # get_resource_owner_profile
 
-sub login_account ($$$) {
-  my ($class, $app, $server, $session_data) = @_;
+sub login_account ($$$$) {
+  my ($class, $app, $server, $session_data, $time) = @_;
   my $service = $server->{name};
 
   return $app->throw_error (400, reason_phrase => 'Non-loginable |service|')
@@ -1898,7 +1990,6 @@ sub login_account ($$$) {
         my $log_id1 = '' . $_[0]->[1];
         my $log_id2 = '' . $_[0]->[2];
         my $log_id3 = '' . $_[0]->[3];
-        my $time = time;
         my $account = {account_id => $account_id,
                        user_status => 1, admin_status => 1,
                        terms_version => 0};
@@ -1996,7 +2087,6 @@ sub login_account ($$$) {
         return $app->db->insert ('account_log', \@log)->then (sub { $return });
       });
     } elsif (@$links == 1) { # existing account
-      my $time = time;
       my $account_id = $links->[0]->{account_id};
       my $name = $account_id;
       $name = $link->{name} if defined $link->{name} and length $link->{name};

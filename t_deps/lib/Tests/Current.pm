@@ -189,12 +189,13 @@ sub are_errors ($$$) {
   });
 } # are_errors
 
-sub pages_ok ($$$$;$) {
+sub pages_ok ($$$$;$%) {
   my $self = $_[0];
   my ($path, $params, %args) = @{$_[1]};
   my $items = [@{$_[2]}];
   my $field = $_[3];
   my $name = $_[4];
+  my %opts = @_[5..$#_];
   my $count = int (@$items / 2) + 3;
   my $page = 1;
   my $ref;
@@ -215,6 +216,7 @@ sub pages_ok ($$$$;$) {
     return $self->post ($path, {%$params, limit => 2, ref => $ref}, %args)->then (sub {
       my $result = $_[0];
       my $expected_length = (@$items > 2 ? 2 : 0+@$items);
+      $result->{json}->{items} = ($opts{items} or sub { $_[0] })->($result->{json}->{items});
       my $actual_length = 0+@{$result->{json}->{items}};
       if ($expected_length == $actual_length) {
         if ($expected_length >= 1) {
