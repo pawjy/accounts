@@ -104,9 +104,11 @@ sub post ($$$;%) {
   if (defined $args{session}) {
     my $session = $self->o ($args{session});
     $p->{sk} = $session->{sk};
+    $p->{sk_context} = $session->{sk_context};
   } elsif (defined $args{account}) {
     my $account = $self->o ($args{account});
     $p->{sk} = $account->{session}->{sk};
+    $p->{sk_context} = $account->{session}->{sk_context};
   }
   return $self->client->request (
     method => 'POST',
@@ -286,9 +288,14 @@ sub create ($;@) {
 
 sub create_session ($$$) {
   my ($self, $name, $opts) = @_;
-  return $self->post (['session'], {})->then (sub {
+  my $skc = $opts->{sk_context} // 'tests';
+  return $self->post (['session'], {
+    sk_context => $skc,
+    source_ua => $opts->{source_ua},
+    source_ipaddr => $opts->{source_ipaddr},
+  })->then (sub {
     my $session = $self->{objects}->{$name} = $_[0]->{json};
-    $session->{sk_context} = 'tests';
+    $session->{sk_context} = $skc;
     
     if ($opts->{account}) {
       return $self->post (['create'], {
@@ -297,6 +304,8 @@ sub create_session ($$$) {
         name => $self->generate_text (rand, {}),
         #user_status
         #admin_status
+        source_ua => $opts->{source_ua},
+        source_ipaddr => $opts->{source_ipaddr},
       })->then (sub {
         $session->{account} = $_[0]->{json};
       });

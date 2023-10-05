@@ -312,9 +312,12 @@ sub main ($$) {
     ##
     ## Parameters
     ##
+    ##   |use_sk|, |sk|, |sk_context|, |sk_max_age|
     ##   |account_id| : ID      : The sessions' account's ID.
-    ##   |sk_context| : String* : The sessions' |sk_context|.  Zero or more
-    ##                            parameters can be specified.
+    ##   Either |sk| and its family or |account_id| is required.
+    ##
+    ##   |session_sk_context| : String* : The sessions' |sk_context|.
+    ##                            Zero or more parameters can be specified.
     ##
     ## Returns
     ##
@@ -325,18 +328,48 @@ sub main ($$) {
     $app->requires_api_key;
     my $page = this_page ($app, limit => 50, max_limit => 100);
     my $where = {};
-    $where->{account_id} = 0+($app->bare_param ('account_id') || 0);
-    return $app->throw_error_json ({reason => 'No |account_id|'})
-        unless $where->{account_id};
-    my $sk_contexts = $app->bare_param_list ('sk_context')->to_a;
-    $where->{sk_context} = {-in => $sk_contexts} if @$sk_contexts;
     $where->{timestamp} = $page->{value} if defined $page->{value};
-    return $app->db->select ('session_recent_log', $where,
-      fields => ['session_id', 'timestamp', 'expires', 'data'],
-      source_name => 'master',
-      offset => $page->{offset}, limit => $page->{limit},
-      order => ['timestamp', $page->{order_direction}],
-    )->then (sub {
+    my $sk_contexts = $app->bare_param_list ('session_sk_context')->to_a;
+    $where->{sk_context} = {-in => $sk_contexts} if @$sk_contexts;
+
+    return Promise->resolve->then (sub {
+      if ($app->bare_param ('use_sk')) {
+        return $app->throw_error
+            (400, reason_phrase => 'Both |sk| and |account_id| is specified')
+            if defined $app->bare_param ('account_id');
+        return $class->resume_session ($app)->then (sub {
+          my $session_row = $_[0];
+          if (defined $session_row) {
+            my $session_data = $session_row->get ('data');
+            if (defined $session_data->{account_id}) {
+              $where->{account_id} = 0+$session_data->{account_id};
+            } else {
+              $where->{sk} = $session_row->get ('sk');
+              $where->{sk_context} //= $session_row->get ('sk_context');
+                  ## Any |session_sk_context| is preferred here.  As |sk|
+                  ## is globally unique, if |session_sk_context| does not
+                  ## have session's |sk_context|, no log is returned.
+            }
+            return 1;
+          } else {
+            return 0;
+          }
+        });
+      } else {
+        $where->{account_id} = $app->bare_param ('account_id');
+        return $app->throw_error_json ({reason => 'No |account_id|'})
+            if not defined $where->{account_id};
+        return 1;
+      }
+    })->then (sub {
+      return undef if not $_[0];
+      return $app->db->select ('session_recent_log', $where,
+        fields => ['session_id', 'sk_context', 'timestamp', 'expires', 'data'],
+        source_name => 'master',
+        offset => $page->{offset}, limit => $page->{limit},
+        order => ['timestamp', $page->{order_direction}],
+      );
+    })->then (sub {
       my $v = $_[0];
       my $items = [map {
         $_->{session_id} .= '';
