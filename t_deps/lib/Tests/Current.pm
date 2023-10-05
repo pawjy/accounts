@@ -288,13 +288,14 @@ sub create ($;@) {
 
 sub create_session ($$$) {
   my ($self, $name, $opts) = @_;
+  my $session;
   my $skc = $opts->{sk_context} // 'tests';
   return $self->post (['session'], {
     sk_context => $skc,
     source_ua => $opts->{source_ua},
     source_ipaddr => $opts->{source_ipaddr},
   })->then (sub {
-    my $session = $self->{objects}->{$name} = $_[0]->{json};
+    $session = $self->{objects}->{$name} = $_[0]->{json};
     $session->{sk_context} = $skc;
     
     if ($opts->{account}) {
@@ -310,6 +311,16 @@ sub create_session ($$$) {
         $session->{account} = $_[0]->{json};
       });
     }
+  })->then (sub {
+    return unless $opts->{session_id};
+    return $self->post (['session', 'get'], {
+      use_sk => 1,
+      sk_context => $session->{sk_context},
+      sk => $session->{sk},
+    })->then (sub {
+      my $result = $_[0];
+      $session->{session_id} = $result->{json}->{items}->[0]->{session_id};
+    });
   });
 } # create_session
 

@@ -382,7 +382,83 @@ sub main ($$) {
         %$next_page,
       });
     });
-   } # /session/get
+  } elsif (@$path == 2 and $path->[0] eq 'session' and $path->[1] eq 'delete') {
+    ## /session/delete - Delete a session
+    ##
+    ## Parameters
+    ##
+    ##   |sk|, |sk_context|, |sk_max_age|
+    ##   |use_sk|     : Boolean : If true, |sk| and its family is used
+    ##                          to determine whether the delete operation
+    ##                          is performed or not.
+    ##
+    ##   |session_sk_context| : String? : The session's sk_context.
+    ##   |session_id| : ID?   : The session's session ID.
+    ##
+    ## Returns nothing.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    my $where = {};
+    return Promise->resolve->then (sub {
+      if ($app->bare_param ('use_sk')) {
+        return $class->resume_session ($app)->then (sub {
+          my $session_row = $_[0];
+          if (defined $session_row) {
+            $where->{sk} = $session_row->get ('sk');
+            $where->{sk_context} = $session_row->get ('sk_context');
+            my $session_data = $session_row->get ('data');
+            $where->{account_id} = 0+($session_data->{account_id} || 0);
+            return 1;
+          } else {
+            return 0;
+          }
+        });
+      } else {
+        return 1;
+      }
+    })->then (sub {
+      return unless $_[0];
+      
+      my $sid = $app->bare_param ('session_id');
+      if (defined $sid) {
+        $where->{session_id} = $sid;
+        delete $where->{sk} if $where->{account_id};
+      }
+      my $sc = $app->bare_param ('session_sk_context');
+      $where->{sk_context} = $sc if defined $sc;
+
+      if (not defined $where->{sk}) {
+        return $app->throw_error_json ({reason => 'No |session_id|'})
+            unless defined $where->{session_id};
+        return $app->db->select ('session_recent_log', $where, source_name => 'master', fields => ['sk', 'sk_context'])->then (sub {
+          my $v = $_[0]->first;
+          if (defined $v) {
+            $where->{sk} = $v->{sk};
+            $where->{sk_context} //= $v->{sk_context};
+            return $app->db->delete ('session_recent_log', $where, source_name => 'master', limit => 1)->then (sub {
+              my $v = $_[0];
+              if ($v->row_count or not defined $where->{session_id}) {
+                delete $where->{session_id};
+                delete $where->{account_id};
+                return $app->db->delete ('session', $where, source_name => 'master', limit => 1);
+              }
+            });
+          }
+        });
+      } else {
+        return $app->db->delete ('session_recent_log', $where, source_name => 'master', limit => 1)->then (sub {
+          my $v = $_[0];
+          if ($v->row_count or not defined $where->{session_id}) {
+            delete $where->{session_id};
+            delete $where->{account_id};
+            return $app->db->delete ('session', $where, source_name => 'master', limit => 1);
+          }
+        });
+      }
+    })->then (sub {
+      return $app->send_json ({});
+    });
+   } # /session/delete
 
   if (@$path == 1 and $path->[0] eq 'create') {
     ## /create - Create an account (without link)
