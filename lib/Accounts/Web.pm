@@ -1376,8 +1376,8 @@ sub main ($$) {
       my $all = $app->bare_param ('all');
       my $time = time;
       return $app->throw_error_json ({reason => 'Bad |account_link_id|'})
-          if not defined $link_id and not $all or
-             $all and defined $link_id;
+          if (not defined $link_id and not $all) or
+             ($all and defined $link_id);
       return $app->db->transaction->then (sub {
         my $tr = $_[0];
         return Promise->resolve->then (sub {

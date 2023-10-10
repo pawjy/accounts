@@ -217,7 +217,7 @@ Test {
         is $item->{log_data}->{ipaddr}, $current->o ('k1');
         is $item->{log_data}->{source_data}->{foo}, $current->o ('t1');
         is $item->{sk}, undef;
-        is $item->{sk_context}, undef;
+        is $item->{sk_context}, $current->o (2)->{sk_context};
       }
     } $current->c;
   });

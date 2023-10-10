@@ -327,11 +327,16 @@ sub create_session ($$$) {
 sub create_account ($$$) {
   my ($self, $name, $opts) = @_;
   my $session;
-  return $self->post (['session'], {})->then (sub {
+  my $skc = $opts->{sk_context} // 'tests';
+  return $self->post (['session'], {
+    sk_context => $skc,
+  })->then (sub {
     my $result = $_[0];
     $session = $result->{json};
+    $session->{sk_context} = $skc;
     return $self->post (['create'], {
       sk => $session->{sk},
+      sk_context => $session->{sk_context},
       name => $opts->{name},
       login_time => $opts->{login_time},
     });
@@ -348,6 +353,7 @@ sub create_account ($$$) {
     return unless @$names;
     return $self->post (['data'], {
       sk => $session->{sk},
+      sk_context => $session->{sk_context},
       name => $names,
       value => $values,
     })->then (sub {
@@ -493,7 +499,7 @@ sub done ($) {
 
 =head1 LICENSE
 
-Copyright 2015-2021 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2023 Wakaba <wakaba@suikawiki.org>.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
