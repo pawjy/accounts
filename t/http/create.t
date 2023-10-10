@@ -180,6 +180,59 @@ Test {
   });
 } n => 1, name => '/create with login_time';
 
+Test {
+  my $current = shift;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['create'], {
+      source_ipaddr => $current->generate_key (k1 => {}),
+      source_ua => $current->generate_key (k2 => {}),
+      'source_data' => perl2json_chars ({foo => $current->generate_text (t1 => {})}),
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      $current->set_o (a1 => $result->{json});
+    } $current->c;
+    return $current->post (['log', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+      action => 'create',
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+@{$result->{json}->{items}}, 1;
+      {
+        my $item = $result->{json}->{items}->[0];
+        is $item->{ua}, $current->o ('k2');
+        is $item->{ipaddr}, $current->o ('k1');
+        is $item->{data}->{source_data}->{foo}, $current->o ('t1');
+      }
+    } $current->c;
+    return $current->post (['session', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+@{$result->{json}->{items}}, 1;
+      {
+        my $item = $result->{json}->{items}->[0];
+        ok $item->{session_id};
+        like $result->{res}->body_bytes, qr{"session_id":"};
+        ok $item->{timestamp};
+        ok $item->{timestamp} < time;
+        ok $item->{expires};
+        is $item->{log_data}->{ua}, $current->o ('k2');
+        is $item->{log_data}->{ipaddr}, $current->o ('k1');
+        is $item->{log_data}->{source_data}->{foo}, $current->o ('t1');
+        is $item->{sk}, undef;
+        is $item->{sk_context}, $current->o ('1')->{sk_context};
+      }
+    } $current->c;
+  });
+} n => 16, name => 'session log';
+
 RUN;
 
 =head1 LICENSE

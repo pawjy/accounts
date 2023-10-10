@@ -199,8 +199,29 @@ Test {
         ok $item->{data}->{account_link_id};
       }
     } $current->c;
+    return $current->post (['session', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is 0+@{$result->{json}->{items}}, 2;
+      {
+        my $item = $result->{json}->{items}->[1];
+        ok $item->{session_id};
+        like $result->{res}->body_bytes, qr{"session_id":"};
+        ok $item->{timestamp};
+        ok $item->{timestamp} < time;
+        ok $item->{expires};
+        is $item->{log_data}->{ua}, $current->o ('k2');
+        is $item->{log_data}->{ipaddr}, $current->o ('k1');
+        is $item->{log_data}->{source_data}->{foo}, $current->o ('t1');
+        is $item->{sk}, undef;
+        is $item->{sk_context}, $current->o (2)->{sk_context};
+      }
+    } $current->c;
   });
-} n => 47, name => '/login then auth then /cb - oauth2';
+} n => 58, name => '/login then auth then /cb - oauth2';
 
 Test {
   my $current = shift;

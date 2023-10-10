@@ -104,9 +104,11 @@ sub post ($$$;%) {
   if (defined $args{session}) {
     my $session = $self->o ($args{session});
     $p->{sk} = $session->{sk};
+    $p->{sk_context} = $session->{sk_context};
   } elsif (defined $args{account}) {
     my $account = $self->o ($args{account});
     $p->{sk} = $account->{session}->{sk};
+    $p->{sk_context} = $account->{session}->{sk_context};
   }
   return $self->client->request (
     method => 'POST',
@@ -189,12 +191,13 @@ sub are_errors ($$$) {
   });
 } # are_errors
 
-sub pages_ok ($$$$;$) {
+sub pages_ok ($$$$;$%) {
   my $self = $_[0];
   my ($path, $params, %args) = @{$_[1]};
   my $items = [@{$_[2]}];
   my $field = $_[3];
   my $name = $_[4];
+  my %opts = @_[5..$#_];
   my $count = int (@$items / 2) + 3;
   my $page = 1;
   my $ref;
@@ -215,6 +218,7 @@ sub pages_ok ($$$$;$) {
     return $self->post ($path, {%$params, limit => 2, ref => $ref}, %args)->then (sub {
       my $result = $_[0];
       my $expected_length = (@$items > 2 ? 2 : 0+@$items);
+      $result->{json}->{items} = ($opts{items} or sub { $_[0] })->($result->{json}->{items});
       my $actual_length = 0+@{$result->{json}->{items}};
       if ($expected_length == $actual_length) {
         if ($expected_length >= 1) {
@@ -284,9 +288,15 @@ sub create ($;@) {
 
 sub create_session ($$$) {
   my ($self, $name, $opts) = @_;
-  return $self->post (['session'], {})->then (sub {
-    my $session = $self->{objects}->{$name} = $_[0]->{json};
-    $session->{sk_context} = 'tests';
+  my $session;
+  my $skc = $opts->{sk_context} // 'tests';
+  return $self->post (['session'], {
+    sk_context => $skc,
+    source_ua => $opts->{source_ua},
+    source_ipaddr => $opts->{source_ipaddr},
+  })->then (sub {
+    $session = $self->{objects}->{$name} = $_[0]->{json};
+    $session->{sk_context} = $skc;
     
     if ($opts->{account}) {
       return $self->post (['create'], {
@@ -295,21 +305,38 @@ sub create_session ($$$) {
         name => $self->generate_text (rand, {}),
         #user_status
         #admin_status
+        source_ua => $opts->{source_ua},
+        source_ipaddr => $opts->{source_ipaddr},
       })->then (sub {
         $session->{account} = $_[0]->{json};
       });
     }
+  })->then (sub {
+    return unless $opts->{session_id};
+    return $self->post (['session', 'get'], {
+      use_sk => 1,
+      sk_context => $session->{sk_context},
+      sk => $session->{sk},
+    })->then (sub {
+      my $result = $_[0];
+      $session->{session_id} = $result->{json}->{items}->[0]->{session_id};
+    });
   });
 } # create_session
 
 sub create_account ($$$) {
   my ($self, $name, $opts) = @_;
   my $session;
-  return $self->post (['session'], {})->then (sub {
+  my $skc = $opts->{sk_context} // 'tests';
+  return $self->post (['session'], {
+    sk_context => $skc,
+  })->then (sub {
     my $result = $_[0];
     $session = $result->{json};
+    $session->{sk_context} = $skc;
     return $self->post (['create'], {
       sk => $session->{sk},
+      sk_context => $session->{sk_context},
       name => $opts->{name},
       login_time => $opts->{login_time},
     });
@@ -326,6 +353,7 @@ sub create_account ($$$) {
     return unless @$names;
     return $self->post (['data'], {
       sk => $session->{sk},
+      sk_context => $session->{sk_context},
       name => $names,
       value => $values,
     })->then (sub {
@@ -471,7 +499,7 @@ sub done ($) {
 
 =head1 LICENSE
 
-Copyright 2015-2021 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2023 Wakaba <wakaba@suikawiki.org>.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
