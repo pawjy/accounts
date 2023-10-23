@@ -458,7 +458,33 @@ sub main ($$) {
     })->then (sub {
       return $app->send_json ({});
     });
-   } # /session/delete
+  } # /session/delete
+  
+  if (@$path == 2 and $path->[0] eq 'ticket' and $path->[1] eq 'add') {
+    ## /ticket/add - Add a ticket to the session
+    ##
+    ##   |sk_context|, |sk|
+    ##   |ticket| : Key :           The ticket.  Zero or more parameters
+    ##                              can be specified.
+    ##
+    ## Returns nothing.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+    return $class->resume_session ($app)->then (sub {
+      my $session_row = $_[0]
+          // return $app->throw_error_json
+                 ({reason => 'Bad session',
+                   error_for_dev => "/ticket/add bad session"});
+      my $session_data = $session_row->get ('data');
+      
+      my $tickets = $app->bare_param_list ('ticket');
+      $session_data->{tickets}->{$_} = 1 for @$tickets;
+      return $session_row->update
+          ({data => $session_data}, source_name => 'master');
+    })->then (sub {
+      return $app->send_json ({});
+    });
+  } # /ticket/add
 
   if (@$path == 1 and $path->[0] eq 'create') {
     ## /create - Create an account (without link)
@@ -477,11 +503,11 @@ sub main ($$) {
     $app->requires_api_key;
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0]
-          // return $app->send_error_json ({reason => 'Bad session',
+          // return $app->throw_error_json ({reason => 'Bad session',
                                             error_for_dev => "/create bad session"});
       my $session_data = $session_row->get ('data');
       if (defined $session_data->{account_id}) {
-        return $app->send_error_json ({reason => 'Account-associated session'});
+        return $app->throw_error_json ({reason => 'Account-associated session'});
       }
 
       my $time = time;
@@ -1549,6 +1575,7 @@ sub main ($$) {
     ##                applicable to additional groups.
     ##   with_agm_group_data Data of the additional group members' group's
     ##                data.
+    ##   with_tickets : Boolean : If true, session's tickets are returned.
     ##
     ## Also, status filters |user_status|, |admin_status|,
     ## |terms_version| with empty prefix are available for account
@@ -1577,6 +1604,8 @@ sub main ($$) {
     ##   additional_group_memberships : Object?
     ##     /group_id/  Additional group's membership object, if available.
     ##       group_data  Group data of the membership's group, if applicable.
+    ##   tickets : Object? :  If |with_tickets|, an object whose names are
+    ##                        tickets.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
@@ -1604,6 +1633,10 @@ sub main ($$) {
         if (defined $session_row) {
           $session_data = $session_row->get ('data');
           $account_id = $session_data->{account_id};
+
+          if ($app->bare_param ('with_tickets')) {
+            $json->{tickets} = $session_data->{tickets} || {};
+          }
         }
         return unless defined $account_id;
         
