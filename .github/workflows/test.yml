@@ -19,7 +19,43 @@
                "run" : "make deps-circleci"
             },
             {
-               "run" : "docker build -t quay.io/wakaba/accounts ."
+               "run" : "docker build -t quay\u005C.io\u005C/wakaba\u005C/accounts \u005C."
+            },
+            {
+               "run" : "make test-deps-circleci"
+            },
+            {
+               "run" : "docker run quay.io/wakaba/accounts which ssh-keygen"
+            },
+            {
+               "run" : "docker run quay.io/wakaba/accounts which /server"
+            },
+            {
+               "run" : "docker run quay.io/wakaba/accounts which /setup-db-for-test"
+            },
+            {
+               "run" : "docker run quay.io/wakaba/accounts /showrev"
+            },
+            {
+               "run" : "mkdir x"
+            },
+            {
+               "run" : "echo '{}' > x/servers.json"
+            },
+            {
+               "run" : "echo '{\u0022servers_json_file\u0022:\u0022servers.json\u0022}' > x/config.json"
+            },
+            {
+               "run" : "docker run -d -v `pwd`/x:/x -e APP_CONFIG=/x/config.json -p 6533:8080 quay.io/wakaba/accounts"
+            },
+            {
+               "run" : "while ! curl http://localhost:6533/robots.txt ; do sleep 1; done"
+            },
+            {
+               "run" : "curl http://localhost:6533/robots.txt --dump-header - --fail"
+            },
+            {
+               "run" : "rm -fr $CIRCLE_ARTIFACTS/ss.pid"
             },
             {
                "run" : "IS_BROWSER_TEST=1 SS_DEBUG_SERVERS=app_docker TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl &"
