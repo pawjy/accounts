@@ -26,6 +26,8 @@
       "SS_ENV_FILE=$CIRCLE_ARTIFACTS/ss.env make test-circle",
 
       "true"
-    ]
+    ],
+    "merger": true,
+    "gaa": true
   }
 }
