@@ -2,40 +2,8 @@
   "github": {
     "build": [
       "make deps-circleci",
-      "docker build -t quay.io/wakaba/accounts ."
+      {"docker_build": "quay.io/wakaba/accounts"}
     ],
-    "tests": [
-      "IS_BROWSER_TEST=1 SS_DEBUG_SERVERS=app_docker TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl &",
-      "while [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; do sleep 1; done",
-      "if [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; then cat $CIRCLE_ARTIFACTS/ss.env; fi; cat $CIRCLE_ARTIFACTS/ss.pid",
-
-      "SS_ENV_FILE=$CIRCLE_ARTIFACTS/ss.env make test-circle",
-
-      "true"
-    ]
-  },
-  "circleci": {
-    "merger": 1,
-    "gaa": 1,
-    "required_docker_images": [
-      "mariadb",
-      "minio/minio",
-      "quay.io/wakaba/chromedriver:stable",
-      "quay.io/wakaba/docker-perl-app-base"
-    ],
-    "docker-build": "quay.io/wakaba/accounts",
-    "heroku": {
-      "prepare": [
-        "git clone $KEYS_REPO_URL local/keys"
-      ]
-    },
-
-    "build": [
-      "make deps-circleci"
-    ],
-    "build_generated_pmbp": true,
-
-    "parallel": 2,
     "tests": [
       "make test-deps-circleci",
       "docker run quay.io/wakaba/accounts which ssh-keygen",
@@ -51,15 +19,15 @@
       "curl http://localhost:6533/robots.txt --dump-header - --fail",
 
       "rm -fr $CIRCLE_ARTIFACTS/ss.pid",
-      {"IS_BROWSER_TEST=1 SS_DEBUG_SERVERS=app_docker TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl": {
-        "background": true}},
+      "IS_BROWSER_TEST=1 SS_DEBUG_SERVERS=app_docker TEST_APP_DOCKER_IMAGE=quay.io/wakaba/accounts ./perl t_deps/bin/env-for-circleci.pl &",
       "while [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; do sleep 1; done",
       "if [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; then cat $CIRCLE_ARTIFACTS/ss.env; fi; cat $CIRCLE_ARTIFACTS/ss.pid",
 
       "SS_ENV_FILE=$CIRCLE_ARTIFACTS/ss.env make test-circle",
 
       "true"
-    ]
-    
+    ],
+    "merger": true,
+    "gaa": true
   }
 }

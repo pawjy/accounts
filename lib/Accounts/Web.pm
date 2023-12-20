@@ -1609,6 +1609,7 @@ sub main ($$) {
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
+    my $st_all = $app->http->response_timing ("all");
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0];
       my $context_key = $app->bare_param ('context_key');
@@ -1714,7 +1715,7 @@ sub main ($$) {
           $st->add;
         });
       })->then (sub {
-        return $app->send_json ($json);
+        return $app->send_json ($json, server_timing => $st_all);
       });
     });
   } # /info

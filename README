@@ -1,8 +1,19 @@
 accounts
 ~~~~~~~~
 
-Docker: quay.io/wakaba/accounts
+* Docker
 
-Author: Wakaba <wakaba@suikawiki.org>.
+Docker image: quay.io/wakaba/accounts
 
-License: See file |LICENSE|.
+* Author
+
+Wakaba <wakaba@suikawiki.org>.
+
+* History
+
+The Git repository was at <https://github.com/wakaba/accounts> until
+18 November 2023.
+
+* License
+
+See file |./LICENSE|.
