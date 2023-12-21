@@ -81,7 +81,9 @@ sub requires_api_key ($) {
 sub send_json ($$;%) {
   my ($self, $data, %args) = @_;
   $self->http->set_response_header ('Content-Type' => 'application/json; charset=utf-8');
+  my $st = $self->http->response_timing ("json");
   my $body = perl2json_bytes $data;
+  $st->add;
   $args{server_timing}->add if defined $args{server_timing};
   $self->http->send_response_body_as_ref (\$body);
   $self->http->close_response_body;
