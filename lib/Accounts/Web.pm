@@ -1610,8 +1610,10 @@ sub main ($$) {
     $app->requires_api_key;
 
     my $st_all = $app->http->response_timing ("all");
+    my $st_re = $app->http->response_timing ("resume");
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0];
+      $st_re->add;
       my $context_key = $app->bare_param ('context_key');
       my $group_id = $app->bare_param ('group_id');
       my $json = {};
