@@ -2348,10 +2348,18 @@ sub login_account ($$$$) {
   })->then (sub {
     my ($account, $account_link) = @{$_[0]};
     unless ($account->{user_status} == 1) {
-      die "XXX Disabled account";
+      return $app->throw_error_json ({
+        reason => 'Bad account |user_status|',
+        user_status => $account->{user_status},
+        admin_status => $account->{admin_status},
+      });
     }
     unless ($account->{admin_status} == 1) {
-      die "XXX Account suspended";
+      return $app->throw_error_json ({
+        reason => 'Bad account |admin_status|',
+        user_status => $account->{user_status},
+        admin_status => $account->{admin_status},
+      });
     }
     $session_data->{account_id} = format_id $account->{account_id};
   });

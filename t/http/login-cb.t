@@ -645,11 +645,175 @@ Test {
   });
 } n => 32, name => 'lk';
 
+Test {
+  my $current = shift;
+  my $cb_url = 'http://haoa/' . rand;
+  my $account_id;
+  my $x_account_id = int rand 1000000;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['login'], {
+      server => 'oauth2server',
+      callback_url => $cb_url,
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+    } $current->c;
+    my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
+    my $con = $current->client_for ($url);
+    return $con->request (url => $url, method => 'POST', params => {
+      account_id => $x_account_id,
+    }); # user accepted!
+  })->then (sub {
+    my $result = $_[0];
+    return test {
+      is $result->status, 302;
+      my $location = $result->header ('Location');
+      my ($base, $query) = split /\?/, $location, 2;
+      is $base, $cb_url;
+      return $current->post ("/cb?$query", {
+        origin => $current->generate_key (origin1 => {}),
+      }, session => 1);
+    } $current->c;
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      $current->set_o (res1 => $result->{json});
+    } $current->c;
+    return $current->post (['account', 'user_status'], {
+      user_status => 2,
+    }, session => 1);
+  })->then (sub {
+    return $current->create_session (2);
+  })->then (sub {
+    return $current->post (['login'], {
+      server => 'oauth2server',
+      callback_url => $cb_url,
+    }, session => 2);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+    } $current->c;
+    my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
+    my $con = $current->client_for ($url);
+    return $con->request (url => $url, method => 'POST', params => {
+      account_id => $x_account_id,
+    }); # user accepted!
+  })->then (sub {
+    my $result = $_[0];
+    return test {
+      my $location = $result->header ('Location');
+      my ($base, $query) = split /\?/, $location, 2;
+      return $current->post ("/cb?$query", {
+        origin => $current->o ('origin1'),
+        lk => $current->o ('res1')->{lk},
+      }, session => 2);
+    } $current->c;
+  })->then (sub {
+    test {
+      ok 0;
+    } $current->c;
+  }, sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 400;
+      is $result->{json}->{reason}, 'Bad account |user_status|';
+      is $result->{json}->{user_status}, 2;
+      is $result->{json}->{admin_status}, 1;
+    } $current->c;
+  });
+} n => 9, name => 'login rejected by user_status';
+
+Test {
+  my $current = shift;
+  my $cb_url = 'http://haoa/' . rand;
+  my $account_id;
+  my $x_account_id = int rand 1000000;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['login'], {
+      server => 'oauth2server',
+      callback_url => $cb_url,
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+    } $current->c;
+    my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
+    my $con = $current->client_for ($url);
+    return $con->request (url => $url, method => 'POST', params => {
+      account_id => $x_account_id,
+    }); # user accepted!
+  })->then (sub {
+    my $result = $_[0];
+    return test {
+      is $result->status, 302;
+      my $location = $result->header ('Location');
+      my ($base, $query) = split /\?/, $location, 2;
+      is $base, $cb_url;
+      return $current->post ("/cb?$query", {
+        origin => $current->generate_key (origin1 => {}),
+      }, session => 1);
+    } $current->c;
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      $current->set_o (res1 => $result->{json});
+    } $current->c;
+    return $current->post (['account', 'admin_status'], {
+      admin_status => 2,
+    }, session => 1);
+  })->then (sub {
+    return $current->create_session (2);
+  })->then (sub {
+    return $current->post (['login'], {
+      server => 'oauth2server',
+      callback_url => $cb_url,
+    }, session => 2);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+    } $current->c;
+    my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
+    my $con = $current->client_for ($url);
+    return $con->request (url => $url, method => 'POST', params => {
+      account_id => $x_account_id,
+    }); # user accepted!
+  })->then (sub {
+    my $result = $_[0];
+    return test {
+      my $location = $result->header ('Location');
+      my ($base, $query) = split /\?/, $location, 2;
+      return $current->post ("/cb?$query", {
+        origin => $current->o ('origin1'),
+        lk => $current->o ('res1')->{lk},
+      }, session => 2);
+    } $current->c;
+  })->then (sub {
+    test {
+      ok 0;
+    } $current->c;
+  }, sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 400;
+      is $result->{json}->{reason}, 'Bad account |admin_status|';
+      is $result->{json}->{user_status}, 1;
+      is $result->{json}->{admin_status}, 2;
+    } $current->c;
+  });
+} n => 9, name => 'login rejected by admin_status';
+
 RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2023 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2024 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
