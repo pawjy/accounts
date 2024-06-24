@@ -1,6 +1,8 @@
 accounts
 ~~~~~~~~
 
+An account server.
+
 * Docker
 
 Docker image: quay.io/wakaba/accounts

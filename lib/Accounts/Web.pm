@@ -1726,28 +1726,43 @@ sub main ($$) {
     ## /profiles - Account data
     ##
     ## Parameters
+    ## 
     ##   account_id (0..)   Account IDs
     ##   with_data
     ##   with_linked
     ##   with_icons
+    ##   with_statuses : Boolean  : Whether the account's status fields
+    ##                              should be included to the output or not.
     ##
     ## Also, status filters |user_status|, |admin_status|,
     ## |terms_version| with empty prefix are available.
+    ##
+    ## Returns an object where names are account IDs and values are
+    ## accounts' data.
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
     my $account_ids = $app->bare_param_list ('account_id')->to_a;
     $_ = unpack 'Q', pack 'Q', $_ for @$account_ids;
+    my $ws = $app->bare_param ('with_statuses');
     return ((@$account_ids ? $app->db->select ('account', {
       account_id => {-in => $account_ids},
       (status_filter $app, '', 'user_status', 'admin_status', 'terms_version'),
-    }, source_name => 'master', fields => ['account_id', 'name'])->then (sub {
+    }, source_name => 'master', fields => [
+      'account_id', 'name',
+      ($ws ? qw(user_status admin_status terms_version) : ()),
+    ])->then (sub {
       return $_[0]->all_as_rows->to_a;
     }) : Promise->resolve ([]))->then (sub {
       return $class->load_linked ($app, [map {
         +{
           account_id => format_id $_->get ('account_id'),
           name => $_->get ('name'),
+          ($ws ? (
+            user_status => $_->get ('user_status'),
+            admin_status => $_->get ('admin_status'),
+            terms_version => $_->get ('terms_version'),
+          ) : ()),
         };
       } @{$_[0]}]);
     })->then (sub {
@@ -1841,6 +1856,65 @@ sub main ($$) {
       });
     });
   } # /agree
+
+  if (@$path == 2 and $path->[0] eq 'account' and
+      ($path->[1] eq 'admin_status' or
+       $path->[1] eq 'user_status')) {
+    ## /account/user_status - Set the |user_status| of the account
+    ## /account/admin_status - Set the |admin_status| of the account
+    ##
+    ## Parameters
+    ##
+    ##   |account_id|        - The account's ID.
+    ##   |sk_context|, |sk|  - The session.  Either session or account ID is
+    ##                         required.
+    ##   |admin_status|      - The new |admin_status| value.  A 7-bit
+    ##                         positive integer.  Required for /admin_status.
+    ##   |user_status|       - The new |user_status| value.  A 7-bit
+    ##                         positive integer.  Required for /user_status.
+    ##
+    ## Returns nothing.
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    my $key = encode_web_utf8 $path->[1];
+    my $new_status = $app->bare_param ($key)
+        or return $app->throw_error (400, reason_phrase => 'Bad |'.$key.'|');
+
+    my $id = $app->bare_param ('account_id');
+    return Promise->resolve->then (sub {
+      if (defined $id) {
+        return $app->db->select ('account', {
+          account_id => $id,
+        }, source_name => 'master', fields => ['account_id', 'name'])->then (sub {
+          my $v = $_[0];
+          my $row = $v->first_as_row;
+          return $app->throw_error_json ({reason => 'Bad |account_id|'})
+              unless defined $row;
+          return $row->update ({$key => 0+$new_status}, source_name => 'master');
+        });
+      } else {
+        return $class->resume_session ($app)->then (sub {
+          my $session_row = $_[0];
+          return $app->throw_error_json ({reason => 'Not a login user'})
+              unless defined $session_row;
+          my $account_id = $session_row->get ('data')->{account_id};
+          return $app->throw_error_json ({reason => 'Not a login user'})
+              unless defined $account_id;
+          return $app->db->update ('account', {
+            $key => 0+$new_status,
+          }, where => {
+            account_id => $account_id,
+          })->then (sub {
+            my $result = $_[0];
+            die "Bad account ID" unless $result->row_count == 1;
+          });
+        });
+      }
+    })->then (sub {
+      return $app->send_json ({});
+    });
+  } # /account/*_status
 
   if (@$path == 1 and $path->[0] eq 'search') {
     ## /search - User search
@@ -3374,7 +3448,7 @@ sub icon ($$$) {
 
 =head1 LICENSE
 
-Copyright 2007-2023 Wakaba <wakaba@suikawiki.org>.
+Copyright 2007-2024 Wakaba <wakaba@suikawiki.org>.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as

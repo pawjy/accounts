@@ -72,6 +72,9 @@ Test {
       is $data2->{name}, $current->o ('n2');
       ok ! $res->{json}->{accounts}->{$current->o ('id1')};
       like $res->{res}->body_bytes, qr{"account_id"\s*:\s*"};
+      is $data2->{user_status}, undef;
+      is $data2->{admin_status}, undef;
+      is $data2->{terms_version}, undef;
     } $current->c;
     return $current->post (['profiles'], {
       account_id => [$current->o ('a1')->{account_id},
@@ -83,17 +86,16 @@ Test {
       is 0+keys %{$result->{json}->{accounts}}, 1;
     } $current->c;
   });
-} n => 7, name => '/profiles with account_id, multiple';
+} n => 10, name => '/profiles with account_id, multiple';
 
 Test {
   my $current = shift;
   return $current->create_account (a1 => {
     name => $current->generate_text ('n1'),
-    user_status => 2,
   })->then (sub {
     return $current->post (['profiles'], {
-      account_id => $current->o ('a1'),
-      user_status => [1, 3],
+      account_id => $current->o ('a1')->{account_id},
+      user_status => [2, 3],
     });
   })->then (sub {
     my $res = $_[0];
@@ -107,11 +109,10 @@ Test {
   my $current = shift;
   return $current->create_account (a1 => {
     name => $current->generate_text ('n1'),
-    admin_status => 2,
   })->then (sub {
     return $current->post (['profiles'], {
-      account_id => $current->o ('a1'),
-      admin_status => [1, 3],
+      account_id => $current->o ('a1')->{account_id},
+      admin_status => [2, 3],
     });
   })->then (sub {
     my $res = $_[0];
@@ -120,6 +121,90 @@ Test {
     } $current->c;
   });
 } n => 1, name => '/profiles with account_id, admin_status filtered';
+
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {
+    name => $current->generate_text ('n1'),
+  })->then (sub {
+    return $current->post (['account', 'user_status'], {
+      user_status => 2,
+    }, account => 'a1');
+  })->then (sub {
+    return $current->post (['profiles'], {
+      account_id => $current->o ('a1')->{account_id},
+      user_status => [1, 3],
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->{json}->{accounts}->{$current->o ('a1')->{account_id}}, undef;
+    } $current->c;
+  });
+} n => 1, name => '/profiles with account_id, user_status filtered 2';
+
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {
+    name => $current->generate_text ('n1'),
+  })->then (sub {
+    return $current->post (['account', 'admin_status'], {
+      admin_status => 2,
+    }, account => 'a1');
+  })->then (sub {
+    return $current->post (['profiles'], {
+      account_id => $current->o ('a1')->{account_id},
+      admin_status => [1, 3],
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->{json}->{accounts}->{$current->o ('a1')->{account_id}}, undef;
+    } $current->c;
+  });
+} n => 1, name => '/profiles with account_id, admin_status filtered 2';
+
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {
+    name => $current->generate_text ('n1'),
+  })->then (sub {
+    return $current->post (['account', 'user_status'], {
+      user_status => 3,
+    }, account => 'a1');
+  })->then (sub {
+    return $current->post (['profiles'], {
+      account_id => $current->o ('a1')->{account_id},
+      user_status => [1, 3],
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      ok $res->{json}->{accounts}->{$current->o ('a1')->{account_id}};
+    } $current->c;
+  });
+} n => 1, name => '/profiles with account_id, user_status filtered 3';
+
+Test {
+  my $current = shift;
+  return $current->create_account (a1 => {
+    name => $current->generate_text ('n1'),
+  })->then (sub {
+    return $current->post (['account', 'admin_status'], {
+      admin_status => 1,
+    }, account => 'a1');
+  })->then (sub {
+    return $current->post (['profiles'], {
+      account_id => $current->o ('a1')->{account_id},
+      admin_status => [1, 3],
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      ok $res->{json}->{accounts}->{$current->o ('a1')->{account_id}};
+    } $current->c;
+  });
+} n => 1, name => '/profiles with account_id, admin_status filtered 3';
 
 Test {
   my $current = shift;
@@ -265,11 +350,36 @@ Test {
   });
 } n => 6, name => '/profiles with_icon 3';
 
+Test {
+  my $current = shift;
+  return $current->create (
+    [a1 => account => {
+    }],
+  )->then (sub {
+    return $current->post (['profiles'], {
+      account_id => [
+        $current->o ('a1')->{account_id},
+      ],
+      with_statuses => 1,
+    });
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      {
+        my $acc = $res->{json}->{accounts}->{$current->o ('a1')->{account_id}};
+        is $acc->{user_status}, 1;
+        is $acc->{admin_status}, 1;
+        is $acc->{terms_version}, 0;
+      }
+    } $current->c;
+  });
+} n => 3, name => 'statuses';
+
 RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2024 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
