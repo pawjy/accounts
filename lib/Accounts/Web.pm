@@ -2350,6 +2350,7 @@ sub login_account ($$$$) {
     unless ($account->{user_status} == 1) {
       return $app->throw_error_json ({
         reason => 'Bad account |user_status|',
+        account_id => ''.$account->{account_id},
         user_status => $account->{user_status},
         admin_status => $account->{admin_status},
       });
@@ -2357,6 +2358,7 @@ sub login_account ($$$$) {
     unless ($account->{admin_status} == 1) {
       return $app->throw_error_json ({
         reason => 'Bad account |admin_status|',
+        account_id => ''.$account->{account_id},
         user_status => $account->{user_status},
         admin_status => $account->{admin_status},
       });
