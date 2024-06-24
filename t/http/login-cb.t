@@ -682,6 +682,11 @@ Test {
       is $result->{status}, 200;
       $current->set_o (res1 => $result->{json});
     } $current->c;
+    return $current->post (['info'], {
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    $current->set_o (a1 => $result->{json});
     return $current->post (['account', 'user_status'], {
       user_status => 2,
     }, session => 1);
@@ -723,9 +728,11 @@ Test {
       is $result->{json}->{reason}, 'Bad account |user_status|';
       is $result->{json}->{user_status}, 2;
       is $result->{json}->{admin_status}, 1;
+      is $result->{json}->{account_id}, $current->o ('a1')->{account_id};
+      like $result->{res}->body_bytes, qr{"account_id":"[0-9]{2}};
     } $current->c;
   });
-} n => 9, name => 'login rejected by user_status';
+} n => 11, name => 'login rejected by user_status';
 
 Test {
   my $current = shift;
@@ -764,6 +771,11 @@ Test {
       is $result->{status}, 200;
       $current->set_o (res1 => $result->{json});
     } $current->c;
+    return $current->post (['info'], {
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    $current->set_o (a1 => $result->{json});
     return $current->post (['account', 'admin_status'], {
       admin_status => 2,
     }, session => 1);
@@ -805,9 +817,11 @@ Test {
       is $result->{json}->{reason}, 'Bad account |admin_status|';
       is $result->{json}->{user_status}, 1;
       is $result->{json}->{admin_status}, 2;
+      is $result->{json}->{account_id}, $current->o ('a1')->{account_id};
+      like $result->{res}->body_bytes, qr{"account_id":"[0-9]{2}};
     } $current->c;
   });
-} n => 9, name => 'login rejected by admin_status';
+} n => 11, name => 'login rejected by admin_status';
 
 RUN;
 
