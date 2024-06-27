@@ -76,7 +76,7 @@ Test {
   })->then (sub {
     my $result = $_[0];
     test {
-      $result->{json}->{items} = [grep { $_->{action} eq 'status' } @{$result->{json}->{items}}];
+      $result->{json}->{items} = [grep { $_->{action} =~ /status/ } @{$result->{json}->{items}}];
       is 0+@{$result->{json}->{items}}, 1;
       {
         my $item = $result->{json}->{items}->[0];
@@ -85,7 +85,7 @@ Test {
         is $item->{operator_account_id}, $current->o ('a1')->{account_id};
         ok $item->{timestamp};
         ok $item->{timestamp} < time;
-        is $item->{action}, 'status';
+        is $item->{action}, 'admin_status';
         is $item->{ua}, $current->o ('k2');
         is $item->{ipaddr}, $current->o ('k1');
         ok $item->{data};
@@ -140,7 +140,7 @@ Test {
   })->then (sub {
     my $result = $_[0];
     test {
-      $result->{json}->{items} = [grep { $_->{action} eq 'status' } @{$result->{json}->{items}}];
+      $result->{json}->{items} = [grep { $_->{action} =~ /status/ } @{$result->{json}->{items}}];
       is 0+@{$result->{json}->{items}}, 1;
       {
         my $item = $result->{json}->{items}->[0];
@@ -149,7 +149,7 @@ Test {
         is $item->{operator_account_id}, $current->o ('a1')->{account_id};
         ok $item->{timestamp};
         ok $item->{timestamp} < time;
-        is $item->{action}, 'status';
+        is $item->{action}, 'admin_status';
         is $item->{ua}, $current->o ('k2');
         is $item->{ipaddr}, $current->o ('k1');
         ok $item->{data};
@@ -181,7 +181,7 @@ Test {
   })->then (sub {
     my $result = $_[0];
     test {
-      $result->{json}->{items} = [grep { $_->{action} eq 'status' } @{$result->{json}->{items}}];
+      $result->{json}->{items} = [grep { $_->{action} =~ /status/ } @{$result->{json}->{items}}];
       is 0+@{$result->{json}->{items}}, 1;
       {
         my $item = $result->{json}->{items}->[0];
@@ -190,7 +190,7 @@ Test {
         is $item->{operator_account_id}, $current->o ('k4');
         ok $item->{timestamp};
         ok $item->{timestamp} < time;
-        is $item->{action}, 'status';
+        is $item->{action}, 'admin_status';
         is $item->{ua}, $current->o ('k2');
         is $item->{ipaddr}, $current->o ('k1');
         ok $item->{data};
