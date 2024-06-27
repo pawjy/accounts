@@ -1881,11 +1881,11 @@ sub main ($$) {
     my $new_status = $app->bare_param ($key)
         or return $app->throw_error (400, reason_phrase => 'Bad |'.$key.'|');
 
-    my $id = $app->bare_param ('account_id');
+    my $account_id = $app->bare_param ('account_id');
     return Promise->resolve->then (sub {
-      if (defined $id) {
+      if (defined $account_id) {
         return $app->db->select ('account', {
-          account_id => $id,
+          account_id => $account_id,
         }, source_name => 'master', fields => ['account_id', 'name'])->then (sub {
           my $v = $_[0];
           my $row = $v->first_as_row;
@@ -1898,19 +1898,39 @@ sub main ($$) {
           my $session_row = $_[0];
           return $app->throw_error_json ({reason => 'Not a login user'})
               unless defined $session_row;
-          my $account_id = $session_row->get ('data')->{account_id};
+          $account_id = $session_row->get ('data')->{account_id};
           return $app->throw_error_json ({reason => 'Not a login user'})
               unless defined $account_id;
           return $app->db->update ('account', {
             $key => 0+$new_status,
           }, where => {
-            account_id => $account_id,
+            account_id => 0+$account_id,
           })->then (sub {
             my $result = $_[0];
             die "Bad account ID" unless $result->row_count == 1;
           });
         });
       }
+    })->then (sub {
+      return $app->db->uuid_short (1);
+    })->then (sub {
+      my $ids = $_[0];
+      my $data = {
+        source_operation => $path->[1],
+      };
+      $data->{$path->[1]} = $new_status;
+      my $app_obj = $app->bare_param ('source_data');
+      $data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
+      return $app->db->insert ('account_log', [{
+        log_id => $ids->[0],
+        account_id => 0+$account_id,
+        operator_account_id => 0+($app->bare_param ('operator_account_id') // $account_id),
+        timestamp => time,
+        action => 'status',
+        ua => $app->bare_param ('source_ua') // '',
+        ipaddr => $app->bare_param ('source_ipaddr') // '',
+        data => Dongry::Type->serialize ('json', $data),
+      }]);
     })->then (sub {
       return $app->send_json ({});
     });
