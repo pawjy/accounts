@@ -1926,7 +1926,7 @@ sub main ($$) {
         account_id => 0+$account_id,
         operator_account_id => 0+($app->bare_param ('operator_account_id') // $account_id),
         timestamp => time,
-        action => 'status',
+        action => $path->[1],
         ua => $app->bare_param ('source_ua') // '',
         ipaddr => $app->bare_param ('source_ipaddr') // '',
         data => Dongry::Type->serialize ('json', $data),
