@@ -43,6 +43,8 @@ Test {
     return $current->post (['account', 'user_status'], {
       account_id => $current->o ('a1')->{account_id},
       user_status => 3,
+      source_ipaddr => $current->generate_key (k1 => {}),
+      source_ua => $current->generate_key (k2 => {}),
     });
   })->then (sub {
     return $current->post (['profiles'], {
@@ -68,8 +70,32 @@ Test {
         is $acc->{terms_version}, 0;
       }
     } $current->c;
+    return $current->post (['log', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      $result->{json}->{items} = [grep { $_->{action} eq 'status' } @{$result->{json}->{items}}];
+      is 0+@{$result->{json}->{items}}, 1;
+      {
+        my $item = $result->{json}->{items}->[0];
+        ok $item->{log_id};
+        is $item->{account_id}, $current->o ('a1')->{account_id};
+        is $item->{operator_account_id}, $current->o ('a1')->{account_id};
+        ok $item->{timestamp};
+        ok $item->{timestamp} < time;
+        is $item->{action}, 'status';
+        is $item->{ua}, $current->o ('k2');
+        is $item->{ipaddr}, $current->o ('k1');
+        ok $item->{data};
+        is $item->{data}->{source_operation}, 'user_status';
+        is $item->{data}->{user_status}, 3;
+        is $item->{data}->{admin_status}, undef;
+      }
+    } $current->c;
   });
-} n => 7, name => 'by account ID';
+} n => 20, name => 'by account ID';
 
 Test {
   my $current = shift;
@@ -81,6 +107,8 @@ Test {
   )->then (sub {
     return $current->post (['account', 'user_status'], {
       user_status => 3,
+      source_ipaddr => $current->generate_key (k1 => {}),
+      source_ua => $current->generate_key (k2 => {}),
     }, account => 'a1');
   })->then (sub {
     return $current->post (['profiles'], {
@@ -106,8 +134,74 @@ Test {
         is $acc->{terms_version}, 0;
       }
     } $current->c;
+    return $current->post (['log', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      $result->{json}->{items} = [grep { $_->{action} eq 'status' } @{$result->{json}->{items}}];
+      is 0+@{$result->{json}->{items}}, 1;
+      {
+        my $item = $result->{json}->{items}->[0];
+        ok $item->{log_id};
+        is $item->{account_id}, $current->o ('a1')->{account_id};
+        is $item->{operator_account_id}, $current->o ('a1')->{account_id};
+        ok $item->{timestamp};
+        ok $item->{timestamp} < time;
+        is $item->{action}, 'status';
+        is $item->{ua}, $current->o ('k2');
+        is $item->{ipaddr}, $current->o ('k1');
+        ok $item->{data};
+        is $item->{data}->{source_operation}, 'user_status';
+        is $item->{data}->{user_status}, 3;
+        is $item->{data}->{admin_status}, undef;
+      }
+    } $current->c;
   });
-} n => 6, name => 'by session';
+} n => 19, name => 'by session';
+
+Test {
+  my $current = shift;
+  return $current->create (
+    [a1 => account => {
+    }],
+  )->then (sub {
+    return $current->post (['account', 'user_status'], {
+      user_status => 3,
+      source_ipaddr => $current->generate_key (k1 => {}),
+      source_ua => $current->generate_key (k2 => {}),
+      source_data => perl2json_chars ({foo => $current->generate_key (k3 => {})}),
+      operator_account_id => $current->generate_id (k4 => {}),
+    }, account => 'a1');
+  })->then (sub {
+    return $current->post (['log', 'get'], {
+      account_id => $current->o ('a1')->{account_id},
+    });
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      $result->{json}->{items} = [grep { $_->{action} eq 'status' } @{$result->{json}->{items}}];
+      is 0+@{$result->{json}->{items}}, 1;
+      {
+        my $item = $result->{json}->{items}->[0];
+        ok $item->{log_id};
+        is $item->{account_id}, $current->o ('a1')->{account_id};
+        is $item->{operator_account_id}, $current->o ('k4');
+        ok $item->{timestamp};
+        ok $item->{timestamp} < time;
+        is $item->{action}, 'status';
+        is $item->{ua}, $current->o ('k2');
+        is $item->{ipaddr}, $current->o ('k1');
+        ok $item->{data};
+        is $item->{data}->{source_operation}, 'user_status';
+        is $item->{data}->{user_status}, 3;
+        is $item->{data}->{admin_status}, undef;
+        is $item->{data}->{source_data}->{foo}, $current->o ('k3');
+      }
+    } $current->c;
+  });
+} n => 14, name => 'logs';
 
 RUN;
 
