@@ -28,7 +28,7 @@ HTML::Tagset~3.24
 HTTP::Cookies~6.11
 HTTP::Date~6.06
 HTTP::Negotiate~6.01
-HTTP::Request::Common~6.46
+HTTP::Response~6.46
 IO::AIO~4.81
 IO::FDPass~1.3
 IO::HTML~1.004
@@ -42,7 +42,7 @@ Math::BigInt~2.003003
 Method::WeakCallback~0.04
 Net::HTTP~6.23
 Net::SSLeay~1.94
-OAuth::Lite::Token
+OAuth::Lite::Consumer
 Path::Class~0.37
 Path::Tiny~0.146
 Pod::Usage~2.03
