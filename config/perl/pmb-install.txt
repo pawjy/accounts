@@ -3,9 +3,8 @@ AnyEvent::AIO~1.1
 AnyEvent::FileLock~0.06
 AnyEvent::Fork~1.32
 AnyEvent::HTTP~2.25
-AnyEvent::Util
 Canary::Stability~2013
-Carp::Heavy~1.50
+Carp~1.50
 Class::Accessor~0.51
 Class::Data::Accessor~0.04004
 Class::ErrorHandler~0.04
@@ -41,7 +40,7 @@ List::MoreUtils~0.430
 List::MoreUtils::XS~0.430
 MIME::Base32~1.303
 MIME::Base64~3.16
-Math::BigInt~2.004001
+Math::BigInt~2.005001
 Method::WeakCallback~0.04
 Net::HTTP~6.23
 Net::SSLeay~1.94
@@ -54,13 +53,14 @@ Proc::Wait3~0.05
 Scalar::Util~1.68
 Socket~2.038
 Term::ANSIColor~5.01
-Test::Builder~1.302209
+Test::More~1.302209
 Time::HiRes~1.9764
 Time::Local~1.35
 Time::Zone~2.24
 Try::Tiny~0.32
 UNIVERSAL::require~0.19
 URI~5.31
+URI::URL~5.31
 WWW::RobotRules~6.02
 common::sense~3.75
 parent~0.244
