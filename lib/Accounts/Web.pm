@@ -566,6 +566,9 @@ sub main ($$) {
     ##                    Required.
     ##   |lk|           - The |lk| cookie value, if any.
     ##   |origin|       - The origin of the server.  Required if |lk|.
+    ##   |select_account_on_multiple| : Boolean - If true and when there
+    ##                    are multiple possible accounts, a list of them
+    ##                    is returned.  If false, one of them are chosen.
     ##
     ##   Initiate the OAuth flow.  Then:
     ##
@@ -642,8 +645,9 @@ sub main ($$) {
         state => $state,
         app_data => $app->text_param ('app_data'),
         create_email_link => $app->bare_param ('create_email_link'),
+        select_account_on_multiple => ($path->[0] eq 'login' and $app->bare_param ('select_account_on_multiple')),
       };
-
+      
       my $sk_context = $session_row->get ('sk_context');
       my $client_id = $app->config->get ($server->{name} . '.client_id.' . $sk_context) //
                       $app->config->get ($server->{name} . '.client_id');
@@ -700,7 +704,20 @@ sub main ($$) {
     ##
     ## Parameters
     ##
+    ##   |sk|, |state|, |reloaded|, |code|
     ##   Operation source parameters.
+    ##
+    ## Returns
+    ##
+    ##   |needs_account_selection| : Boolean   - True when there are
+    ##                            multiple candidate accounts.
+    ##   |accounts| : Array?    - The candidate accounts.
+    ##     |account_id| : ID    - The account ID.
+    ##     |name| : Text        - The account's name.
+    ##   |app_data| : Object?   - Application-specific data given when
+    ##                            the flow has started, if any and login
+    ##                            successed.
+    ##
     $app->requires_request_method ({POST => 1});
     $app->requires_api_key;
 
@@ -845,36 +862,37 @@ sub main ($$) {
           if ($session_data->{action}->{operation} eq 'login') {
             my $time = time;
             return $class->login_account ($app, $server, $session_data, $time)->then (sub {
-              return $class->write_session_log ($app, $session_row, $time, force => 1);
+              my $login_result = $_[0];
+              if (defined $login_result->{multiple_accounts_found}) {
+                return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
+                  return $login_result; # need to be continued
+                });
+              }
+              return $class->write_session_log ($app, $session_row, $time, force => 1)->then (sub {
+                return {}; # Success
+              });
             });
           } elsif ($session_data->{action}->{operation} eq 'link') {
-            return $class->link_account ($app, $server, $session_data);
+            return $class->link_account ($app, $server, $session_data)->then(sub {
+              return {}; # Success
+            });
           } else {
             die "Bad operation |$session_data->{action}->{operation}|";
           }
         })->then (sub {
-          my $app_data = $session_data->{action}->{app_data}; # or undef
-          my $json = {app_data => $app_data};
-          if ($session_data->{action}->{operation} eq 'login') {
-            $session_data->{login_time} = time;
-
-            my $lk = $app->bare_param ('lk') // '';
-            my $origin = $app->bare_param ('origin') // '';
-            my $lk_expires = time + 60*60*24*400;
-            if (verify_lk ($app->config, $lk, $origin, $lk_expires)) {
-              #
-            } else {
-              $json->{lk} = create_lk ($app->config, $origin);
-              if (defined $json->{lk}) {
-                $json->{lk_expires} = $lk_expires;
-                $json->{is_new} = 1;
-              }
-            }
+          my $result = $_[0];
+          if (defined $result->{multiple_accounts_found}) {
+            ## Account selection is needed.
+            my $app_data = $session_data->{action}->{app_data};
+            return $app->send_json ({
+              needs_account_selection => 1,
+              accounts => $result->{accounts},
+            });
+          } else {
+            return $class->finalize_login_session ($app, $session_row)->then (sub {
+              return $app->send_json ($_[0]);
+            });
           }
-          delete $session_data->{action};
-          return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
-            return $app->send_json ($json);
-          });
         });
       }, sub {
         warn $_[0];
@@ -884,7 +902,61 @@ sub main ($$) {
         return $class->delete_old_sessions ($app);
       });
     });
-  } # /cb
+  } elsif (@$path == 2 and $path->[0] eq 'login' and $path->[1] eq 'continue') {
+    ## /login/continue - Continue login flow after account selection
+    ##
+    ## Parameters
+    ##
+    ##   |sk_context|, |sk|
+    ##   |selected_account_id| : ID : The account ID selected by the user.
+    ##   Operation source parameters.
+    ##
+    ## Returns
+    ##
+    ##   |app_data| : Object?   - Application-specific data given when
+    ##                            the flow has started, if any and login
+    ##                            successed.
+    ##
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    my $selected_account_id = $app->bare_param ('selected_account_id')
+        // return $app->send_error_json
+                      ({reason => 'No |selected_account_id|'});
+
+    return $class->resume_session ($app)->then (sub {
+      my $session_row = $_[0]
+          // return $app->send_error_json
+                        ({reason => 'Bad session',
+                          error_for_dev => '/login/continue bad session'});
+
+      my $session_data = $session_row->get('data');
+      return $app->send_error_json ({reason => 'Bad login flow state'})
+          unless 'oauth' eq ($session_data->{action}->{endpoint} // '');
+
+      my $server = $app->config->get_oauth_server ($session_data->{action}->{server})
+          or $app->send_error(500);
+
+      my $time = time;
+      return $class->login_account (
+        $app, $server, $session_data, $time,
+        selected_account_id => $selected_account_id,
+      )->then (sub {
+        my $login_result = $_[0];
+        if (defined $login_result->{multiple_accounts_found}) {
+          return $app->throw_error_json
+              ({reason => 'Internal error during login continuation'});
+        } else {
+          return $class->write_session_log
+              ($app, $session_row, $time, force => 1);
+        }
+      })->then(sub {
+        return $class->finalize_login_session ($app, $session_row);
+      })->then (sub {
+        return $app->send_json ($_[0]);
+      });
+    });
+  } # /login/continue
 
   if (@$path == 2 and $path->[0] eq 'email') {
     if ($path->[1] eq 'input') {
@@ -2175,8 +2247,8 @@ sub get_resource_owner_profile ($$%) {
   });
 } # get_resource_owner_profile
 
-sub login_account ($$$$) {
-  my ($class, $app, $server, $session_data, $time) = @_;
+sub login_account ($$$$;%) {
+  my ($class, $app, $server, $session_data, $time, %args) = @_;
   my $service = $server->{name};
 
   return $app->throw_error (400, reason_phrase => 'Non-loginable |service|')
@@ -2197,7 +2269,35 @@ sub login_account ($$$$) {
   }, source_name => 'master')->then (sub {
     my $links = $_[0]->all;
     # XXX filter by account status?
-    $links = [$links->[0]] if @$links; # XXX
+
+    if (@$links) {
+      if (defined $args{selected_account_id}) {
+        $links = [grep { $_->{account_id} eq $args{selected_account_id} } @$links];
+        return $app->throw_error_json
+            ({reason => 'Selected account did not match linked accounts'})
+            unless @$links == 1;
+
+        #
+      } elsif ($session_data->{action}->{select_account_on_multiple}) {
+        my @account_ids = map { $_->{account_id} } @$links;
+        return $app->db->select ('account', {
+          account_id => {-in => \@account_ids, user_status => 1, admin_status => 1},
+        }, fields => ['account_id', 'name'], source_name => 'master')->then(sub {
+          my $accounts = $_[0]->all_as_rows;
+          return [{
+            multiple_accounts_found => 1,
+            accounts => [map {
+              {account_id => ''.$_->get ('account_id'),
+               name => $_->get ('name')};
+            } @$accounts],
+          }];
+        });
+      } else {
+        #
+      }
+      $links = [$links->[0]];
+    } # @$links
+
     my $token1 = '';
     my $token2 = '';
     if (defined $server->{temp_endpoint}) { # OAuth 1.0
@@ -2248,6 +2348,7 @@ sub login_account ($$$$) {
             %$log_cols,
             data => Dongry::Type->serialize ('json', $log_data),
           };
+
           return $app->db->execute ('INSERT INTO account_link (account_link_id, account_id, service_name, created, updated, linked_name, linked_id, linked_key, linked_token1, linked_token2, linked_email, linked_data) VALUES (:account_link_id, :account_id, :service_name, :created, :updated, :linked_name, :linked_id, :linked_key:nullable, :linked_token1, :linked_token2, :linked_email, :linked_data)', {
             account_link_id => $link_id1,
             account_id => $account_id,
@@ -2362,10 +2463,12 @@ sub login_account ($$$$) {
       ])->then (sub {
         return [$_[0]->[0]->first, {account_link_id => $links->[0]->{account_link_id}}];
       });
-    } else { # multiple account links
-      die "XXX Not implemented yet";
+    } else {
+      die "This should not be reached";
     }
   })->then (sub {
+    return $_[0]->[0] if defined $_[0]->[0]->{multiple_accounts_found};
+
     my ($account, $account_link) = @{$_[0]};
     unless ($account->{user_status} == 1) {
       return $app->throw_error_json ({
@@ -2384,6 +2487,7 @@ sub login_account ($$$$) {
       });
     }
     $session_data->{account_id} = format_id $account->{account_id};
+    return {};
   });
 } # login_account
 
@@ -2461,6 +2565,33 @@ sub link_account ($$$) {
     });
   });
 } # link_account
+
+sub finalize_login_session ($$$) {
+  my ($class, $app, $session_row) = @_;
+  my $session_data = $session_row->get ('data');
+
+  my $app_data = $session_data->{action}->{app_data}; # or undef
+  my $json = {app_data => $app_data};
+  if (($session_data->{action}->{operation} // '') eq 'login') {
+    $session_data->{login_time} = time;
+
+    my $lk = $app->bare_param ('lk') // '';
+    my $origin = $app->bare_param ('origin') // '';
+    my $lk_expires = time + 60*60*24*400;
+    if (not verify_lk ($app->config, $lk, $origin, $lk_expires)) {
+      $json->{lk} = create_lk ($app->config, $origin);
+      if (defined $json->{lk}) {
+        $json->{lk_expires} = $lk_expires;
+        $json->{is_new} = 1;
+      }
+    }
+  }
+
+  delete $session_data->{action};
+  return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
+    return $json;
+  });
+} # finalize_login_session
 
 ## An account link object:
 ##
