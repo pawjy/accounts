@@ -166,9 +166,9 @@ Test {
     my $result = $_[0];
     test {
       is $result->{status}, 200;
-      is 0+keys %{$result->{json}->{invitations}}, 2;
-      ok $result->{json}->{invitations}->{$current->o ('i3')->{invitation_key}};
-      ok $result->{json}->{invitations}->{$current->o ('i2')->{invitation_key}};
+      is 0+keys %{$result->{json}->{invitations}}, 2, $current->o ('i1')->{invitation_key};
+      ok $result->{json}->{invitations}->{$current->o ('i3')->{invitation_key}}, $current->o ('i3')->{invitation_key};
+      ok $result->{json}->{invitations}->{$current->o ('i2')->{invitation_key}}, $current->o ('i2')->{invitation_key};
       ok $result->{json}->{next_ref};
       ok $result->{json}->{has_next};
     } $current->c;
