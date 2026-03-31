@@ -9,6 +9,7 @@ use Promised::File;
 use Promised::Command;
 use JSON::PS;
 use Digest::SHA qw(sha1_hex);
+use Crypt::OpenSSL::Random;
 use Crypt::PK::Ed25519;
 use Wanage::URL;
 use Wanage::HTTP;
@@ -931,17 +932,21 @@ sub main ($$) {
                           error_for_dev => '/login/continue bad session'});
 
       my $session_data = $session_row->get('data');
+      my $endpoint = $session_data->{action}->{endpoint} // '';
       return $app->send_error_json ({reason => 'Bad login flow state'})
-          unless 'oauth' eq ($session_data->{action}->{endpoint} // '');
-
-      my $server = $app->config->get_oauth_server ($session_data->{action}->{server})
-          or $app->send_error(500);
+          unless $endpoint eq 'oauth' or $endpoint eq 'email';
 
       my $time = time;
-      return $class->login_account (
-        $app, $server, $session_data, $time,
-        selected_account_id => $selected_account_id,
-      )->then (sub {
+      return ($endpoint eq 'email' ?
+        $class->login_account_by_email (
+          $app, $session_data, $time,
+          selected_account_id => $selected_account_id,
+        ) : do {
+        my $server = $app->config->get_oauth_server ($session_data->{action}->{server})
+            or $app->send_error(500);
+        $class->login_account ($app, $server, $session_data, $time,
+                               selected_account_id => $selected_account_id);
+      })->then (sub {
         my $login_result = $_[0];
         if (defined $login_result->{multiple_accounts_found}) {
           return $app->throw_error_json
@@ -951,12 +956,296 @@ sub main ($$) {
               ($app, $session_row, $time, force => 1);
         }
       })->then(sub {
-        return $class->finalize_login_session ($app, $session_row);
+        my $account_id = $session_data->{account_id};
+        return $class->finalize_login_session ($app, $session_row)->then (sub {
+          my $json = $_[0];
+          $json->{account_id} = ''.$account_id;
+          return $json;
+        });
       })->then (sub {
         return $app->send_json ($_[0]);
       });
     });
   } # /login/continue
+
+  if (@$path == 3 and $path->[0] eq 'login' and $path->[1] eq 'email' and $path->[2] eq 'request') {
+    ## /login/email/request - Request a secret number for email login
+    ##
+    ## Parameters
+    ##   |addr| : Text : Email address.
+    ##   Operation source parameters.
+    ##
+    ## Returns
+    ##   |secret_number| : String? :     The generated secret number, if
+    ##                                   applicable.
+    ##   |secret_expires| : Timestamp? : The expiration of the |secret_number|,
+    ##                                   if applicable.
+    ##   |should_send_email| : Boolean : Whether an email should be sent.
+    ##
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    my $addr = $app->text_param ('addr') // '';
+    unless ($addr =~ /\A[\x21-\x3F\x41-\x7E]+\@[\x21-\x3F\x41-\x7E]+\z/) {
+      return $app->send_error_json ({reason => 'Bad email address'});
+    }
+    my $email_sha = sha1_hex encode_web_utf8 $addr;
+    my $ipaddr = $app->bare_param ('source_ipaddr') // '';
+    my $time = time;
+
+    my $result_json = {should_send_email => 0};
+    my $log_data = {linked_email => $addr};
+
+    my $ip_limit = $app->config->get ('login_email_rate_limit_ip_count') || 100;
+    my $ip_window = $app->config->get ('login_email_rate_limit_ip_window') || 600;
+    my $email_limit = $app->config->get ('login_email_rate_limit_email_count') || 5;
+    my $email_window = $app->config->get ('login_email_rate_limit_email_window') || 3600;
+
+    return $class->resume_session ($app)->then (sub {
+      my $session_row = $_[0]
+          // return $app->throw_error_json ({reason => 'Bad session'});
+
+      ## IP-based rate limit (Count all requests from account_log)
+      return $app->db->select ('account_log', {
+        action => 'login/email/request',
+        ipaddr => $ipaddr,
+        timestamp => {'>', $time - $ip_window},
+      }, fields => [{-count => undef, as => 'c'}], source_name => 'master')->then (sub {
+        if (($_[0]->first || {})->{c} >= $ip_limit) {
+          $log_data->{result} = 'rate_limited';
+          $log_data->{reason} = 'IP rate limit';
+          return 0;
+        }
+        return 1;
+      });
+    })->then (sub {
+      return 0 unless $_[0];
+      ## Email-based rate limit
+      return $app->db->select ('login_token', {
+        email_sha => Dongry::Type->serialize ('text', $email_sha),
+        created => {'>', $time - $email_window},
+      }, fields => [{-count => undef, as => 'c'}], source_name => 'master')->then (sub {
+        if (($_[0]->first || {})->{c} >= $email_limit) {
+          $log_data->{result} = 'rate_limited';
+          $log_data->{reason} = 'Email rate limit';
+          return 0;
+        }
+        return 1;
+      });
+    })->then (sub {
+      return 0 unless $_[0];
+      ## Check if email is registered
+      return $app->db->select ('account_link', {
+        service_name => 'email',
+        linked_email => Dongry::Type->serialize ('text', $addr),
+      }, fields => ['account_id'], source_name => 'master', limit => 1)->then (sub {
+        my $row = $_[0]->first;
+        if (defined $row) {
+          my $account_id = $row->{account_id};
+          ## Check account status
+          return $app->db->select ('account', {
+            account_id => $account_id,
+            user_status => 1,
+            admin_status => 1,
+          }, fields => ['account_id'], source_name => 'master', limit => 1)->then (sub {
+            my $acc = $_[0]->first;
+            if (defined $acc) {
+              return {account_id => $acc->{account_id}};
+            } else {
+              $log_data->{result} = 'not_found';
+              return undef;
+            }
+          });
+        } else {
+          $log_data->{result} = 'not_found';
+          return undef;
+        }
+      });
+    })->then (sub {
+      my $found = $_[0];
+      if ($found) {
+        my $account_id = $found->{account_id};
+        my $secret = $class->generate_8digit_secret;
+        return $app->db->transaction->then (sub {
+          my $tr = $_[0];
+          ## Revoke existing tokens for this email
+          return $tr->update ('login_token', {
+            status => 2, # revoked
+          }, where => {
+            email_sha => $email_sha,
+            status => 1,
+          }, source_name => 'master')->then (sub {
+            return $tr->insert ('login_token', [{
+              email_sha => $email_sha,
+              token => $secret,
+              expires => $result_json->{secret_expires} = $time + 600,
+              created => $time,
+              ipaddr => Dongry::Type->serialize ('text', $ipaddr),
+              attempts => 0,
+              status => 1, # active
+            }], source_name => 'master');
+          })->then (sub {
+            return $tr->commit;
+          })->then (sub {
+            $result_json->{secret_number} = $secret;
+            $result_json->{should_send_email} = 1;
+            $log_data->{result} = 'sent';
+            return $account_id;
+          });
+        });
+      } else {
+        return 0; # Not found or rate limited
+      }
+    })->then (sub {
+      my $account_id = $_[0] || 0;
+      return $app->db->uuid_short (1)->then (sub {
+        return $app->db->insert ('account_log', [{
+          log_id => $_[0]->[0],
+          account_id => $account_id, # one of them
+          operator_account_id => 0,
+          timestamp => $time,
+          action => 'login/email/request',
+          ua => $app->bare_param ('source_ua') // '',
+          ipaddr => $ipaddr,
+          data => Dongry::Type->serialize ('json', $log_data),
+        }]);
+      });
+    })->then (sub {
+      $app->send_json ($result_json);
+      return $class->delete_old_login_tokens ($app);
+    });
+  } # /login/email/request
+
+  if (@$path == 3 and $path->[0] eq 'login' and $path->[1] eq 'email' and $path->[2] eq 'verify') {
+    ## /login/email/verify - Verify secret number and login
+    ##
+    ## Parameters
+    ##   |addr| : Text : Email address.
+    ##   |secret_number| : Text : The secret number.
+    ##   |sk_context| : Text : Session context.
+    ##   |sk| : Text? : Session key.
+    ##   Operation source parameters.
+    ##
+    $app->requires_request_method ({POST => 1});
+    $app->requires_api_key;
+
+    my $addr = $app->text_param ('addr') // '';
+    my $secret = $app->text_param ('secret_number') // '';
+    my $email_sha = sha1_hex encode_web_utf8 $addr;
+    my $time = time;
+    my $log_data = {linked_email => $addr};
+
+    return $class->resume_session ($app)->then (sub {
+      my $session_row = $_[0]
+          // return $app->throw_error_json ({reason => 'Bad session'});
+
+      return $app->db->select ('login_token', {
+        email_sha => $email_sha,
+        status => 1, # active
+      }, source_name => 'master', order => [created => 'DESC'], limit => 1)->then (sub {
+        my $row = $_[0]->first;
+        unless ($row) {
+          $log_data->{result} = 'failed';
+          $log_data->{reason} = 'No active token';
+          return {status => 400, reason => 'Invalid secret number'};
+        }
+
+        if ($row->{expires} < $time) {
+          $log_data->{result} = 'expired';
+          return $app->db->update ('login_token', {
+            status => 2, # revoked
+          }, where => {
+            email_sha => $email_sha,
+          }, source_name => 'master')->then (sub {
+            return {status => 400, reason => 'Expired secret number'};
+          });
+        }
+
+        my $attempts_limit = $app->config->get ('login_email_attempts_limit_count') || 5;
+        if ($row->{attempts} >= $attempts_limit) {
+          $log_data->{result} = 'too_many_attempts';
+          return $app->db->update ('login_token', {
+            status => 2, # revoked
+          }, where => {
+            email_sha => $email_sha,
+          }, source_name => 'master')->then (sub {
+            return {status => 400, reason => 'Too many attempts'};
+          });
+        }
+
+        if ($row->{token} eq $secret and length $secret) {
+          ## Success
+          return $app->db->update ('login_token', {
+            status => 2, # revoked
+          }, where => {
+            email_sha => $email_sha,
+          }, source_name => 'master')->then (sub {
+            my $session_data = $session_row->get ('data');
+            $session_data->{email} = {
+              linked_id => $email_sha,
+              linked_email => $addr,
+            };
+            $session_data->{action} = {
+              endpoint => 'email',
+              operation => 'login',
+            };
+
+            return $class->login_account_by_email ($app, $session_data, $time)->then (sub {
+              my $login_result = $_[0];
+              if (defined $login_result->{multiple_accounts_found}) {
+                $log_data->{result} = 'success';
+                $log_data->{multiple_accounts} = 1;
+                return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
+                  return {status => 200, json => {
+                    needs_account_selection => 1,
+                    accounts => $login_result->{accounts},
+                  }};
+                });
+              } else {
+                return $class->finalize_login_session ($app, $session_row)->then (sub {
+                  my $json = $_[0];
+                  $json->{account_id} = $session_data->{account_id};
+                  $log_data->{result} = 'success';
+                  return {status => 200, json => $json, account_id => $json->{account_id}};
+                });
+              }
+            });
+          });
+        } else {
+          $log_data->{result} = 'failed';
+          return $app->db->execute ('UPDATE login_token SET attempts = attempts + 1 WHERE email_sha = ? AND status = 1', {
+            email_sha => $email_sha,
+          }, source_name => 'master')->then (sub {
+            return {status => 400, reason => 'Invalid secret number'};
+          });
+        }
+      });
+    })->then (sub {
+      my $res = $_[0];
+      my $account_id = $res->{account_id} || 0;
+      return $app->db->uuid_short (1)->then (sub {
+        return $app->db->insert ('account_log', [{
+          log_id => $_[0]->[0],
+          account_id => $account_id,
+          operator_account_id => $account_id,
+          timestamp => $time,
+          action => 'login/email/verify',
+          ua => $app->bare_param ('source_ua') // '',
+          ipaddr => $app->bare_param ('source_ipaddr') // '',
+          data => Dongry::Type->serialize ('json', $log_data),
+        }]);
+      })->then (sub {
+        if ($res->{status} == 200) {
+          return $app->send_json ($res->{json});
+        } else {
+          $app->http->set_status ($res->{status});
+          return $app->send_json ({reason => $res->{reason}});
+        }
+      });
+    })->then (sub {
+      return $class->delete_old_login_tokens ($app);
+    });
+  } # /login/email/verify
 
   if (@$path == 2 and $path->[0] eq 'email') {
     if ($path->[1] eq 'input') {
@@ -2187,6 +2476,24 @@ sub delete_old_sessions ($$) {
   });
 } # delete_old_sessions
 
+sub delete_old_login_tokens ($$) {
+  my ($class, $app) = @_;
+  my $time = time;
+  my $email_window = $app->config->get ('login_email_rate_limit_email_window') || 3600;
+  my $ip_window = $app->config->get ('login_email_rate_limit_ip_window') || 600;
+  my $max_window = $email_window > $ip_window ? $email_window : $ip_window;
+  return $app->db->delete ('login_token', {
+    created => {'<', $time - $max_window},
+    expires => {'<', $time},
+  }, source_name => 'master');
+} # delete_old_login_tokens
+
+sub generate_8digit_secret ($) {
+  my $bytes = Crypt::OpenSSL::Random::random_bytes (4);
+  my $num = unpack 'L', $bytes;
+  return sprintf '%08d', $num % 100000000;
+} # generate_8digit_secret
+
 sub get_resource_owner_profile ($$%) {
   my ($class, $app, %args) = @_;
   my $server = $args{server} or die;
@@ -2246,6 +2553,55 @@ sub get_resource_owner_profile ($$%) {
     }
   });
 } # get_resource_owner_profile
+
+sub login_account_by_email ($$$$;%) {
+  my ($class, $app, $session_data, $time, %args) = @_;
+  my $email_data = $session_data->{email}
+      // return $app->throw_error_json ({reason => 'Bad login flow state'});
+  my $email_sha = $email_data->{linked_id};
+
+  return $app->db->select ('account_link', {
+    service_name => 'email',
+    linked_id => Dongry::Type->serialize ('text', $email_sha),
+  }, fields => ['account_id'], source_name => 'master')->then (sub {
+    my $links = $_[0]->all;
+    return {status => 400, reason => 'Invalid secret number'} unless @$links;
+    my @account_ids = map { $_->{account_id} } @$links;
+
+    return $app->db->select ('account', {
+      account_id => {-in => \@account_ids},
+      user_status => 1,
+      admin_status => 1,
+    }, fields => ['account_id', 'name'], source_name => 'master')->then (sub {
+      my $accounts = $_[0]->all;
+      unless (@$accounts) {
+        return $app->throw_error_json ({status => 403, reason => 'Account disabled'});
+      }
+
+      if (@$accounts > 1 and not defined $args{selected_account_id}) {
+        return {
+          multiple_accounts_found => 1,
+          accounts => [map {
+            {account_id => format_id $_->{account_id}, name => $_->{name}};
+          } @$accounts],
+        };
+      }
+
+      my $account;
+      if (defined $args{selected_account_id}) {
+        $account = (grep { $_->{account_id} eq $args{selected_account_id} } @$accounts)[0];
+        return $app->throw_error_json
+            ({reason => 'Selected account did not match linked accounts'})
+            unless defined $account;
+      } else {
+        $account = $accounts->[0];
+      }
+
+      $session_data->{account_id} = format_id $account->{account_id};
+      return {};
+    });
+  });
+} # login_account_by_email
 
 sub login_account ($$$$;%) {
   my ($class, $app, $server, $session_data, $time, %args) = @_;
