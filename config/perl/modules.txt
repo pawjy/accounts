@@ -3,3 +3,4 @@ Encode
 MIME::Base64
 Path::Tiny
 Crypt::PK::Ed25519
+Crypt::OpenSSL::Random

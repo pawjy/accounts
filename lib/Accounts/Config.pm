@@ -83,6 +83,10 @@ my $Schema = {
     type => {linked_id => 'text', linked_key => 'text', linked_name => 'text'},
     primary_keys => ['account_link_id'],
   },
+  login_token => {
+    type => {email_sha => 'text', token => 'text', ipaddr => 'text'},
+    primary_keys => ['email_sha', 'created'],
+  },
 }; # $Schema
 
 sub get_db_options ($) {
