@@ -6,6 +6,8 @@ use JSON::PS;
 use Digest::SHA qw(sha1_hex);
 use Crypt::OpenSSL::Random;
 use Crypt::PK::Ed25519;
+use Web::Encoding;
+use Web::URL::Encoding;
 use Web::Transport::Base64;
 push our @ISA, qw(Accounts::Web);
 
