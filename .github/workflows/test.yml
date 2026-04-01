@@ -149,7 +149,7 @@
                "run" : "if [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; then cat $CIRCLE_ARTIFACTS/ss.env; fi; cat $CIRCLE_ARTIFACTS/ss.pid"
             },
             {
-               "run" : "SS_ENV_FILE=$CIRCLE_ARTIFACTS/ss.env make test-circle"
+               "run" : "CIRCLE_NODE_TOTAL=1 CIRCLE_NODE_INDEX=0 SS_ENV_FILE=$CIRCLE_ARTIFACTS/ss.env make test-circle"
             },
             {
                "env" : {

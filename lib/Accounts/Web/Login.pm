@@ -2,10 +2,13 @@ package Accounts::Web::Login;
 use strict;
 use warnings;
 use Time::HiRes qw(time);
+use File::Temp;
 use JSON::PS;
 use Digest::SHA qw(sha1_hex);
 use Crypt::OpenSSL::Random;
 use Crypt::PK::Ed25519;
+use Web::Encoding;
+use Web::URL::Encoding;
 use Web::Transport::Base64;
 push our @ISA, qw(Accounts::Web);
 
