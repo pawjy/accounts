@@ -23,7 +23,7 @@
       "while [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; do sleep 1; done",
       "if [ ! -e $CIRCLE_ARTIFACTS/ss.pid ]; then cat $CIRCLE_ARTIFACTS/ss.env; fi; cat $CIRCLE_ARTIFACTS/ss.pid",
 
-      "SS_ENV_FILE=$CIRCLE_ARTIFACTS/ss.env make test-circle",
+      "CIRCLE_NODE_TOTAL=1 CIRCLE_NODE_INDEX=0 SS_ENV_FILE=$CIRCLE_ARTIFACTS/ss.env make test-circle",
 
       {"docker_push": "quay.io/wakaba/accounts"},
 
