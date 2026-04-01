@@ -7,7 +7,7 @@ use Digest::SHA qw(sha1_hex);
 
 Test {
   my $current = shift;
-  my $addr = 'test@example.com';
+  my $addr = rand . 'test@example.com';
   my $ip = '127.0.0.1';
 
   return $current->create (
@@ -41,7 +41,7 @@ Test {
 
 Test {
   my $current = shift;
-  my $addr = 'log1@example.com';
+  my $addr = rand . 'log1@example.com';
   my $ip = '127.0.0.2';
   my $ua = 'TestAgent/1.0';
   my $secret;
@@ -123,7 +123,7 @@ Test {
 
 Test {
   my $current = shift;
-  my $addr = 'log2@example.com';
+  my $addr = rand . 'log2@example.com';
   my $ip = '127.0.0.2';
   my $ua = 'TestAgent/1.0';
   my $secret;
@@ -245,7 +245,7 @@ Test {
 
 Test {
   my $current = shift;
-  my $addr = 'notfound@example.com';
+  my $addr = rand . 'notfound@example.com';
   my $ip = '127.0.0.3';
   my $ua = 'NotFoundAgent/1.0';
 
@@ -281,7 +281,7 @@ Test {
 
 Test {
   my $current = shift;
-  my $addr = 'multi@example.com';
+  my $addr = rand .  'multi@example.com';
   my $ip = '127.0.0.4';
   my ($s1, $s2, $a1, $a2, $secret);
 
@@ -336,7 +336,7 @@ Test {
 
 Test {
   my $current = shift;
-  my $addr = 'rate-email@example.com';
+  my $addr = rand . 'rate-email@example.com';
   
   return $current->create (
     [s1 => session => {account => 1}],
@@ -424,7 +424,7 @@ Test {
 
 Test {
   my $current = shift;
-  my $addr = 'mix@example.com';
+  my $addr = rand . 'mix@example.com';
   my ($s1, $s2, $s3, $a1, $a2, $secret);
 
   return $current->create (
@@ -486,17 +486,7 @@ Test {
   });
 } n => 2, name => 'Improper order / empty flow';
 
-RUN (
-  additional_app_config => {
-    login_email_rate_limit_ip_count => 3,
-    login_email_rate_limit_ip_window => 600,
-    login_email_rate_limit_email_count => 2,
-    login_email_rate_limit_email_window => 3600,
-    login_email_attempts_limit_count => 2,
-    'github.client_id' => 'abc',
-    'github.client_secret' => 'def',
-  },
-);
+RUN;
 
 =head1 LICENSE
 

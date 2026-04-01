@@ -51,7 +51,20 @@ sub run ($%) {
         ])->then (sub {
           my ($config, $servers, $storage_data, $mysqld_data) = @{$_[0]};
 
-          $config = {%$config, %{$args{additional_app_config} or {}}};
+          $config = {
+            %$config,
+
+            # for t/http/login-email.t
+            login_email_rate_limit_ip_count => 3,
+            login_email_rate_limit_ip_window => 600,
+            login_email_rate_limit_email_count => 2,
+            login_email_rate_limit_email_window => 3600,
+            login_email_attempts_limit_count => 2,
+            'github.client_id' => 'abc',
+            'github.client_secret' => 'def',
+            
+            %{$args{additional_app_config} or {}},
+          };
           $servers = {%$servers, %{$args{additional_app_servers} or {}}};
 
           $data->{config} = $config;
