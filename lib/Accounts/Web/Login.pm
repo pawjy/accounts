@@ -2,6 +2,7 @@ package Accounts::Web::Login;
 use strict;
 use warnings;
 use Time::HiRes qw(time);
+use File::Temp;
 use JSON::PS;
 use Digest::SHA qw(sha1_hex);
 use Crypt::OpenSSL::Random;

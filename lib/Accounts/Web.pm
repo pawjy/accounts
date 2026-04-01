@@ -10,6 +10,7 @@ use Wanage::URL;
 use Wanage::HTTP;
 use Dongry::Type;
 use Dongry::Type::JSONPS;
+use Dongry::SQL qw(like);
 
 sub format_id ($) {
   return sprintf '%llu', $_[0];
