@@ -9,7 +9,6 @@ use Web::DOM::Document;
 use Web::XML::Parser;
 use Web::Transport::AWS;
 use Web::Transport::OAuth1;
-use Web::Transport::ConnectionClient;
 use Web::Transport::BasicClient;
 use JSON::PS;
 use Digest::SHA qw(sha1_hex);
@@ -117,9 +116,9 @@ sub icon ($$$) {
         })->then (sub { return $v->{url} });
       }
 
-      return $app->db->execute ('select uuid_short() as `id`', undef, source_name => 'master')->then (sub {
-        my $id = $_[0]->first->{id};
-    
+      return $app->db->uuid_short (1)->then (sub {
+        my $id = $_[0]->[0] || die "No ID";
+        
         my $key_prefix = $cfg->('s3_key_prefix') // '';
         my $key = "$id";
         $key = "$key_prefix/$key" if length $key_prefix;
@@ -160,7 +159,7 @@ sub icon ($$$) {
         return unless defined $sts_role_arn;
         my $sts_url = Web::URL->parse_string
             (qq<https://sts.$region.amazonaws.com/>);
-        my $sts_client = Web::Transport::ConnectionClient->new_from_url
+        my $sts_client = Web::Transport::BasicClient->new_from_url
             ($sts_url);
         $expires = time + $max_age;
         return $sts_client->request (
@@ -197,7 +196,7 @@ sub icon ($$$) {
               ('SecretAccessKey')->[0]->text_content;
           $token = $doc->get_elements_by_tag_name
               ('SessionToken')->[0]->text_content;
-        });
+        })->finally (sub { return $sts_client->close });
       })->then (sub {
         my $acl = "public-read";
         #my $redirect_url = ...;

@@ -357,7 +357,7 @@ sub login ($$$) {
             unless length $code;
         my $url = Web::URL->parse_string
             (($server->{url_scheme} // 'https') . '://' . $server->{host} . $server->{token_endpoint});
-        my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+        my $client = Web::Transport::BasicClient->new_from_url ($url);
         $p = $client->request (
           method => 'POST',
           url => $url,
@@ -1018,7 +1018,7 @@ sub login ($$$) {
                                   $app->config->get ($server->{name} . '.client_secret');
               my $url = Web::URL->parse_string
                   (($server->{url_scheme} // 'https') . '://' . $server->{host} . $server->{token_endpoint});
-              my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+              my $client = Web::Transport::BasicClient->new_from_url ($url);
               return $client->request (
                 method => 'POST',
                 url => $url,
@@ -1539,7 +1539,7 @@ sub get_resource_owner_profile ($$%) {
         ($session_data->{$service}->{linked_data}->{email_verified} // '') ne 'true') {
       delete $session_data->{$service}->{linked_data}->{profile_email};
     }
-  });
+  })->finally (sub { return $client->close });
 } # get_resource_owner_profile
 
 sub login_account_by_email ($$$$;%) {
