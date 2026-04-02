@@ -11,6 +11,8 @@ use Web::Transport::AWS;
 use Web::Transport::OAuth1;
 use Web::Transport::ConnectionClient;
 use Web::Transport::BasicClient;
+use JSON::PS;
+use Digest::SHA qw(sha1_hex);
 push our @ISA, qw(Accounts::Web);
 
 sub Accounts::Web::load_icons ($$$$$) {
