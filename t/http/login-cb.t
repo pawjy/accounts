@@ -823,11 +823,56 @@ Test {
   });
 } n => 11, name => 'login rejected by admin_status';
 
+Test {
+  my $current = shift;
+  my $cb_url = 'http://haoa.test/cb/' . rand;
+  my $x_account_id = 'xid_' . int rand 1000000;
+  my $account_id;
+  
+  return $current->create_session(1)->then(sub {
+    return $current->create_session(2)->then(sub {
+      return $current->post(['create'], { name => 'Single Account' }, session => 2);
+    })->then(sub {
+      my $res = $_[0];
+      $account_id = $res->{json}->{account_id};
+      return $current->post(['link', 'add'], { server => 'oauth2server', linked_id => $x_account_id }, session => 2);
+    })->then(sub {
+      return { cb_url => $cb_url, x_account_id => $x_account_id, account_id => $account_id };
+    });
+  })->then (sub {
+    my $o = $_[0];
+    return $current->post(['login'], {
+      server => 'oauth2server',
+      callback_url => $o->{cb_url},
+      select_account_on_multiple => 1,
+    }, session => 1)->then(sub {
+      my $url = Web::URL->parse_string($_[0]->{json}->{authorization_url});
+      return $current->client_for($url)->request(url => $url, method => 'POST', params => { account_id => $o->{x_account_id} });
+    })->then(sub {
+      my ($base, $query) = split /\?/, $_[0]->header('Location'), 2;
+      return $current->post("/cb?$query", {}, session => 1);
+    })->then(sub {
+      my $result = $_[0];
+      test {
+        is $result->{status}, 200, '/cb returns 200';
+        is $result->{json}->{needs_account_selection}, undef, 'Should NOT request account selection for a single account';
+        is $result->{json}->{accounts}, undef;
+      } $current->c;
+      return $current->post(['info'], {}, session => 1);
+    })->then(sub {
+      my $result = $_[0];
+      test {
+        is $result->{json}->{account_id}, $o->{account_id}, 'Logged in automatically when only one account exists';
+      } $current->c;
+    });
+  });
+} n => 4, name => 'single account with select_account_on_multiple=1';
+
 RUN;
 
 =head1 LICENSE
 
-Copyright 2015-2024 Wakaba <wakaba@suikawiki.org>.
+Copyright 2015-2026 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

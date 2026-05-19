@@ -1622,7 +1622,8 @@ sub login_account ($$$$;%) {
             unless @$links == 1;
 
         #
-      } elsif ($session_data->{action}->{select_account_on_multiple}) {
+      } elsif ($session_data->{action}->{select_account_on_multiple} and
+               @$links > 1) {
         my @account_ids = map { $_->{account_id} } @$links;
         return $app->db->select ('account', {
           account_id => {-in => \@account_ids, user_status => 1, admin_status => 1},
