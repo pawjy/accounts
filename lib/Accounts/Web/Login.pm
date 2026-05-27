@@ -539,6 +539,7 @@ sub login ($$$) {
     ## /login/email/request - Request a secret number for email login
     ##
     ## Parameters
+    ##   |sk_context|, |sk|
     ##   |addr| : Text : Email address.
     ##   Operation source parameters.
     ##
@@ -571,6 +572,10 @@ sub login ($$$) {
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0]
           // return $app->throw_error_json ({reason => 'Bad session'});
+      my $session_data = $session_row->get ('data');
+      if (defined $session_data->{account_id}) {
+        return $app->throw_error_json ({reason => 'Bad session'});
+      }
 
       ## IP-based rate limit (Count all requests from account_log)
       return $app->db->select ('account_log', {
@@ -687,10 +692,9 @@ sub login ($$$) {
     ## /login/email/verify - Verify secret number and login
     ##
     ## Parameters
+    ##   |sk_context|, |sk|
     ##   |addr| : Text : Email address.
     ##   |secret_number| : Text : The secret number.
-    ##   |sk_context| : Text : Session context.
-    ##   |sk| : Text? : Session key.
     ##   Operation source parameters.
     ##
     $app->requires_request_method ({POST => 1});
@@ -705,6 +709,10 @@ sub login ($$$) {
     return $class->resume_session ($app)->then (sub {
       my $session_row = $_[0]
           // return $app->throw_error_json ({reason => 'Bad session'});
+      my $session_data = $session_row->get ('data');
+      if (defined $session_data->{account_id}) {
+        return $app->throw_error_json ({reason => 'Bad session'});
+      }
 
       return $app->db->select ('login_token', {
         email_sha => $email_sha,

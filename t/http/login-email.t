@@ -12,28 +12,31 @@ Test {
 
   return $current->create (
     [s1 => session => {account => 1}],
+    [s2 => session => {}],
   )->then (sub {
     return $current->post (['email', 'input'], {addr => $addr}, session => 's1');
   })->then (sub {
     return $current->post (['email', 'verify'], {key => $_[0]->{json}->{key}}, session => 's1');
   })->then (sub {
     ## Validation errors (Expected 400 or 401)
-    return $current->are_errors ([['login', 'email', 'request'], {addr => $addr, source_ipaddr => $ip}, session => 's1'], [
+    return $current->are_errors ([['login', 'email', 'request'], {addr => $addr, source_ipaddr => $ip}, session => 's2'], [
       {params => {addr => ''}, status => 400, reason => 'Bad email address', name => 'empty addr'},
       {params => {addr => 'invalid-email'}, status => 400, reason => 'Bad email address', name => 'invalid addr format'},
       {params => {addr => "テスト\@example.com"}, status => 400, reason => 'Bad email address', name => 'non-ASCII addr'},
       {bearer => 'invalid', status => 401, name => 'invalid bearer'},
       {session => undef, status => 400, reason => 'Bad session', name => 'no session'},
+      {session => 's1', status => 400, reason => 'Bad session', name => 'already authenticated'},
       {method => 'GET', status => 405, name => 'GET request'},
     ]);
   })->then (sub {
     ## Verification errors (Expected 400)
-    return $current->are_errors ([['login', 'email', 'verify'], {addr => $addr, secret_number => '12345678', source_ipaddr => $ip}, session => 's1'], [
+    return $current->are_errors ([['login', 'email', 'verify'], {addr => $addr, secret_number => '12345678', source_ipaddr => $ip}, session => 's2'], [
       {params => {addr => ''}, status => 400, reason => 'Invalid secret number', name => 'empty addr'},
       {params => {secret_number => ''}, status => 400, reason => 'Invalid secret number', name => 'empty secret'},
       {params => {secret_number => 'abc'}, status => 400, reason => 'Invalid secret number', name => 'non-numeric secret'},
       {bearer => 'invalid', status => 401, name => 'invalid bearer'},
       {session => undef, status => 400, reason => 'Bad session', name => 'no session'},
+      {session => 's1', status => 400, reason => 'Bad session', name => 'already authenticated'},
       {method => 'GET', status => 405, name => 'GET request'},
     ]);
   });
@@ -49,6 +52,7 @@ Test {
 
   return $current->create (
     [s1 => session => {account => 1}],
+    [s2 => session => {}],
   )->then (sub {
     $account_id = $current->o ('s1')->{account}->{account_id};
     return $current->post (['email', 'input'], {addr => $addr}, session => 's1');
@@ -58,7 +62,7 @@ Test {
     ## 1. Request
     return $current->post (['login', 'email', 'request'], {
       addr => $addr, source_ipaddr => $ip, source_ua => $ua,
-    }, session => 's1');
+    }, session => 's2');
   })->then (sub {
     my $result = $_[0];
     $secret = $result->{json}->{secret_number};
@@ -86,7 +90,7 @@ Test {
     ## 3. Verify success
     return $current->post (['login', 'email', 'verify'], {
       addr => $addr, secret_number => $secret, source_ipaddr => $ip, source_ua => $ua,
-    }, session => 's1');
+    }, session => 's2');
   })->then (sub {
     my $result = $_[0];
     test {
@@ -97,7 +101,7 @@ Test {
     } $current->c;
 
     ## 4. Verify with /info
-    return $current->post (['info'], {}, session => 's1');
+    return $current->post (['info'], {}, session => 's2');
   })->then (sub {
     my $result = $_[0];
     test {
@@ -131,6 +135,7 @@ Test {
 
   return $current->create (
     [s1 => session => {account => 1}],
+    [s2 => session => {}],
   )->then (sub {
     $account_id = $current->o ('s1')->{account}->{account_id};
     return $current->post (['email', 'input'], {addr => $addr}, session => 's1');
@@ -140,7 +145,7 @@ Test {
     ## 1. Request
     return $current->post (['login', 'email', 'request'], {
       addr => $addr, source_ipaddr => $ip, source_ua => $ua,
-    }, session => 's1');
+    }, session => 's2');
   })->then (sub {
     my $result = $_[0];
     $secret = $result->{json}->{secret_number};
@@ -168,7 +173,7 @@ Test {
     return $current->post (['login', 'email', 'verify'], {
       addr => $addr, secret_number => $secret . 1,
       source_ipaddr => $ip, source_ua => $ua,
-    }, session => 's1');
+    }, session => 's2');
   })->then (sub { test { ok 0 } $current->c }, sub {
     my $result = $_[0];
     test {
@@ -180,7 +185,7 @@ Test {
     return $current->post (['login', 'email', 'verify'], {
       addr => $addr, secret_number => $secret . 2,
       source_ipaddr => $ip, source_ua => $ua,
-    }, session => 's1');
+    }, session => 's2');
   })->then (sub { test { ok 0 } $current->c }, sub {
     my $result = $_[0];
     test {
@@ -192,7 +197,7 @@ Test {
     return $current->post (['login', 'email', 'verify'], {
       addr => $addr, secret_number => $secret . 3,
       source_ipaddr => $ip, source_ua => $ua,
-    }, session => 's1');
+    }, session => 's2');
   })->then (sub { test { ok 0 } $current->c }, sub {
     my $result = $_[0];
     test {
@@ -201,11 +206,11 @@ Test {
       is $result->{json}->{account_id}, undef;
     } $current->c;
   })->then (sub {
-    return $current->post (['info'], {}, session => 's1');
+    return $current->post (['info'], {}, session => 's2');
   })->then (sub {
     my $result = $_[0];
     test {
-      is $result->{json}->{account_id}, $account_id, 'info returns correct account_id';
+      is $result->{json}->{account_id}, undef, 'info returns correct account_id';
     } $current->c;
 
     return $current->post (['log', 'get'], {action => 'login/email/verify'});
@@ -288,6 +293,7 @@ Test {
   return $current->create (
     [s1 => session => {account => 1}],
     [s2 => session => {account => 1}],
+    [s3 => session => {}],
   )->then (sub {
     $a1 = $current->o ('s1')->{account}->{account_id};
     $a2 = $current->o ('s2')->{account}->{account_id};
@@ -302,11 +308,11 @@ Test {
     return $current->post (['email', 'verify'], {key => $_[0]->{json}->{key}}, session => 's2');
   })->then (sub {
     ## Request
-    return $current->post (['login', 'email', 'request'], {addr => $addr, source_ipaddr => $ip}, session => 's1');
+    return $current->post (['login', 'email', 'request'], {addr => $addr, source_ipaddr => $ip}, session => 's3');
   })->then (sub {
     $secret = $_[0]->{json}->{secret_number};
     ## Verify
-    return $current->post (['login', 'email', 'verify'], {addr => $addr, secret_number => $secret, source_ipaddr => $ip}, session => 's1');
+    return $current->post (['login', 'email', 'verify'], {addr => $addr, secret_number => $secret, source_ipaddr => $ip}, session => 's3');
   })->then (sub {
     my $result = $_[0];
     test {
@@ -315,7 +321,7 @@ Test {
     } $current->c;
     
     ## 1. Continue with first account
-    return $current->post (['login', 'continue'], {selected_account_id => $a1}, session => 's1');
+    return $current->post (['login', 'continue'], {selected_account_id => $a1}, session => 's3');
   })->then (sub {
     my $result = $_[0];
     test {
@@ -325,7 +331,7 @@ Test {
     } $current->c;
 
     ## 2. Check /info
-    return $current->post (['info'], {}, session => 's1');
+    return $current->post (['info'], {}, session => 's3');
   })->then (sub {
     my $result = $_[0];
     test {
@@ -340,6 +346,7 @@ Test {
   
   return $current->create (
     [s1 => session => {account => 1}],
+    [s2 => session => {}],
   )->then (sub {
     return $current->post (['email', 'input'], {addr => $addr}, session => 's1');
   })->then (sub {
@@ -350,7 +357,7 @@ Test {
     for (1..2) {
       my $req_ip = '192.168.10.' . $_;
       $p = $p->then (sub {
-        return $current->post (['login', 'email', 'request'], {addr => $addr, source_ipaddr => $req_ip}, session => 's1');
+        return $current->post (['login', 'email', 'request'], {addr => $addr, source_ipaddr => $req_ip}, session => 's2');
       })->then (sub {
         my $result = $_[0];
         test {
@@ -361,7 +368,7 @@ Test {
     return $p;
   })->then (sub {
     ## 3rd request should be rate limited by EMAIL (even from a new IP)
-    return $current->post (['login', 'email', 'request'], {addr => $addr, source_ipaddr => '192.168.10.100'}, session => 's1');
+    return $current->post (['login', 'email', 'request'], {addr => $addr, source_ipaddr => '192.168.10.100'}, session => 's2');
   })->then (sub {
     my $result = $_[0];
     test {
