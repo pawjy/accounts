@@ -108,7 +108,23 @@ Test {
       is $result->{json}->{account_id}, $account_id, 'info returns correct account_id';
     } $current->c;
 
-    ## 5. Check verify logs
+    ## 5. Check session_recent_log
+    return $current->post (['session', 'get'], {
+      use_sk => 1,
+    }, session => 's2');
+  })->then (sub {
+    my $result = $_[0];
+    my $items = $result->{json}->{items};
+    test {
+      my $log = $items->[0];
+      ok $log, 'session_recent_log exists';
+      is $log->{log_data}->{login_method}, 'email', 'login_method is email';
+      is $log->{log_data}->{service_name}, undef, 'no service_name for email';
+      ok $log->{log_data}->{ua}, 'ua recorded';
+      ok $log->{log_data}->{ipaddr}, 'ipaddr recorded';
+    } $current->c;
+
+    ## 6. Check verify logs
     return $current->post (['log', 'get'], {action => 'login/email/verify'});
   })->then (sub {
     my $result = $_[0];
@@ -123,7 +139,7 @@ Test {
       is $log->{data}->{linked_email}, $addr, 'verify log data has email';
     } $current->c;
   });
-} n => 20, name => 'Basic success flow and comprehensive log check';
+} n => 25, name => 'Basic success flow and comprehensive log check';
 
 Test {
   my $current = shift;
@@ -337,8 +353,22 @@ Test {
     test {
       is $result->{json}->{account_id}, $a1, 'info returns a1';
     } $current->c;
+
+    ## 3. Check session_recent_log
+    return $current->post (['session', 'get'], {
+      use_sk => 1,
+    }, session => 's3');
+  })->then (sub {
+    my $result = $_[0];
+    my $items = $result->{json}->{items};
+    test {
+      my $log = $items->[0];
+      ok $log, 'session_recent_log exists';
+      is $log->{log_data}->{login_method}, 'email', 'login_method is email';
+      is $log->{log_data}->{service_name}, undef, 'no service_name for email';
+    } $current->c;
   });
-} n => 6, name => 'Multiple accounts and continue';
+} n => 9, name => 'Multiple accounts and continue';
 
 Test {
   my $current = shift;

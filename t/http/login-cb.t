@@ -216,12 +216,14 @@ Test {
         is $item->{log_data}->{ua}, $current->o ('k2');
         is $item->{log_data}->{ipaddr}, $current->o ('k1');
         is $item->{log_data}->{source_data}->{foo}, $current->o ('t1');
+        is $item->{log_data}->{login_method}, 'oauth', 'login_method is oauth';
+        is $item->{log_data}->{service_name}, 'oauth2server', 'service_name is oauth2server';
         is $item->{sk}, undef;
         is $item->{sk_context}, $current->o (2)->{sk_context};
       }
     } $current->c;
   });
-} n => 58, name => '/login then auth then /cb - oauth2';
+} n => 60, name => '/login then auth then /cb - oauth2';
 
 Test {
   my $current = shift;

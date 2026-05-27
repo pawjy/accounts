@@ -993,14 +993,19 @@ sub write_session_log ($$$$;%) {
   };
   my $app_obj = $app->bare_param ('source_data');
   $data->{source_data} = json_bytes2perl $app_obj if defined $app_obj;
+  if (my $extra = $args{extra_data}) {
+    @$data{keys %$extra} = values %$extra;
+  }
   if ($args{force} or length $data->{ipaddr} or length $data->{ua} or
       defined $data->{source_data}) {
     my $session_data = $session_row->get ('data');
+    my $aid = $session_data->{account_id};
+    my $sid = $session_data->{session_id};
     return $app->db->insert ('session_recent_log', [{
       sk => $session_row->get ('sk'),
       sk_context => $session_row->get ('sk_context'),
-      account_id => 0+($session_data->{account_id} || 0),
-      session_id => 0+$session_data->{session_id},
+      account_id => $aid ? 0+$aid : 0,
+      session_id => $sid ? 0+$sid : 0,
       timestamp => $now,
       expires => $session_row->get ('expires'),
       data => Dongry::Type->serialize ('json', $data),

@@ -130,10 +130,23 @@ Test {
       })->then(sub {
         my $result = $_[0];
         test { is $result->{json}->{account_id}, $o->{account_id_B}, 'Successfully logged in as the selected account' } $current->c;
+
+        return $current->post(['session', 'get'], {
+          use_sk => 1,
+        }, session => 1);
+      })->then(sub {
+        my $result = $_[0];
+        my $items = $result->{json}->{items};
+        test {
+          my $log = $items->[0];
+          ok $log, 'session_recent_log exists';
+          is $log->{log_data}->{login_method}, 'oauth', 'login_method is oauth';
+          is $log->{log_data}->{service_name}, 'oauth2server', 'service_name is oauth2server';
+        } $current->c;
       });
     });
   });
-} n => 5, name => 'Happy Path: Account selection and continuation';
+} n => 8, name => 'Happy Path: Account selection and continuation';
 
 Test {
   my $current = shift;

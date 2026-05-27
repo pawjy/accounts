@@ -436,9 +436,7 @@ sub login ($$$) {
                   return $login_result; # need to be continued
                 });
               }
-              return $class->write_session_log ($app, $session_row, $time, force => 1)->then (sub {
-                return {}; # Success
-              });
+              return {}; # Success
             });
           } elsif ($session_data->{action}->{operation} eq 'link') {
             return $class->link_account ($app, $server, $session_data)->then(sub {
@@ -518,9 +516,6 @@ sub login ($$$) {
         if (defined $login_result->{multiple_accounts_found}) {
           return $app->throw_error_json
               ({reason => 'Internal error during login continuation'});
-        } else {
-          return $class->write_session_log
-              ($app, $session_row, $time, force => 1);
         }
       })->then(sub {
         my $account_id = $session_data->{account_id};
@@ -779,7 +774,7 @@ sub login ($$$) {
               } else {
                 return $class->finalize_login_session ($app, $session_row)->then (sub {
                   my $json = $_[0];
-                  $json->{account_id} = $session_data->{account_id};
+                  $json->{account_id} = ''.$session_data->{account_id};
                   $log_data->{result} = 'success';
                   return {status => 200, json => $json, account_id => $json->{account_id}};
                 });
@@ -1922,6 +1917,18 @@ sub link_account ($$$) {
 sub finalize_login_session ($$$) {
   my ($class, $app, $session_row) = @_;
   my $session_data = $session_row->get ('data');
+  my $time = time;
+
+  my $log_extra = {};
+  if (defined $session_data->{action}) {
+    my $endpoint = $session_data->{action}->{endpoint};
+    if ($endpoint eq 'oauth') {
+      $log_extra->{login_method} = 'oauth';
+      $log_extra->{service_name} = $session_data->{action}->{server};
+    } elsif ($endpoint eq 'email') {
+      $log_extra->{login_method} = 'email';
+    }
+  }
 
   my $app_data = $session_data->{action}->{app_data}; # or undef
   my $json = {app_data => $app_data};
@@ -1930,7 +1937,7 @@ sub finalize_login_session ($$$) {
 
     my $lk = $app->bare_param ('lk') // '';
     my $origin = $app->bare_param ('origin') // '';
-    my $lk_expires = time + 60*60*24*400;
+    my $lk_expires = $time + 60*60*24*400;
     if (not verify_lk ($app->config, $lk, $origin, $lk_expires)) {
       $json->{lk} = create_lk ($app->config, $origin);
       if (defined $json->{lk}) {
@@ -1941,8 +1948,11 @@ sub finalize_login_session ($$$) {
   }
 
   delete $session_data->{action};
-  return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
-    return $json;
+  return $class->write_session_log ($app, $session_row, $time,
+      force => 1, extra_data => $log_extra)->then (sub {
+    return $session_row->update ({data => $session_data}, source_name => 'master')->then (sub {
+      return $json;
+    });
   });
 } # finalize_login_session
 
