@@ -10,6 +10,7 @@ use Crypt::PK::Ed25519;
 use Web::Encoding;
 use Web::URL::Encoding;
 use Web::Transport::Base64;
+use Wanage::URL qw(parse_form_urlencoded_b);
 push our @ISA, qw(Accounts::Web);
 
 BEGIN { *status_filter = \&Accounts::Web::status_filter }

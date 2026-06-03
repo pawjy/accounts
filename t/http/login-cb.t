@@ -228,6 +228,49 @@ Test {
 Test {
   my $current = shift;
   my $cb_url = 'http://haoa/' . rand;
+  return $current->create_session (1)->then (sub {
+    return $current->post (['login'], {
+      server => 'oauth2server_facebook',
+      callback_url => $cb_url,
+    }, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+    } $current->c;
+    my $url = Web::URL->parse_string ($result->{json}->{authorization_url});
+    my $con = $current->client_for ($url);
+    return $con->request (url => $url, method => 'POST');
+  })->then (sub {
+    my $result = $_[0];
+    return test {
+      is $result->status, 302;
+      my $location = $result->header ('Location');
+      my ($base, $query) = split /\?/, $location, 2;
+      is $base, $cb_url;
+      return $current->post ("/cb?$query", {}, session => 1);
+    } $current->c;
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      is $result->{json}->{app_data}, undef;
+      ok ! $result->{json}->{need_reload};
+    } $current->c;
+    return $current->post (['info'], {with_linked => 'id'}, session => 1);
+  })->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->{status}, 200;
+      my $links = $result->{json}->{links};
+      ok grep { $_->{service_name} eq 'oauth2server_facebook' } values %$links;
+    } $current->c;
+  });
+} n => 8, name => '/login then auth then /cb - oauth2 (facebook-style form-urlencoded token)';
+
+Test {
+  my $current = shift;
+  my $cb_url = 'http://haoa/' . rand;
   my $x_account_id = int rand 1000000;
   return $current->create_session (1)->then (sub {
     return $current->post (['login'], {

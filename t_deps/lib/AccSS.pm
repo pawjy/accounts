@@ -76,6 +76,8 @@ sub run ($%) {
             $config->{"oauth1server.client_secret"} = $csc.".oauth1";
             $config->{"oauth2server.client_id"} = $cid.".oauth2";
             $config->{"oauth2server.client_secret"} = $csc.".oauth2";
+            $config->{"oauth2server_facebook.client_id"} = $cid.".oauth2fb";
+            $config->{"oauth2server_facebook.client_secret"} = $csc.".oauth2fb";
             $config->{"oauth2server_refresh.client_id"} = $cid.".oauth2";
             $config->{"oauth2server_refresh.client_secret"} = $csc.".oauth2";
             $config->{"oauth1server.client_id.sk2"} = $cid.".oauth1.SK2";

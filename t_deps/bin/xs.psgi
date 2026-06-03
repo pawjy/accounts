@@ -181,6 +181,35 @@ use warnings;
             params => $params,
           });
         }
+      } elsif ($path eq '/oauth2fb/token') {
+        my $params = $http->request_body_params;
+        my $session = $Sessions->{$params->{code}->[0]};
+        if (not defined $session) {
+          $http->set_status (400);
+          $http->send_response_body_as_text ("Bad |code|");
+        } elsif ($params->{redirect_uri}->[0] eq $session->{callback} and
+                 $params->{client_id}->[0] =~ /\A\Q$ClientID\E\.oauth2fb(\.\w+|)\z/ and
+                 $params->{client_secret}->[0] =~ /\A\Q$ClientSecret\E\.oauth2fb(\Q$1\E)\z/) {
+          my $token = rand;
+          my $no_id = $session->{account_no_id};
+          my $s = $Sessions->{$token} = {
+            access_token => $token,
+            account_id => $session->{account_id} // int rand 100000,
+            account_name => $session->{account_name} // $AccountName,
+            account_email => $session->{account_email} // $AccountEmail,
+          };
+          if ($no_id) {
+            delete $s->{account_id};
+            delete $s->{account_key};
+          }
+          $http->send_response_body_as_text (sprintf 'access_token=%s', percent_encode_c $s->{access_token}.$1);
+          delete $Sessions->{$params->{code}->[0]};
+        } else {
+          $http->send_response_body_as_text (Dumper {
+            _ => 'Bad params',
+            params => $params,
+          });
+        }
       } elsif ($path eq '/oauth2r/token') {
         my $params = $http->request_body_params;
         if ($params->{grant_type}->[0] eq 'authorization_code') {

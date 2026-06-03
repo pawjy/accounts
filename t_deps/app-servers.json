@@ -55,6 +55,26 @@
     "timeout": 600,
     "cb_wrapper_url": "http://cb.wrapper.test/wrapper/%s?url=%s&test=1"
   },
+  "oauth2server_facebook": {
+    "name": "oauth2server_facebook",
+    "url_scheme": "http",
+    "host": "xs.server.test",
+    "auth_endpoint": "/oauth2/authorize",
+    "auth_host": "xs.server.test",
+    "token_endpoint": "/oauth2fb/token",
+    "profile_endpoint": "/profile",
+    "profile_id_field": "id",
+    "profile_key_field": "login",
+    "profile_name_field": "name",
+    "profile_email_field": "email",
+    "auth_scheme": "token",
+    "linked_id_field": "profile_id",
+    "linked_key_field": "profile_key",
+    "linked_name_field": "profile_name",
+    "linked_email_field": "profile_email",
+    "scope_separator": ",",
+    "timeout": 600
+  },
   "oauth2server_refresh": {
     "name": "oauth2server_refresh",
     "url_scheme": "http",
