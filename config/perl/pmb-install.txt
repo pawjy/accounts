@@ -24,11 +24,10 @@ Exporter::Tiny~1.006003
 File::Listing~6.16
 File::Path~2.18
 File::Temp~0.2312
-HTML::Entities~3.85
+HTML::HeadParser~3.85
 HTML::Tagset~3.24
 HTTP::Cookies~6.11
 HTTP::Date~6.08
-HTTP::Message~7.02
 HTTP::Negotiate~6.01
 HTTP::Request~7.02
 IO::AIO~4.81
