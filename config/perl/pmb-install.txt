@@ -28,9 +28,8 @@ HTML::Entities~3.85
 HTML::Tagset~3.24
 HTTP::Cookies~6.11
 HTTP::Date~6.08
-HTTP::Headers~7.02
 HTTP::Negotiate~6.01
-HTTP::Request~7.02
+HTTP::Status~7.02
 IO::AIO~4.81
 IO::FDPass~1.3
 IO::HTML~1.004
