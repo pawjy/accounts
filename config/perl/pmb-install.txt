@@ -13,7 +13,7 @@ Crypt::OpenSSL::Bignum~0.09
 Crypt::OpenSSL::Guess~0.15
 Crypt::OpenSSL::RSA~0.41
 Crypt::OpenSSL::Random~0.17
-Crypt::PK::Ed25519~0.090
+Crypt::PK::Ed25519~0.091
 Cwd~3.75
 Data::Dumper~2.183
 Digest::SHA~6.04
@@ -24,12 +24,12 @@ Exporter::Tiny~1.006003
 File::Listing~6.16
 File::Path~2.18
 File::Temp~0.2312
-HTML::HeadParser~3.85
+HTML::Entities~3.85
 HTML::Tagset~3.24
 HTTP::Cookies~6.12
 HTTP::Date~6.08
-HTTP::Message~7.04
 HTTP::Negotiate~6.01
+HTTP::Request~7.04
 HTTP::Response~7.04
 IO::AIO~4.81
 IO::FDPass~1.3
@@ -45,7 +45,7 @@ Math::BigInt~2.005003
 Method::WeakCallback~0.04
 Net::HTTP~6.24
 Net::SSLeay~1.96
-OAuth::Lite::AuthMethod
+OAuth::Lite::Token
 Path::Class~0.37
 Path::Tiny~0.150
 Pod::Usage~2.05
@@ -54,7 +54,7 @@ Proc::Wait3~0.05
 Scalar::Util~1.70
 Socket~2.041
 Term::ANSIColor~5.01
-Test::More~1.302222
+Test::Builder~1.302222
 Time::HiRes~1.9764
 Time::Local~1.35
 Time::Zone~2.35
