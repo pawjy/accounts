@@ -52,6 +52,25 @@ sub verify_lk ($$$$) {
   return $result;
 } # verify_lk
 
+sub _link_add_transaction ($$$) {
+  my ($db, $code, $retries) = @_;
+  return $db->transaction->then (sub {
+    my $tr = $_[0];
+    return Promise->resolve->then (sub { return $code->($tr) })->then (sub {
+      return $tr->commit;
+    }, sub {
+      my $error = $_[0];
+      return $tr->rollback->then (sub {
+        # Only replay rolled-back DB work, never an HTTP request or commit.
+        die $error unless $retries > 0 and
+            UNIVERSAL::isa ($error, 'Dongry::Database::Executed') and
+            ($error->error_text // '') =~ /\(Error code 1213\)\z/;
+        return _link_add_transaction ($db, $code, $retries - 1);
+      });
+    });
+  });
+} # _link_add_transaction
+
 sub login ($$$) {
   my ($class, $app, $path) = @_;
 
@@ -1229,7 +1248,7 @@ sub login ($$$) {
         my $link_id = format_id $_[0]->[0];
         my $log_id = format_id $_[0]->[1];
         my $time = time;
-        return $app->db->transaction->then (sub {
+        return _link_add_transaction ($app->db, sub {
           my $tr = $_[0];
           return Promise->resolve->then (sub {
             return $tr->delete ('account_link', {
@@ -1272,10 +1291,8 @@ sub login ($$$) {
               ipaddr => $app->bare_param ('source_ipaddr') // '',
               data => Dongry::Type->serialize ('json', $data),
             }]); # since R5.9
-          })->then (sub {
-            return $tr->commit;
           });
-        });
+        }, 2);
       });
     })->then (sub {
       return $app->send_json ({});
