@@ -44,7 +44,7 @@ Math::BigInt~2.005003
 Method::WeakCallback~0.04
 Net::HTTP~6.24
 Net::SSLeay
-OAuth::Lite::Token
+OAuth::Lite::Consumer
 Path::Class~0.37
 Path::Tiny~0.150
 Pod::Usage~2.05
