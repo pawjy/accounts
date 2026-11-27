@@ -262,7 +262,7 @@ sub run ($%) {
       handler => 'ServerSet::WebDriverServerHandler',
     },
     _ => {
-      requires => ['app_config', 'wd'],
+      requires => ['app_config', 'wd', 'mysqld'],
       start => sub {
         my ($handler, $self, %args) = @_;
         my $data = {};
@@ -273,7 +273,9 @@ sub run ($%) {
 
         return Promise->all ([
           $args{receive_wd_data},
+          $args{receive_mysqld_data},
         ])->then (sub {
+          $data->{test_db} = $_[0]->[1]->{local_dsn_options}->{accounts};
           
           $data->{app_local_url} = $self->local_url ('app');
           $data->{app_client_url} = $self->client_url ('app');

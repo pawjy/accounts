@@ -36,3 +36,7 @@ An account has following properties:
     For an account created by </create> or </cb>, its value will be 0.
     The value can be incremented by </agree> end point with the
     |version| parameter.
+
+Session properties for OAuth handoff are described in |doc/app-handoff.md|,
+including the login-only context and the source_session_id and client_info
+fields in session history.

@@ -177,6 +177,8 @@ sub next_page ($$$) {
 
 use Accounts::AppServer;
 use Accounts::Web::Login;
+use Accounts::Web::Handoff;
+use Crypt::PRNG qw(random_bytes);
 use Accounts::Web::Groups;
 use Accounts::Web::Media;
 
@@ -197,6 +199,13 @@ sub main ($$) {
       ($app->http->get_request_header ('x-timing'));
   $app->db->connect ('master'); # preconnect
 
+  my $login_context = ($app->bare_param ('sk_context') // '') eq 'web-login' &&
+                      Accounts::Web::Handoff->login_context_enabled ($app);
+  if ($login_context and not Accounts::Web::Handoff->allows_login_operation ($app, $path)) {
+    $app->requires_api_key;
+    return $app->send_error_json ({reason => 'Operation unavailable in login context'});
+  }
+
   if ({
     login => 1, link => 1, cb => 1, email => 1, keygen => 1, token => 1,
     create => 1,
@@ -214,6 +223,10 @@ sub main ($$) {
 
   if ($path->[0] eq 'icon') {
     return Accounts::Web::Media->icon ($app, $path);
+  }
+
+  if (@$path == 3 and $path->[0] eq 'session' and $path->[1] eq 'handoff') {
+    return Accounts::Web::Handoff->main ($app, $path->[2]);
   }
 
   if (@$path == 1 and $path->[0] eq 'session') {
@@ -239,27 +252,16 @@ sub main ($$) {
       my $session_row = $_[0];
       if (defined $session_row) {
         my $session_data = $session_row->get ('data');
-        if (defined $session_data->{session_id}) { # sessions before R5.10.3 does not have |session_id|
+        # Sessions before R5.10.3 have no session_id.
+        if (defined $session_data->{session_id} and
+            !!$session_data->{handoff_login} == !!$login_context) {
           return [$session_row, 0];
         }
       }
 
-      $sk = id 100;
-      my $age = $MaxSessionTimeout;
-      my $ma = $app->config->get ('session_max_age') || 'Infinity';
-      $age = $ma if $ma < $age;
-      return $app->db->uuid_short (1)->then (sub {
-        my $session_id = $_[0]->[0];
-        my $data = {session_id => '' . $session_id};
-        return $app->db->insert ('session', [{
-          sk => $sk,
-          sk_context => $sk_context,
-          created => $time,
-          expires => $time + $age,
-          data => Dongry::Type->serialize ('json', $data),
-        }], source_name => 'master');
-      })->then (sub {
-        $session_row = $_[0]->first_as_row;
+      return $class->create_session ($app, $app->db, sk_context => $sk_context,
+                                     login_only => $login_context)->then (sub {
+        $session_row = $_[0];
         return [$session_row, 1];
       });
     })->then (sub {
@@ -733,6 +735,13 @@ sub main ($$) {
       my $version = 0+($app->bare_param ('version') || 0);
       $version = 255 if $version > 255;
       my $dg = $app->bare_param ('downgrade');
+      if ($login_context) {
+        my $request = $session_row->get ('data')->{handoff_request} || {};
+        my $client = Accounts::Web::Handoff->client ($app, $request->{client});
+        return $app->send_error_json ({reason => 'Invalid handoff agreement'})
+            unless $client and $request->{authentication} and $request->{expires} > time
+                and !$dg and $version == $client->{terms_version};
+      }
       return Promise->all ([
         $app->db->execute ('UPDATE `account` SET `terms_version` = :version WHERE `account_id` = :account_id'.($dg?'':' AND `terms_version` < :version'), {
           account_id => $account_id,
@@ -960,6 +969,26 @@ sub main ($$) {
   return $app->send_error (404);
 } # main
 
+# Shared by ordinary login and the one-time native handoff. Callers determine
+# identity; this helper only creates a fresh regular session with the usual TTL.
+sub create_session {
+  my ($class, $app, $db, %args) = @_;
+  my $age = $MaxSessionTimeout;
+  my $ma = $app->config->get ('session_max_age') || 'Infinity';
+  $age = $ma if $ma < $age;
+  $age = 600 if $args{login_only} and $age > 600;
+  my $sk = $args{sk} // ($args{login_only} ? unpack ('H*', random_bytes (50)) : id 100);
+  my $now = time;
+  return $db->execute ('SELECT UUID_SHORT() AS id', {}, source_name => 'master')->then (sub {
+    return $db->insert ('session', [{
+      sk => $sk, sk_context => $args{sk_context},
+      created => $now, expires => $now + $age,
+      data => Dongry::Type->serialize ('json', {%{$args{data} || {}},
+          ($args{login_only} ? (handoff_login => 1) : ()), session_id => ''.$_[0]->first->{id}}),
+    }], source_name => 'master');
+  })->then (sub { return $_[0]->first_as_row });
+}
+
 sub resume_session ($$;$) {
   my ($class, $app, $tr) = @_;
   my $sk = $app->bare_param ('sk') // '';
@@ -973,6 +1002,14 @@ sub resume_session ($$;$) {
 
     my $session_data = $session_row->get ('data');
     return undef if not defined $session_data->{session_id}; # sessions before R5.10.3 does not have |session_id|
+
+    if ($session_data->{handoff_login}) {
+      return undef unless Accounts::Web::Handoff->login_context_enabled ($app)
+          and Accounts::Web::Handoff->allows_login_operation ($app, $app->path_segments);
+    } elsif ($session_row->get ('sk_context') eq 'web-login' and
+             Accounts::Web::Handoff->login_context_enabled ($app)) {
+      return undef;
+    }
 
     my $ma = $app->bare_param ('sk_max_age');
     if ($ma) {
@@ -988,6 +1025,7 @@ sub resume_session ($$;$) {
 sub write_session_log ($$$$;%) {
   my ($class, $app, $session_row, $now, %args) = @_;
   my $data = {
+    %{$session_row->get ('data')->{handoff_audit} || {}},
     ua => $app->bare_param ('source_ua') // '',
     ipaddr => $app->bare_param ('source_ipaddr') // '',
   };
@@ -1001,7 +1039,7 @@ sub write_session_log ($$$$;%) {
     my $session_data = $session_row->get ('data');
     my $aid = $session_data->{account_id};
     my $sid = $session_data->{session_id};
-    return $app->db->insert ('session_recent_log', [{
+    return ($args{db} // $app->db)->insert ('session_recent_log', [{
       sk => $session_row->get ('sk'),
       sk_context => $session_row->get ('sk_context'),
       account_id => $aid ? 0+$aid : 0,
